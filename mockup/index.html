@@ -1,0 +1,796 @@
+<meta charset="utf-8">
+<title>Агент деканата</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<style>
+/* Layout: chat strip pinned on top (expands over the page to 80% height), empty tab page in the middle, tab bar at the bottom. Light theme only. */
+:root {
+  --bg: #f1f3f7;
+  --surface: #ffffff;
+  --surface-2: #f5f7fa;
+  --ink: #18212f;
+  --muted: #667085;
+  --line: #dde2ea;
+  --accent: #2563eb;
+  --on-accent: #ffffff;
+  --ok: #15803d;
+  --danger: #dc2626;
+  --scrim: rgba(17, 24, 39, .32);
+  --shadow: 0 12px 32px rgba(17, 24, 39, .16);
+  --font-ui: "Golos Text", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font: 400 15px/1.45 var(--font-ui); overflow: hidden; margin: 0; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.wrap { width: 100%; max-width: 920px; margin-inline: auto; padding-inline: 16px; }
+
+/* ───────── Чат ───────── */
+.chat-slot { position: relative; }
+.chat {
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%); z-index: 30;
+  width: min(1100px, calc(100% - 32px));
+  background: var(--surface); border: 1px solid var(--line); border-top: 0;
+  border-radius: 0 0 14px 14px;
+  display: flex; flex-direction: column;
+}
+.chat .wrap { max-width: none; }
+.chat.open { height: 90vh; box-shadow: var(--shadow); }
+.messages { flex: 1; min-height: 0; overflow-y: auto; padding-block: 20px; display: flex; flex-direction: column; gap: 10px; }
+.chat:not(.open) .messages { display: none; }
+.msg { max-width: 75%; display: flex; flex-direction: column; gap: 6px; }
+.msg.user { align-self: flex-end; align-items: flex-end; }
+.msg.agent { align-self: flex-start; }
+.bubble { padding: 9px 13px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg.user .bubble { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+
+/* часть последнего сообщения в свёрнутом чате */
+.peek { padding-top: 10px; display: flex; }
+.chat.open .peek { display: none; }
+.peek .bubble {
+  max-width: 75%; padding: 6px 12px; font-size: 14px; white-space: normal;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.peek.user { justify-content: flex-end; }
+.peek.user .bubble { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+
+.composer { padding-block: 10px; display: flex; flex-direction: column; gap: 10px; }
+.chat.open .composer { border-top: 1px solid var(--line); }
+.input-row { display: flex; gap: 8px; align-items: flex-end; }
+.input-row textarea {
+  flex: 1; min-width: 0; resize: none; height: 36px; max-height: 140px;
+  padding: 7px 11px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface-2);
+}
+.icon-btn {
+  width: 36px; height: 36px; flex: none; border-radius: 9px;
+  display: grid; place-items: center;
+  background: var(--surface); border: 1px solid var(--line); color: var(--ink);
+}
+.icon-btn:hover { background: var(--surface-2); }
+.icon-btn svg { width: 17px; height: 17px; }
+.icon-btn.send { background: var(--accent); border-color: transparent; color: var(--on-accent); }
+.chat.open .toggle svg { transform: rotate(180deg); }
+
+/* превью вложений */
+.thumbs { display: flex; gap: 8px; flex-wrap: wrap; }
+.thumb {
+  position: relative; width: 84px; flex: none;
+  display: flex; flex-direction: column; gap: 4px;
+  background: none; border: 0; padding: 0; text-align: left;
+}
+.thumb .pic {
+  width: 84px; height: 104px; border-radius: 8px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--surface);
+  display: block;
+}
+.thumb .pic img, .thumb .pic canvas { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+.thumb .pic .page { padding: 7px; font-size: 5.5px; line-height: 1.35; color: var(--ink); overflow: hidden; height: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
+.thumb .pic .ext { display: grid; place-items: center; height: 100%; font-weight: 600; font-size: 13px; color: var(--muted); text-transform: uppercase; }
+.thumb .name { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg.user .thumb .name { text-align: right; }
+.thumb .remove {
+  position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--surface); color: var(--muted);
+  display: grid; place-items: center; font-size: 13px; line-height: 1; padding: 0;
+}
+.msg .thumbs { justify-content: flex-end; }
+
+.scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 20; }
+
+/* ───────── Страница вкладки ───────── */
+.content { overflow-y: auto; }
+.page { max-width: 1400px; padding-block: 24px 32px; display: flex; flex-direction: column; gap: 16px; }
+.page h1 { margin: 0; font-size: 22px; font-weight: 600; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+
+.stat { padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
+.stat .label { font-size: 14px; color: var(--muted); }
+.stat .value { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* таблицы */
+.toolbar, .pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; }
+.toolbar { border-bottom: 1px solid var(--line); }
+.pager { border-top: 1px solid var(--line); }
+.toolbar span, .pager span { font-size: 14px; color: var(--muted); }
+.toolbar b { color: var(--ink); font-weight: 600; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { padding: 9px 16px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--line); }
+tbody tr:last-child td { border-bottom: 0; }
+th { font-size: 12px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+th.num, td.num { text-align: right; }
+.pages { display: flex; gap: 4px; }
+.pages button { min-width: 32px; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-size: 13px; }
+.pages button.cur { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.pages button:disabled { opacity: .4; cursor: default; }
+
+/* OLAP */
+.ops { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-size: 14px; }
+.chips button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.filters { display: flex; flex-wrap: wrap; gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); min-width: 0; }
+.field input, .field select {
+  padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-size: 14px; color: var(--ink); min-width: 180px;
+}
+.card h2 { margin: 0; padding: 12px 16px; font-size: 15px; font-weight: 600; border-bottom: 1px solid var(--line); }
+.chart { padding: 16px; }
+.chart svg { width: 100%; height: auto; display: block; }
+.chart text { font: 11px var(--font-ui); fill: var(--muted); }
+.summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+.chip { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 500; background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); }
+.chip.ok { background: #e7f6ec; color: var(--ok); border-color: transparent; }
+.chip.warn { background: #fdf2dc; color: #92580a; border-color: transparent; }
+.chip.bad { background: #fde8e8; color: var(--danger); border-color: transparent; }
+.chip.muted { color: var(--muted); }
+td.empty { text-align: center; color: var(--muted); padding: 28px; }
+td.wrap { white-space: normal; min-width: 280px; }
+.toolbar h2 { padding: 0; border: 0; }
+
+/* ───────── Вкладки ───────── */
+.tabbar { background: var(--surface); border-top: 1px solid var(--line); }
+.tabs { display: grid; grid-template-columns: repeat(8, 1fr); max-width: none; padding-inline: 8px; }
+.tab {
+  padding: 14px 4px; border: 0; background: none; color: var(--muted);
+  font-size: 14px; font-weight: 500; border-top: 2px solid transparent;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--accent); border-top-color: var(--accent); }
+
+/* ───────── Окно подтверждения ───────── */
+.modal-scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 50; display: grid; place-items: center; padding: 16px; }
+.dialog {
+  width: min(420px, 100%); background: var(--surface); border-radius: 14px; box-shadow: var(--shadow);
+  padding: 22px; display: flex; flex-direction: column; gap: 20px;
+}
+.dialog p { margin: 0; font-size: 17px; font-weight: 500; text-wrap: balance; }
+.dialog .actions { display: flex; gap: 8px; justify-content: flex-end; }
+.btn { padding: 9px 16px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); font-weight: 500; }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+
+/* ───────── Просмотр вложения ───────── */
+.viewer-scrim { position: fixed; inset: 0; background: rgba(17, 24, 39, .6); z-index: 60; display: grid; place-items: center; padding: 24px; }
+.viewer { width: min(900px, 100%); height: min(90vh, 100%); background: var(--surface); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+.viewer-head { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 18px; border-bottom: 1px solid var(--line); }
+.viewer-head span { flex: 1; min-width: 0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.viewer-body { flex: 1; min-height: 0; overflow: auto; padding: 20px; background: var(--surface-2); display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.viewer-body img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.viewer-body canvas { max-width: 100%; box-shadow: 0 1px 4px rgba(17, 24, 39, .15); background: #fff; }
+.viewer-body .doc { width: 100%; max-width: 720px; background: var(--surface); padding: 32px 40px; box-shadow: 0 1px 4px rgba(17, 24, 39, .15); white-space: pre-wrap; overflow-wrap: anywhere; }
+.viewer-body .doc.html { white-space: normal; }
+</style>
+
+<div class="app">
+  <!-- ЧАТ -->
+  <div class="chat-slot" id="chatSlot">
+    <section class="chat" id="chat" aria-label="Чат с агентом">
+      <div class="messages wrap" id="messages" aria-live="polite"></div>
+      <div class="peek wrap" id="peek" hidden><div class="bubble" id="peekText"></div></div>
+      <div class="composer wrap" id="composer">
+        <div class="thumbs" id="attached" hidden></div>
+        <form class="input-row" id="form">
+          <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.jpg,.jpeg,.png" multiple hidden>
+          <button type="button" class="icon-btn" id="attachBtn" title="Прикрепить файлы" aria-label="Прикрепить файлы">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5l-8.6 8.6a5 5 0 01-7.1-7.1l8.6-8.6a3.4 3.4 0 014.8 4.8l-8.6 8.6a1.7 1.7 0 01-2.4-2.4l7.9-7.9"/></svg>
+          </button>
+          <textarea id="input" rows="1" placeholder="Сообщение агенту…" aria-label="Сообщение"></textarea>
+          <button type="submit" class="icon-btn send" title="Отправить" aria-label="Отправить">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </button>
+          <button type="button" class="icon-btn toggle" id="toggle" title="Развернуть чат" aria-label="Развернуть чат" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+        </form>
+      </div>
+    </section>
+  </div>
+  <div class="scrim" id="scrim" hidden></div>
+
+  <!-- СТРАНИЦА ВКЛАДКИ -->
+  <main class="content" id="content"><div class="wrap page" id="page"></div></main>
+
+  <!-- ВКЛАДКИ -->
+  <nav class="tabbar" aria-label="Разделы">
+    <div class="wrap tabs" role="tablist" id="tabs">
+      <button class="tab" role="tab" aria-selected="true" data-tab="students">Студенты</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="groups">Группы</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="schedule">Расписание</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="debtors">Должники</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="requests">Заявки на справки</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="practice">Практики</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="employees">Сотрудники</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="olap">OLAP-анализ</button>
+    </div>
+  </nav>
+</div>
+
+<!-- ОКНО ПОДТВЕРЖДЕНИЯ -->
+<div class="modal-scrim" id="confirm" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirmText">
+    <p id="confirmText"></p>
+    <div class="actions">
+      <button class="btn" id="cancelBtn">Отменить</button>
+      <button class="btn primary" id="applyBtn"></button>
+    </div>
+  </div>
+</div>
+
+<!-- ПРОСМОТР ВЛОЖЕНИЯ -->
+<div class="viewer-scrim" id="viewer" hidden>
+  <div class="viewer" role="dialog" aria-modal="true" aria-labelledby="viewerName">
+    <div class="viewer-head">
+      <span id="viewerName"></span>
+      <button class="icon-btn" id="viewerClose" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="viewer-body" id="viewerBody"></div>
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+/* ── Окно подтверждения (общее для чата и удаления) ── */
+let confirmResolve = null;
+function confirmDialog(text, okText) {
+  $("#confirmText").textContent = text;
+  $("#applyBtn").textContent = okText;
+  $("#confirm").hidden = false;
+  $("#applyBtn").focus();
+  return new Promise((r) => { confirmResolve = r; });
+}
+function closeConfirm(ok) { $("#confirm").hidden = true; confirmResolve?.(ok); confirmResolve = null; }
+$("#applyBtn").addEventListener("click", () => closeConfirm(true));
+$("#cancelBtn").addEventListener("click", () => closeConfirm(false));
+
+/* ── Сворачивание / разворачивание чата ── */
+const chat = $("#chat");
+const box = $("#messages");
+const slot = $("#chatSlot");
+new ResizeObserver(() => { if (!chat.classList.contains("open")) slot.style.height = chat.offsetHeight + "px"; }).observe(chat);
+
+function setOpen(open) {
+  chat.classList.toggle("open", open);
+  $("#scrim").hidden = !open;
+  const t = $("#toggle");
+  t.setAttribute("aria-expanded", open);
+  t.title = t.ariaLabel = open ? "Свернуть чат" : "Развернуть чат";
+  if (open) box.scrollTop = box.scrollHeight;
+}
+$("#toggle").addEventListener("click", () => setOpen(!chat.classList.contains("open")));
+
+/* ── Вложения: превью ── */
+const kindOf = (f) => {
+  const ext = f.name.split(".").pop().toLowerCase();
+  return ["jpg", "jpeg", "png"].includes(ext) ? "image" : ext;
+};
+
+async function pdfDoc(file) { return pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise; }
+async function renderPdfPage(pdf, n, width) {
+  const page = await pdf.getPage(n);
+  const vp = page.getViewport({ scale: 1 });
+  const scale = width / vp.width;
+  const v = page.getViewport({ scale });
+  const c = document.createElement("canvas");
+  c.width = v.width; c.height = v.height;
+  await page.render({ canvasContext: c.getContext("2d"), viewport: v }).promise;
+  return c;
+}
+async function textOf(item) {
+  if (item.kind === "txt") return item.file.text();
+  if (item.kind === "docx") return (await mammoth.extractRawText({ arrayBuffer: await item.file.arrayBuffer() })).value;
+  return "";
+}
+
+// Готовит превью один раз и сохраняет его в item.preview (data URL или текст)
+async function makePreview(item) {
+  try {
+    if (item.kind === "image") item.preview = { img: item.url };
+    else if (item.kind === "pdf") item.preview = { img: (await renderPdfPage(await pdfDoc(item.file), 1, 200)).toDataURL() };
+    else item.preview = { text: (await textOf(item)).slice(0, 600) };
+  } catch (e) { item.preview = { ext: item.kind }; }
+}
+
+function thumbEl(item, removable) {
+  const b = document.createElement("div");
+  b.className = "thumb";
+  const p = item.preview || { ext: "…" };
+  const inner = p.img ? `<img src="${p.img}" alt="">` : p.text != null ? `<div class="page">${esc(p.text)}</div>` : `<div class="ext">${esc(p.ext)}</div>`;
+  b.innerHTML = `<button type="button" class="pic" title="Открыть ${esc(item.file.name)}">${inner}</button><span class="name">${esc(item.file.name)}</span>`;
+  b.querySelector(".pic").addEventListener("click", () => openViewer(item));
+  if (removable) {
+    const x = document.createElement("button");
+    x.type = "button"; x.className = "remove"; x.textContent = "×"; x.ariaLabel = "Убрать файл";
+    x.addEventListener("click", () => { pending = pending.filter((i) => i !== item); renderAttached(); });
+    b.append(x);
+  }
+  return b;
+}
+
+let pending = [];
+const fileInput = $("#fileInput");
+$("#attachBtn").addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", async () => {
+  const allowed = /\.(pdf|docx|txt|jpe?g|png)$/i;
+  const items = [...fileInput.files].filter((f) => allowed.test(f.name)).map((f) => ({ file: f, kind: kindOf(f), url: URL.createObjectURL(f) }));
+  fileInput.value = "";
+  pending.push(...items);
+  renderAttached();
+  await Promise.all(items.map(makePreview));
+  renderAttached();
+  $("#input").focus();
+});
+function renderAttached() {
+  const a = $("#attached");
+  a.replaceChildren(...pending.map((i) => thumbEl(i, true)));
+  a.hidden = pending.length === 0;
+}
+
+/* ── Просмотр вложения ── */
+async function openViewer(item) {
+  $("#viewerName").textContent = item.file.name;
+  const body = $("#viewerBody");
+  body.replaceChildren();
+  $("#viewer").hidden = false;
+  try {
+    if (item.kind === "image") {
+      const img = new Image(); img.src = item.url; img.alt = item.file.name; body.append(img);
+    } else if (item.kind === "pdf") {
+      const pdf = await pdfDoc(item.file);
+      for (let n = 1; n <= pdf.numPages; n++) body.append(await renderPdfPage(pdf, n, 800));
+    } else if (item.kind === "docx") {
+      const d = document.createElement("div"); d.className = "doc html";
+      d.innerHTML = (await mammoth.convertToHtml({ arrayBuffer: await item.file.arrayBuffer() })).value;
+      body.append(d);
+    } else {
+      const d = document.createElement("div"); d.className = "doc"; d.textContent = await item.file.text(); body.append(d);
+    }
+  } catch (e) {
+    const d = document.createElement("div"); d.className = "doc"; d.textContent = "Не удалось открыть файл."; body.append(d);
+  }
+}
+$("#viewerClose").addEventListener("click", () => { $("#viewer").hidden = true; });
+
+/* ── Сообщения ── */
+function addMessage(who, text, items = []) {
+  const el = document.createElement("div");
+  el.className = "msg " + who;
+  if (items.length) {
+    const t = document.createElement("div");
+    t.className = "thumbs";
+    t.append(...items.map((i) => thumbEl(i, false)));
+    el.append(t);
+  }
+  if (text) {
+    const b = document.createElement("div");
+    b.className = "bubble"; b.textContent = text;
+    el.append(b);
+  }
+  box.append(el);
+  box.scrollTop = box.scrollHeight;
+  $("#peek").className = "peek wrap " + who;
+  $("#peekText").textContent = text || items.map((i) => i.file.name).join(", ");
+  $("#peek").hidden = false;
+}
+
+/* ── Подтверждение изменений ── */
+const CHANGE_WORDS = /(измени|исправ|добав|удали|постав|обнови|внеси|запиши|перевед|замени)/i;
+async function askConfirm() {
+  const applied = await confirmDialog("Вы уверены, что хотите применить данные изменения?", "Применить изменения");
+  addMessage("agent", applied ? "Изменения применены." : "Изменения не применены.");
+}
+
+/* ── Отправка ── */
+const input = $("#input");
+$("#form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const text = input.value.trim();
+  if (!text && !pending.length) return;
+  addMessage("user", text, pending);
+  pending = []; renderAttached();
+  input.value = ""; autoGrow();
+  setOpen(true);
+  setTimeout(() => {
+    if (CHANGE_WORDS.test(text)) askConfirm();
+    else addMessage("agent", "Ответ агента (заглушка).");
+  }, 600);
+});
+/* ═════════ ВКЛАДКИ (данные выдуманы, колонки — как в представлениях БД «Деканат») ═════════ */
+
+// Детерминированный генератор, чтобы данные не менялись при перезагрузке
+let seed = 7;
+const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+const pick = (a) => a[Math.floor(rnd() * a.length)];
+const int = (a, b) => a + Math.floor(rnd() * (b - a + 1));
+
+const money = (v, frac = 0) => v == null ? "—" : Number(v).toLocaleString("ru-RU", { minimumFractionDigits: frac, maximumFractionDigits: frac });
+const date = (s) => s ? s.split("-").reverse().join(".") : "—";
+const iso = (d) => d.toISOString().slice(0, 10);
+const chip = (text, kind) => `<span class="chip ${kind || ""}">${esc(text)}</span>`;
+
+/* ── Справочники ── */
+const GROUPS = [
+  { name: "ИДБ-23-11", year: 2023, spec: "09.03.04 Программная инженерия", form: "Очная" },
+  { name: "ИДБ-23-12", year: 2023, spec: "09.03.04 Программная инженерия", form: "Очная" },
+  { name: "ИДБ-24-11", year: 2024, spec: "09.03.03 Прикладная информатика", form: "Очная" },
+  { name: "ИДБ-24-12", year: 2024, spec: "09.03.03 Прикладная информатика", form: "Очная" },
+  { name: "ИДБ-25-11", year: 2025, spec: "09.03.02 Информационные системы и технологии", form: "Очная" },
+];
+const DISCIPLINES = [
+  ["Математический анализ", 1, "Экзамен"], ["Основы программирования", 1, "Экзамен"], ["Иностранный язык", 1, "Зачёт"],
+  ["Линейная алгебра и аналитическая геометрия", 2, "Экзамен"], ["Дискретная математика", 2, "Экзамен"], ["Информатика", 2, "Зачёт"],
+  ["Объектно-ориентированное программирование", 3, "Экзамен"], ["Базы данных", 3, "Экзамен"], ["Физическая культура", 3, "Зачёт"],
+  ["Операционные системы", 4, "Экзамен"], ["Компьютерные сети", 4, "Дифференцированный зачёт"], ["Теория вероятностей", 4, "Экзамен"],
+];
+const course = (year) => 2026 - year + 1;           // текущий семестр — 2026/27, осенний
+const doneSemesters = (year) => (course(year) - 1) * 2;
+const mark = (p) => p >= 45 ? 5 : p >= 35 ? 4 : p >= 25 ? 3 : null;
+
+const M_LAST = ["Орлов", "Ганиев", "Ковалёв", "Смирнов", "Белов", "Лаптев", "Петров", "Зайцев", "Морозов", "Волков", "Соловьёв", "Козлов", "Фёдоров", "Карпов", "Тихонов"];
+const M_FIRST = ["Денис", "Тимур", "Максим", "Артём", "Кирилл", "Сергей", "Илья", "Никита", "Егор", "Иван", "Роман", "Глеб"];
+const F_FIRST = ["Алина", "Ксения", "Дарья", "Анна", "Мария", "Полина", "Вера", "Софья", "Елизавета", "Ольга"];
+const PATR = ["Игоре", "Руслано", "Олего", "Андрее", "Сергее", "Викторо", "Дмитрие", "Алексее", "Павло"];
+const person = () => {
+  const f = rnd() < 0.45;
+  return `${pick(M_LAST)}${f ? "а" : ""} ${pick(f ? F_FIRST : M_FIRST)} ${pick(PATR)}${f ? "вна" : "вич"}`;
+};
+
+/* ── Сотрудники (v_employees) ── */
+const EMP_SPEC = [
+  ["Директор института", "Дирекция ИИТ", 1], ["Заместитель директора института", "Дирекция ИИТ", 1],
+  ["Специалист по учебно-методической работе", "Деканат ИИТ", 3], ["Методист", "Деканат ИИТ", 2],
+  ["Заведующий кафедрой", "ИС", 1], ["Заведующий кафедрой", "ПМ", 1], ["Заведующий кафедрой", "ИТиВС", 1],
+  ["Профессор", "ИС", 2], ["Профессор", "ПМ", 1], ["Доцент", "ИС", 3], ["Доцент", "ПМ", 3], ["Доцент", "ИТиВС", 3], ["Доцент", "ИЯ", 2],
+  ["Старший преподаватель", "ИТиВС", 3], ["Старший преподаватель", "ИЯ", 2], ["Старший преподаватель", "УиИТС", 2],
+];
+const employees = [];
+EMP_SPEC.forEach(([position, unit, n]) => {
+  for (let i = 0; i < n; i++) {
+    const num = employees.length + 1;
+    employees.push({
+      personnel_number: "Т-" + String(num).padStart(4, "0"), full_name: person(), position, unit,
+      employment_rate: pick([1, 1, 1, 0.5, 0.75]), hire_date: `${int(2002, 2024)}-${pick(["02-01", "08-25", "09-01"])}`,
+      phone: `+7 495 100-${int(10, 99)}-${String(num).padStart(2, "0")}`, email: `staff${num}@univ.ru`,
+    });
+  }
+});
+const teachers = employees.filter((e) => /Профессор|Доцент|преподаватель|Заведующий/.test(e.position));
+const deanStaff = employees.filter((e) => e.unit === "Деканат ИИТ");
+
+/* ── Студенты, результаты, долги ── */
+const students = [], results = [], debtors = [];
+GROUPS.forEach((g, gi) => {
+  for (let i = 1; i <= 8; i++) {
+    const st = {
+      student: person(), record_book_number: `${String(g.year).slice(2)}-${gi + 1}1${String(i).padStart(2, "0")}`,
+      group_name: g.name, course: course(g.year), funding: rnd() < 0.75 ? "Бюджет" : "Договор",
+      status: rnd() < 0.06 ? "Академический отпуск" : "Обучается", attendance_pct: +(70 + rnd() * 29).toFixed(1),
+    };
+    const weak = rnd() < 0.25;
+    const pts = [];
+    DISCIPLINES.filter(([, s]) => s <= doneSemesters(g.year)).forEach(([discipline, semester, control_type]) => {
+      const failed = rnd() < (weak ? 0.3 : 0.03);
+      const points = failed ? null : Math.min(54, int(weak ? 25 : 32, 54));
+      results.push({ ...st, discipline, semester, control_type, points });
+      if (failed && st.status === "Обучается") {
+        debtors.push({ student: st.student, group_name: g.name, discipline, semester, control_type,
+          attempts: int(1, 3), last_result: pick(["Неудовлетворительно", "Неявка", "Не зачтено"]) });
+      }
+      if (points != null) pts.push({ points, graded: control_type !== "Зачёт" });
+    });
+    st.avg_points = pts.length ? +(pts.reduce((s, p) => s + p.points, 0) / pts.length).toFixed(1) : null;
+    st.debts = debtors.filter((d) => d.student === st.student).length;
+    const minMark = Math.min(...pts.filter((p) => p.graded).map((p) => mark(p.points)));
+    st.min_mark = pts.length ? minMark : null;
+    students.push(st);
+  }
+});
+const expulsion = [];
+students.forEach((s) => {
+  const ds = debtors.filter((d) => d.student === s.student);
+  if (ds.length && (ds.length >= 3 || Math.max(...ds.map((d) => d.attempts)) >= 3)) {
+    expulsion.push({ student: s.student, group_name: s.group_name, debts: ds.length, max_attempts: Math.max(...ds.map((d) => d.attempts)),
+      disciplines: ds.map((d) => `${d.discipline} (${d.attempts} ${d.attempts === 1 ? "попытка" : "попытки"})`).join(", "),
+      reason: Math.max(...ds.map((d) => d.attempts)) >= 3 ? "Не сдана комиссия" : "Три и более задолженности" });
+  }
+  s.category = s.status !== "Обучается" ? s.status
+    : expulsion.some((e) => e.student === s.student) ? "Кандидат на отчисление"
+    : s.debts > 0 ? "Есть задолженности"
+    : s.min_mark == null ? "Ещё не сдавал сессию"
+    : s.min_mark === 5 ? "Отличник" : s.min_mark === 4 ? "Хорошист" : "Есть тройки";
+  s.scholarships = s.funding === "Бюджет" && ["Отличник", "Хорошист"].includes(s.category)
+    ? (s.category === "Отличник" ? "Повышенная государственная академическая" : "Государственная академическая") : null;
+});
+const CATEGORY_KIND = { "Отличник": "ok", "Хорошист": "ok", "Есть задолженности": "warn", "Кандидат на отчисление": "bad", "Академический отпуск": "muted" };
+
+/* ── Группы (v_groups) ── */
+const groups = GROUPS.map((g) => {
+  const st = students.filter((s) => s.group_name === g.name);
+  const active = st.filter((s) => s.status === "Обучается");
+  return { group_name: g.name, specialty: g.spec, study_form: g.form, admission_year: g.year, course: course(g.year),
+    current_semester: course(g.year) * 2 - 1, curator: pick(teachers).full_name, headman: active[0]?.student ?? "—",
+    active_students: active.length, budget_students: active.filter((s) => s.funding === "Бюджет").length };
+});
+
+/* ── Расписание на семестр по датам (v_schedule_calendar) ── */
+const PAIRS = [null, ["08:30", "10:00"], ["10:10", "11:40"], ["12:10", "13:40"], ["13:50", "15:20"], ["15:30", "17:00"], ["17:10", "18:40"]];
+const WEEKDAYS = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+const TERM_START = new Date("2026-09-01T00:00:00Z"), TERM_END = new Date("2026-12-20T00:00:00Z");
+const HOLIDAYS = ["2026-11-04"];
+const CUR_DISC = {
+  "ИДБ-23-11": ["Проектирование информационных систем", "Тестирование программного обеспечения", "Машинное обучение"],
+  "ИДБ-23-12": ["Проектирование информационных систем", "Тестирование программного обеспечения", "Машинное обучение"],
+  "ИДБ-24-11": ["Базы данных", "Объектно-ориентированное программирование", "Иностранный язык"],
+  "ИДБ-24-12": ["Базы данных", "Объектно-ориентированное программирование", "Иностранный язык"],
+  "ИДБ-25-11": ["Дискретная математика", "Линейная алгебра и аналитическая геометрия", "Физическая культура"],
+};
+const slots = [];
+GROUPS.forEach((g) => {
+  CUR_DISC[g.name].forEach((discipline, di) => {
+    const teacher = pick(teachers).full_name;
+    [["Лекция", "every"], ["Практика", di === 0 ? "every" : pick(["odd", "even"])]].forEach(([lesson_type, parity]) => {
+      slots.push({ group_name: g.name, discipline, lesson_type, teacher, parity, weekday: int(1, 5), pair_number: int(1, 4),
+        classroom: lesson_type === "Лекция" ? pick(["А-101", "А-102", "Б-101"]) : pick(["А-201", "А-203", "Б-302", "В-202"]),
+        subgroup: lesson_type === "Практика" && rnd() < 0.3 ? 1 : null });
+    });
+  });
+});
+const schedule = [];
+for (let d = new Date(TERM_START); d <= TERM_END; d.setUTCDate(d.getUTCDate() + 1)) {
+  const wd = d.getUTCDay();
+  if (wd === 0 || HOLIDAYS.includes(iso(d))) continue;
+  const week_no = Math.floor((d - TERM_START) / 864e5 / 7) + 1;
+  slots.filter((s) => s.weekday === wd && (s.parity === "every" || (s.parity === "odd") === (week_no % 2 === 1))).forEach((s) => {
+    schedule.push({ lesson_date: iso(d), weekday_name: WEEKDAYS[wd], week_no, week: week_no % 2 ? "нечётная" : "чётная", ...s });
+  });
+}
+schedule.sort((a, b) => a.lesson_date.localeCompare(b.lesson_date) || a.pair_number - b.pair_number || a.group_name.localeCompare(b.group_name));
+
+/* ── Заявки на справки (v_document_queue) ── */
+const DOC_TYPES = [["Справка об обучении", 3], ["Академическая справка", 10], ["Справка для военного комиссариата", 3], ["Справка о размере стипендии", 5], ["Выписка из приказа", 5]];
+const PURPOSES = ["По месту работы родителей", "В военкомат", "В соцзащиту", "Для оформления визы", "В банк", "По месту требования"];
+const requests = Array.from({ length: 14 }, (_, i) => {
+  const [document, days] = pick(DOC_TYPES);
+  const created = new Date(Date.UTC(2026, 8, 18 + int(0, 13)));
+  const due = new Date(created); due.setUTCDate(due.getUTCDate() + days);
+  const status = pick(["Новая", "Новая", "В работе", "В работе", "Готова к выдаче"]);
+  const s = pick(students);
+  return { request_id: 230 + i, student: s.student, group_name: s.group_name, document, copies: pick([1, 1, 1, 2]),
+    purpose: pick(PURPOSES), status, created_at: iso(created), due_date: iso(due), processed_by: status === "Новая" ? null : pick(deanStaff).full_name };
+}).sort((a, b) => a.due_date.localeCompare(b.due_date));
+const STATUS_KIND = { "Новая": "", "В работе": "warn", "Готова к выдаче": "ok" };
+
+/* ── Практики (v_practice) ── */
+const ORGS = [["ООО «ТехноСофт-М»", "Руководитель отдела разработки"], ["АО «ИнфоСистемы Про»", "Ведущий аналитик"], ["ООО «ДатаЛаб»", "Технический директор"],
+  ["ООО «СтанкоСофт»", "Начальник отдела ИТ"], ["АО «Цифровое производство»", "Главный инженер"], ["ООО «ОблакоТех»", "Руководитель группы"]];
+const practices = [];
+students.filter((s) => s.course >= 2 && s.status === "Обучается").forEach((s, i) => {
+  if (i % 2) return;
+  const [organization, job] = pick(ORGS);
+  const prod = s.course >= 3;
+  practices.push({ student: s.student, group_name: s.group_name, practice: prod ? "Производственная практика" : "Учебная практика",
+    semester: prod ? 6 : 4, organization, supervisor: pick(teachers).full_name, org_supervisor: `${person()}, ${job.toLowerCase()}`,
+    start_date: prod ? "2026-06-29" : "2026-06-15", end_date: prod ? "2026-07-26" : "2026-07-12", order_number: `${int(140, 190)}-с` });
+});
+
+/* ── Таблица с постраничным выводом ── */
+const PAGE_SIZE = 20;
+const pageNo = {};
+let currentTab = "students";
+function tableCard(id, title, cols, rows) {
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const p = Math.min(pageNo[id] || 1, pages);
+  const shown = rows.slice((p - 1) * PAGE_SIZE, p * PAGE_SIZE);
+  const head = cols.map(([l, , c]) => `<th class="${c || ""}">${l}</th>`).join("");
+  const body = shown.length
+    ? shown.map((r) => `<tr>${cols.map(([, f, c]) => `<td class="${c || ""}">${f(r)}</td>`).join("")}</tr>`).join("")
+    : `<tr><td colspan="${cols.length}" class="empty">Нет данных</td></tr>`;
+  const pager = pages > 1 ? `<div class="pager"><span>Страница ${p} из ${pages}</span><div class="pages">
+      <button data-tbl="${id}" data-pg="${p - 1}" ${p <= 1 ? "disabled" : ""}>←</button>
+      ${pageButtons(p, pages).map((n) => n === "…" ? `<span>…</span>` : `<button data-tbl="${id}" data-pg="${n}" class="${n === p ? "cur" : ""}">${n}</button>`).join("")}
+      <button data-tbl="${id}" data-pg="${p + 1}" ${p >= pages ? "disabled" : ""}>→</button></div></div>` : "";
+  return `<section class="card">
+    <div class="toolbar">${title ? `<h2>${title}</h2>` : ""}<span>Всего записей: <b>${rows.length}</b></span></div>
+    <div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>${pager}</section>`;
+}
+function pageButtons(cur, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const set = [...new Set([1, cur - 1, cur, cur + 1, total])].filter((n) => n >= 1 && n <= total).sort((a, b) => a - b);
+  return set.flatMap((n, i) => (i && n - set[i - 1] > 1 ? ["…", n] : [n]));
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-pg]");
+  if (!b || b.disabled) return;
+  pageNo[b.dataset.tbl] = +b.dataset.pg;
+  showTab(currentTab, true);
+});
+
+/* ── Страницы ── */
+const PAGES = {
+  students: () => tableCard("students", "", [
+    ["Зачётка", (r) => r.record_book_number], ["ФИО", (r) => esc(r.student)], ["Группа", (r) => r.group_name], ["Курс", (r) => r.course, "num"],
+    ["Статус", (r) => esc(r.status)], ["Основа", (r) => r.funding], ["Ср. балл", (r) => r.avg_points ?? "—", "num"],
+    ["Долги", (r) => r.debts || "—", "num"], ["Посещ., %", (r) => r.attendance_pct, "num"],
+    ["Стипендия", (r) => esc(r.scholarships || "—")], ["Категория", (r) => chip(r.category, CATEGORY_KIND[r.category])],
+  ], students),
+  groups: () => tableCard("groups", "", [
+    ["Группа", (r) => r.group_name], ["Направление", (r) => esc(r.specialty)], ["Форма", (r) => r.study_form],
+    ["Год набора", (r) => r.admission_year, "num"], ["Курс", (r) => r.course, "num"], ["Семестр", (r) => r.current_semester, "num"],
+    ["Куратор", (r) => esc(r.curator)], ["Староста", (r) => esc(r.headman)],
+    ["Студентов", (r) => r.active_students, "num"], ["Из них бюджет", (r) => r.budget_students, "num"],
+  ], groups),
+  schedule: () => tableCard("schedule", "2026/27, осенний семестр", [
+    ["Дата", (r) => date(r.lesson_date)], ["День", (r) => r.weekday_name], ["Неделя", (r) => `${r.week_no}, ${r.week}`],
+    ["Пара", (r) => `${r.pair_number} · ${PAIRS[r.pair_number].join("–")}`], ["Группа", (r) => r.group_name],
+    ["Дисциплина", (r) => esc(r.discipline)], ["Вид", (r) => r.lesson_type], ["Преподаватель", (r) => esc(r.teacher)],
+    ["Аудитория", (r) => r.classroom], ["Подгруппа", (r) => r.subgroup ?? "—", "num"],
+  ], schedule),
+  debtors: () => tableCard("expulsion", "Кандидаты на отчисление", [
+    ["Студент", (r) => esc(r.student)], ["Группа", (r) => r.group_name], ["Долгов", (r) => r.debts, "num"],
+    ["Макс. попыток", (r) => r.max_attempts, "num"], ["Дисциплины", (r) => esc(r.disciplines), "wrap"], ["Причина", (r) => chip(r.reason, "bad")],
+  ], expulsion) + tableCard("debtors", "Все задолженности", [
+    ["Студент", (r) => esc(r.student)], ["Группа", (r) => r.group_name], ["Дисциплина", (r) => esc(r.discipline)],
+    ["Семестр", (r) => r.semester, "num"], ["Контроль", (r) => r.control_type], ["Попыток", (r) => r.attempts, "num"],
+    ["Последний результат", (r) => esc(r.last_result)],
+  ], debtors),
+  requests: () => tableCard("requests", "", [
+    ["№", (r) => r.request_id], ["Студент", (r) => esc(r.student)], ["Группа", (r) => r.group_name], ["Документ", (r) => esc(r.document)],
+    ["Экз.", (r) => r.copies, "num"], ["Цель", (r) => esc(r.purpose)], ["Статус", (r) => chip(r.status, STATUS_KIND[r.status])],
+    ["Создана", (r) => date(r.created_at)], ["Срок", (r) => date(r.due_date)], ["Исполнитель", (r) => esc(r.processed_by || "—")],
+  ], requests),
+  practice: () => tableCard("practice", "", [
+    ["Студент", (r) => esc(r.student)], ["Группа", (r) => r.group_name], ["Практика", (r) => r.practice], ["Семестр", (r) => r.semester, "num"],
+    ["Организация", (r) => esc(r.organization)], ["Руководитель от вуза", (r) => esc(r.supervisor)],
+    ["Руководитель от организации", (r) => esc(r.org_supervisor)], ["Начало", (r) => date(r.start_date)], ["Окончание", (r) => date(r.end_date)],
+    ["Приказ", (r) => r.order_number],
+  ], practices),
+  employees: () => tableCard("employees", "", [
+    ["Таб. №", (r) => r.personnel_number], ["ФИО", (r) => esc(r.full_name)], ["Должность", (r) => esc(r.position)],
+    ["Подразделение", (r) => esc(r.unit)], ["Ставка", (r) => money(r.employment_rate, 2), "num"], ["Принят", (r) => date(r.hire_date)],
+    ["Телефон", (r) => r.phone], ["Email", (r) => r.email],
+  ], employees),
+};
+const TITLES = { students: "Студенты", groups: "Группы", schedule: "Расписание", debtors: "Должники", requests: "Заявки на справки",
+  practice: "Практики", employees: "Сотрудники", olap: "OLAP-анализ" };
+
+/* ── OLAP: анализ успеваемости ── */
+const OPS = [["rollup-group", "Roll-up по группе"], ["rollup-discipline", "Roll-up по дисциплине"], ["rollup-semester", "Roll-up по семестру"],
+  ["slice-group", "Срез по группе"], ["slice-discipline", "Срез по дисциплине"], ["dice", "Dice"],
+  ["drilldown-group", "Drill-down по группе"], ["cross-group-semester", "Кросс-таблица Группа × Семестр"]];
+const olap = { op: "rollup-group", group: GROUPS[0].name, discipline: DISCIPLINES[0][0], dGroup: "", dDisc: "", dSem: "" };
+const avg = (rows) => { const p = rows.filter((r) => r.points != null); return p.length ? +(p.reduce((s, r) => s + r.points, 0) / p.length).toFixed(1) : null; };
+function rollup(key, rows = results) {
+  const m = new Map();
+  rows.forEach((r) => { const k = key(r); if (!m.has(k)) m.set(k, []); m.get(k).push(r); });
+  return [...m.entries()].map(([name, rs]) => ({ name, avg: avg(rs), debts: rs.filter((r) => r.points == null).length,
+    students: new Set(rs.map((r) => r.student)).size, results: rs.length,
+    excellent: rs.filter((r) => mark(r.points) === 5).length }));
+}
+const ROLLUP_COLS = (first) => [[first, (r) => esc(r.name)], ["Средний балл", (r) => r.avg ?? "—", "num"],
+  ["Результатов", (r) => r.results, "num"], ["На «отлично»", (r) => r.excellent, "num"], ["Долгов", (r) => r.debts, "num"]];
+const RESULT_COLS = [["Студент", (r) => esc(r.student)], ["Группа", (r) => r.group_name], ["Дисциплина", (r) => esc(r.discipline)],
+  ["Семестр", (r) => r.semester, "num"], ["Контроль", (r) => r.control_type], ["Баллы", (r) => r.points ?? "—", "num"],
+  ["Оценка", (r) => r.points == null ? chip("долг", "bad") : r.control_type === "Зачёт" ? "зачтено" : mark(r.points)]];
+
+function chartSvg(rows, label) {
+  const W = 1000, H = 250, L = 44, B = 40, T = 14, R = 10, top = 54;
+  const y = (v) => T + (H - T - B) * (1 - v / top);
+  const gw = (W - L - R) / rows.length, bw = Math.min(gw * 0.5, 64);
+  let s = "";
+  [0, 10, 20, 30, 40, 50].forEach((v) => {
+    s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
+  });
+  rows.forEach((r, i) => {
+    const cx = L + gw * i + gw / 2, v = r.avg ?? 0;
+    s += `<rect x="${cx - bw / 2}" y="${y(v)}" width="${bw}" height="${y(0) - y(v)}" rx="3" fill="var(--accent)"><title>${esc(r.name)}: ${v}</title></rect>`;
+    s += `<text x="${cx}" y="${y(v) - 6}" text-anchor="middle" style="fill:var(--ink)">${v}</text>`;
+    const name = String(r.name).length > 22 ? String(r.name).slice(0, 21) + "…" : r.name;
+    s += `<text x="${cx}" y="${H - 16}" text-anchor="middle">${esc(name)}</text>`;
+  });
+  return `<section class="card"><h2>${label}</h2><div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${label}">${s}</svg></div></section>`;
+}
+const sel = (id, label, options, value, withAll) => `<label class="field">${label}<select id="${id}">${withAll ? `<option value="">Все</option>` : ""}${options.map(([v, l]) =>
+  `<option value="${esc(v)}" ${String(v) === String(value) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>`;
+const groupOpts = () => GROUPS.map((g) => [g.name, g.name]);
+const discOpts = () => DISCIPLINES.map(([d]) => [d, d]);
+
+function renderOlap() {
+  const o = olap;
+  let filters = "", out = "";
+  if (o.op === "rollup-group") {
+    const rows = rollup((r) => r.group_name);
+    out = chartSvg(rows, "Средний балл по группам") + tableCard("olap1", "", ROLLUP_COLS("Группа"), rows);
+  } else if (o.op === "rollup-discipline") {
+    const rows = rollup((r) => r.discipline);
+    out = chartSvg(rows, "Средний балл по дисциплинам") + tableCard("olap1", "", ROLLUP_COLS("Дисциплина"), rows);
+  } else if (o.op === "rollup-semester") {
+    const rows = rollup((r) => r.semester).sort((a, b) => a.name - b.name).map((r) => ({ ...r, name: r.name + " семестр" }));
+    out = chartSvg(rows, "Средний балл по семестрам") + tableCard("olap1", "", ROLLUP_COLS("Семестр"), rows);
+  } else if (o.op === "slice-group") {
+    filters = sel("oGroup", "Группа", groupOpts(), o.group);
+    out = tableCard("olap1", "По дисциплинам", ROLLUP_COLS("Дисциплина"), rollup((r) => r.discipline, results.filter((r) => r.group_name === o.group)));
+  } else if (o.op === "slice-discipline") {
+    filters = sel("oDisc", "Дисциплина", discOpts(), o.discipline);
+    out = tableCard("olap1", "По группам", ROLLUP_COLS("Группа"), rollup((r) => r.group_name, results.filter((r) => r.discipline === o.discipline)));
+  } else if (o.op === "dice") {
+    filters = sel("oDGroup", "Группа", groupOpts(), o.dGroup, true) + sel("oDDisc", "Дисциплина", discOpts(), o.dDisc, true)
+      + sel("oDSem", "Семестр", [1, 2, 3, 4].map((s) => [s, s + " семестр"]), o.dSem, true);
+    const rows = results.filter((r) => (!o.dGroup || r.group_name === o.dGroup) && (!o.dDisc || r.discipline === o.dDisc) && (!o.dSem || r.semester == o.dSem));
+    out = tableCard("olap1", "Результаты (по фильтрам)", RESULT_COLS, rows);
+  } else if (o.op === "drilldown-group") {
+    filters = sel("oGroup", "Группа", groupOpts(), o.group);
+    const st = students.filter((s) => s.group_name === o.group), rs = results.filter((r) => r.group_name === o.group);
+    out = `<div class="summary">${[["Студентов", st.length], ["Средний балл", avg(rs) ?? "—"],
+      ["Долгов", rs.filter((r) => r.points == null).length], ["Отличников", st.filter((s) => s.category === "Отличник").length]]
+      .map(([l, v]) => `<div class="card stat"><span class="label">${l}</span><span class="value">${v}</span></div>`).join("")}</div>`
+      + tableCard("olap1", "Студенты группы", [["Студент", (r) => esc(r.student)], ["Ср. балл", (r) => r.avg_points ?? "—", "num"],
+        ["Долги", (r) => r.debts || "—", "num"], ["Категория", (r) => chip(r.category, CATEGORY_KIND[r.category])]], st);
+  } else if (o.op === "cross-group-semester") {
+    const sems = [1, 2, 3, 4];
+    out = tableCard("olap1", "Средний балл: группа × семестр", [["Группа", (r) => r.name],
+      ...sems.map((s) => [s + " сем.", (r) => avg(results.filter((x) => x.group_name === r.name && x.semester === s)) ?? "—", "num"])],
+      GROUPS.map((g) => ({ name: g.name })));
+  }
+  return `<section class="card ops"><div class="chips">${OPS.map(([k, l]) => `<button data-op="${k}" aria-pressed="${k === o.op}">${l}</button>`).join("")}</div>
+    ${filters ? `<div class="filters">${filters}</div>` : ""}</section>${out}`;
+}
+function bindOlap() {
+  document.querySelectorAll("[data-op]").forEach((b) => b.onclick = () => { olap.op = b.dataset.op; pageNo.olap1 = 1; showTab("olap", true); });
+  [["oGroup", "group"], ["oDisc", "discipline"], ["oDGroup", "dGroup"], ["oDDisc", "dDisc"], ["oDSem", "dSem"]].forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    if (el) el.onchange = () => { olap[key] = el.value; pageNo.olap1 = 1; showTab("olap", true); };
+  });
+}
+
+/* ── Переключение вкладок ── */
+function showTab(tab, keepScroll) {
+  currentTab = tab;
+  document.querySelectorAll(".tab").forEach((x) => x.setAttribute("aria-selected", x.dataset.tab === tab));
+  const top = $("#content").scrollTop;
+  $("#page").innerHTML = `<h1>${TITLES[tab]}</h1>` + (tab === "olap" ? renderOlap() : PAGES[tab]());
+  if (tab === "olap") bindOlap();
+  $("#content").scrollTop = keepScroll ? top : 0;
+}
+document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
+showTab("students");
+
+function autoGrow() { input.style.height = "36px"; input.style.height = Math.min(input.scrollHeight + 2, 140) + "px"; }
+input.addEventListener("input", autoGrow);
+input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#form").requestSubmit(); } });
+</script>

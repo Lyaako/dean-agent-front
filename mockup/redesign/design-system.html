@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Дизайн-система · Агент деканата</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="app.css">
+<style>
+/* Раскладка листа дизайн-системы: карточки-секции на сетке 12 колонок, как в референсе */
+body { min-height: 100%; }
+.ds-page { max-width: 1240px; margin: 0 auto; padding: 72px 32px 96px; }
+.ds-hero { display: flex; flex-direction: column; align-items: center; gap: 14px; margin-bottom: 56px; text-align: center; }
+.ds-hero h1 { margin: 0; font: 600 clamp(44px, 6vw, 76px)/1 var(--font-display); letter-spacing: -.05em; animation: blurIn .9s var(--ease) backwards; }
+.ds-hero .lead { margin: 0; max-width: 620px; }
+.ds-hero .row { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
+a.btn { text-decoration: none; }
+
+.ds-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 20px; }
+.ds-card { grid-column: span 12; display: flex; flex-direction: column; gap: 20px; padding: 26px 28px 28px; animation: cardIn var(--t4) var(--ease) backwards; animation-delay: calc(var(--i, 0) * 60ms); }
+.span-4 { grid-column: span 4; } .span-5 { grid-column: span 5; } .span-6 { grid-column: span 6; }
+.span-7 { grid-column: span 7; } .span-8 { grid-column: span 8; }
+.ds-label { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 500; color: var(--muted); }
+.ds-label b { color: var(--ink); font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.ds-sub { font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: -10px; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.col { display: flex; flex-direction: column; gap: 10px; }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; }
+
+/* Цвета */
+.swatches { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.swatches.small { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.sw { display: flex; flex-direction: column; gap: 12px; padding: 0; border: 0; background: none; text-align: left; }
+.sw .tile {
+  position: relative; height: 132px; border-radius: 22px; background: var(--c); overflow: hidden;
+  box-shadow: 0 18px 34px -22px var(--c); transition: transform var(--t3) var(--spring), box-shadow var(--t3) var(--ease);
+}
+.sw.small .tile { height: 84px; border-radius: 18px; }
+.sw .tile::after { content: ""; position: absolute; inset: 0; background: linear-gradient(140deg, rgba(255, 255, 255, .22), transparent 45%); }
+.sw .tile .tints { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 4px; }
+.sw .tile .tints i { width: 18px; height: 18px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, .7); }
+.sw:hover .tile { transform: translateY(-4px); box-shadow: 0 26px 40px -22px var(--c); }
+.sw:active .tile { transform: scale(.98); }
+.sw b { display: flex; align-items: center; justify-content: space-between; font-weight: 600; }
+.sw b code { font: 500 13px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+.sw small { margin-top: -8px; font-size: 13px; color: var(--muted); }
+.neutrals { display: flex; flex-wrap: wrap; gap: 18px 26px; }
+.neutral { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.neutral i { width: 34px; height: 34px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(12, 16, 41, .08); }
+.neutral span { display: flex; flex-direction: column; line-height: 1.3; }
+.neutral code { font: 500 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+.gradient-strip { height: 56px; border-radius: 18px; background: linear-gradient(100deg, #052891 0%, #6491f0 30%, #820aaa 62%, #e16aff 82%, #052891 100%) 0 50% / 200% 100%; animation: sheen 8s linear infinite; }
+
+/* Типографика */
+.type-row { display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: baseline; gap: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.type-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.type-row small { font-size: 12px; color: var(--muted); }
+.t-display { font: 600 52px/1 var(--font-display); letter-spacing: -.045em; }
+.t-title { font: 600 26px/1.15 var(--font-display); letter-spacing: -.03em; }
+.t-head { font-size: 17px; font-weight: 600; letter-spacing: -.015em; }
+.t-body { font-size: 15px; }
+.t-caption { font-size: 13px; color: var(--muted); }
+.t-num { font: 600 30px/1 var(--font-display); letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+
+/* Демо-копии элементов макета, которые там закреплены на экране */
+.chat.demo { position: relative; left: auto; transform: none; animation: none; width: 100%; }
+.tabbar.demo { position: relative; left: auto; bottom: auto; transform: none; animation: none; width: max-content; max-width: 100%; margin: 0 auto; }
+.demo-thread { display: flex; flex-direction: column; gap: 18px; padding: 18px; border-radius: 22px; background: var(--fill); }
+.demo-thread .msg.user .bubble { box-shadow: none; }
+.demo-thread .suggest { margin: 0; max-width: none; }
+.demo-thread .suggest button { background: var(--surface); }
+.ds-table { border-radius: 18px; box-shadow: 0 0 0 1px var(--line); overflow: hidden; }
+.ind-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
+
+/* Движение */
+.motion { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 28px; }
+.curve { display: grid; grid-template-columns: 130px minmax(0, 1fr); align-items: center; gap: 16px; }
+.curve b { display: block; font-size: 14px; font-weight: 600; }
+.curve small { font: 500 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+.track { position: relative; height: 34px; border-radius: 999px; background: var(--fill); }
+.track i { position: absolute; top: 5px; left: 5px; width: 24px; height: 24px; border-radius: 50%; background: var(--c); box-shadow: 0 6px 14px -6px var(--c); transition: left 1s var(--e); }
+.run .track i { left: calc(100% - 29px); }
+.durations { display: flex; gap: 10px; flex-wrap: wrap; }
+.dur { flex: 1 1 90px; padding: 12px 14px; border-radius: 16px; background: var(--fill); }
+.dur b { display: block; font: 600 20px/1.1 var(--font-display); letter-spacing: -.02em; }
+.dur small { font-size: 12px; color: var(--muted); }
+.patterns { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.patterns li { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.patterns li:last-child { border-bottom: 0; }
+.patterns .ico { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; background: var(--sky-100); color: var(--indigo); }
+.patterns .ico .ic { width: 17px; height: 17px; }
+.patterns small { display: block; color: var(--muted); font-size: 13px; }
+.ds-more { display: flex; justify-content: center; margin-top: 28px; }
+.ds-more span { padding: 8px 18px; border-radius: 999px; background: var(--fill-2); font-size: 13px; font-weight: 500; color: var(--ink-2); }
+
+@media (max-width: 980px) {
+  .span-4, .span-5, .span-6, .span-7, .span-8 { grid-column: span 12; }
+  .motion { grid-template-columns: 1fr; }
+  .ind-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .ds-page { padding: 40px 16px 72px; }
+  .ds-card { padding: 20px; }
+  .swatches, .swatches.small, .two { grid-template-columns: 1fr; }
+  .type-row { grid-template-columns: 1fr; gap: 4px; }
+  .curve { grid-template-columns: 1fr; gap: 6px; }
+}
+</style>
+</head>
+<body>
+<main class="ds-page">
+  <header class="ds-hero">
+    <span class="eyebrow">Агент деканата · макет v2</span>
+    <h1>Дизайн-система</h1>
+    <p class="lead">Цвета, типографика, компоненты и движение — всё, из чего собран макет. Элементы живые: наводите, нажимайте, переключайте.</p>
+    <div class="row">
+      <a class="btn primary go" href="index.html">Открыть макет<i data-icon="arrow"></i></a>
+      <button class="btn soft" id="replay" type="button"><i data-icon="sparkle"></i>Проиграть анимации</button>
+    </div>
+  </header>
+
+  <div class="ds-grid" id="grid">
+    <!-- ЦВЕТА -->
+    <section class="card ds-card" style="--i:0">
+      <div class="ds-label"><b>Цвета</b><span>Нажмите на образец, чтобы скопировать HEX</span></div>
+      <div class="ds-sub">Основные</div>
+      <div class="swatches">
+        <button class="sw" type="button" data-hex="#052891" style="--c:#052891"><span class="tile"><span class="tints"><i style="background:#e7edfd"></i><i style="background:#1a3cad"></i></span></span><b>Indigo<code>#052891</code></b><small>Главные кнопки, выбранные вкладки и фильтры, сообщения пользователя</small></button>
+        <button class="sw" type="button" data-hex="#6491f0" style="--c:#6491f0"><span class="tile"><span class="tints"><i style="background:#f3f6fe"></i><i style="background:#e7edfd"></i></span></span><b>Sky<code>#6491f0</code></b><small>Фокус, графики, лекции в расписании, индикаторы</small></button>
+        <button class="sw" type="button" data-hex="#820aaa" style="--c:#820aaa"><span class="tile"><span class="tints"><i style="background:#f4e5fa"></i></span></span><b>Violet<code>#820aaa</code></b><small>Агент и его подсказки, практики, лучший результат</small></button>
+      </div>
+      <div class="ds-sub">Вспомогательные</div>
+      <div class="swatches small">
+        <button class="sw small" type="button" data-hex="#e16aff" style="--c:#e16aff"><span class="tile"><span class="tints"><i style="background:#fbeaff"></i><i style="background:#9d22c0"></i></span></span><b>Orchid<code>#e16aff</code></b><small>«В работе», внимание, неявка</small></button>
+        <button class="sw small" type="button" data-hex="#fa235a" style="--c:#fa235a"><span class="tile"><span class="tints"><i style="background:#ffe6ec"></i><i style="background:#c8133f"></i></span></span><b>Rose<code>#fa235a</code></b><small>Долги, просрочка, удаление, «сегодня»</small></button>
+        <button class="sw small" type="button" data-hex="#46c8a0" style="--c:#46c8a0"><span class="tile"><span class="tints"><i style="background:#e1f6ee"></i><i style="background:#12795a"></i></span></span><b>Mint<code>#46c8a0</code></b><small>Успех, «готова к выдаче», переключатели</small></button>
+      </div>
+      <div class="ds-sub">Нейтральные</div>
+      <div class="neutrals">
+        <span class="neutral" style="--c:#0c1029"><i></i><span>Ink<code>#0c1029</code></span></span>
+        <span class="neutral" style="--c:#3a3f5c"><i></i><span>Ink 2<code>#3a3f5c</code></span></span>
+        <span class="neutral" style="--c:#6b7089"><i></i><span>Muted<code>#6b7089</code></span></span>
+        <span class="neutral" style="--c:#d8dbe5"><i></i><span>Line 2<code>#d8dbe5</code></span></span>
+        <span class="neutral" style="--c:#e5e8f0"><i></i><span>Fill 2<code>#e5e8f0</code></span></span>
+        <span class="neutral" style="--c:#f0f2f7"><i></i><span>Fill<code>#f0f2f7</code></span></span>
+        <span class="neutral" style="--c:#f5f6fa"><i></i><span>Фон<code>#f5f6fa</code></span></span>
+        <span class="neutral" style="--c:#ffffff"><i></i><span>Поверхность<code>#ffffff</code></span></span>
+      </div>
+      <div class="ds-sub">Градиент агента — орб, кольцо фокуса, приветствие</div>
+      <div class="gradient-strip"></div>
+    </section>
+
+    <!-- ТИПОГРАФИКА -->
+    <section class="card ds-card span-7" style="--i:1">
+      <div class="ds-label"><b>Типографика</b><span>SF Pro · Inter как запасной</span></div>
+      <div class="type-row"><small>Display · 52 / 600</small><span class="t-display">Студенты</span></div>
+      <div class="type-row"><small>Title · 26 / 600</small><span class="t-title">Кандидаты на отчисление</span></div>
+      <div class="type-row"><small>Headline · 17 / 600</small><span class="t-head">Средний балл по группам</span></div>
+      <div class="type-row"><small>Body · 15 / 400</small><span class="t-body">Агент находит нужные данные и вносит точечные правки.</span></div>
+      <div class="type-row"><small>Caption · 13 / 400</small><span class="t-caption">Зачётка 23-1101 · 4 курс</span></div>
+      <div class="type-row"><small>Eyebrow · 12 / 600</small><span class="eyebrow">Контингент · 2026/27</span></div>
+      <div class="type-row"><small>Числа · табличные</small><span class="t-num" data-count="1234.5">1 234,5</span></div>
+    </section>
+
+    <!-- КНОПКИ -->
+    <section class="card ds-card span-5" style="--i:2">
+      <div class="ds-label"><b>Кнопки</b><span>Пилюли, нажатие — пружина</span></div>
+      <div class="row"><button class="btn primary">Применить изменения</button><button class="btn">Отменить</button></div>
+      <div class="row"><button class="btn soft go">Студенты<i data-icon="arrow"></i></button><button class="btn outline">Экспорт</button><button class="btn ghost"><i data-icon="plus"></i>Новый диалог</button></div>
+      <div class="row"><button class="btn danger"><i data-icon="trash"></i>Удалить</button><button class="btn primary" disabled>Недоступно</button></div>
+      <div class="row"><button class="btn sm primary go">Показать в таблице<i data-icon="arrow"></i></button><button class="btn sm soft">Расписание</button><button class="btn sm ghost">Ещё</button></div>
+      <div class="row">
+        <button class="icon-btn send" aria-label="Отправить"><i data-icon="up"></i></button>
+        <button class="icon-btn send" disabled aria-label="Отправить (пусто)"><i data-icon="up"></i></button>
+        <button class="icon-btn soft" aria-label="Назад"><i data-icon="left"></i></button>
+        <button class="icon-btn soft" aria-label="Вперёд"><i data-icon="right"></i></button>
+        <button class="icon-btn" aria-label="Прикрепить"><i data-icon="clip"></i></button>
+        <button class="icon-btn" aria-label="Закрыть"><i data-icon="x"></i></button>
+      </div>
+    </section>
+
+    <!-- ТЕГИ -->
+    <section class="card ds-card span-6" style="--i:3">
+      <div class="ds-label"><b>Теги и бейджи</b><span>Фильтры выбираются по одному</span></div>
+      <div class="chips" data-single>
+        <button class="fchip" aria-pressed="true">Все<span class="n">40</span></button>
+        <button class="fchip" aria-pressed="false">Хорошист<span class="n">8</span></button>
+        <button class="fchip" aria-pressed="false">Есть тройки<span class="n">10</span></button>
+        <button class="fchip" aria-pressed="false">С долгами<span class="n">7</span></button>
+      </div>
+      <div class="ds-sub">Статусы</div>
+      <div class="row">
+        <span class="badge info">Новая</span><span class="badge warn">В работе</span><span class="badge ok">Готова к выдаче</span>
+        <span class="badge bad">Не сдана комиссия</span><span class="badge muted">Академический отпуск</span>
+      </div>
+      <div class="row"><span class="badge info plain">4 курс</span><span class="badge info plain">Лекция</span><span class="badge violet plain">Практика</span><span class="badge bad plain">Сегодня</span></div>
+      <div class="ds-sub">Подсказка агенту</div>
+      <div class="row"><button class="ask" type="button"><i data-icon="sparkle"></i><span>Кто кандидаты на отчисление?</span></button></div>
+    </section>
+
+    <!-- СЕГМЕНТЫ -->
+    <section class="card ds-card span-6" style="--i:4">
+      <div class="ds-label"><b>Сегментированные контролы</b><span>Бегунок скользит пружиной</span></div>
+      <div class="row">
+        <div class="seg" style="--n:2;--i:0"><button aria-pressed="true"><i data-icon="grid"></i><span>Карточки</span></button><button aria-pressed="false"><i data-icon="list"></i><span>Таблица</span></button></div>
+        <div class="seg" style="--n:3;--i:1"><button aria-pressed="false">Неделя</button><button aria-pressed="true">Месяц</button><button aria-pressed="false">Семестр</button></div>
+      </div>
+      <div class="row"><div class="seg dark" style="--n:3;--i:0"><button aria-pressed="true">Все</button><button aria-pressed="false">Бюджет</button><button aria-pressed="false">Договор</button></div></div>
+      <div class="ds-sub">Дни недели</div>
+      <div class="days" data-single style="grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 360px;">
+        <button class="day" aria-pressed="false"><small>Чт</small><b>1</b><span class="cnt">7 занятий</span></button>
+        <button class="day today" aria-pressed="true"><small>Пт</small><b>2</b><span class="cnt">3 занятия</span></button>
+        <button class="day" aria-pressed="false"><small>Сб</small><b>3</b><span class="cnt">нет пар</span></button>
+      </div>
+    </section>
+
+    <!-- ПОЛЯ -->
+    <section class="card ds-card span-7" style="--i:5">
+      <div class="ds-label"><b>Поля ввода</b><span>Фокус — мягкое свечение</span></div>
+      <label class="search" style="max-width:none"><i data-icon="search"></i><input type="search" placeholder="ФИО или номер зачётки" aria-label="Поиск студентов">
+        <select class="pill-select" aria-label="Группа"><option>Все группы</option><option>ИДБ-23-11</option><option>ИДБ-24-11</option></select></label>
+      <label class="search" style="max-width:360px"><i data-icon="search"></i><input type="search" placeholder="Студент или дисциплина" aria-label="Поиск долгов"></label>
+      <div class="row" style="align-items:flex-end">
+        <label class="field"><span>Группа</span><select class="select"><option>ИДБ-23-11</option><option>ИДБ-24-11</option></select></label>
+        <label class="field"><span>Номер заявки</span><input class="text-input" placeholder="Например, 237"></label>
+      </div>
+    </section>
+
+    <!-- ЧЕКБОКСЫ -->
+    <section class="card ds-card span-5" style="--i:6">
+      <div class="ds-label"><b>Чекбоксы, радио, переключатели</b></div>
+      <div class="two">
+        <label class="check"><input type="checkbox" checked>Отмечено</label>
+        <label class="check"><input type="checkbox" checked disabled>Недоступно, отмечено</label>
+        <label class="check"><input type="checkbox">Не отмечено</label>
+        <label class="check"><input type="checkbox" disabled>Недоступно</label>
+      </div>
+      <div class="two">
+        <label class="check"><input type="radio" name="r1" checked>Бюджет</label>
+        <label class="check"><input type="radio" name="r2" checked disabled>Недоступно, выбрано</label>
+        <label class="check"><input type="radio" name="r1">Договор</label>
+        <label class="check"><input type="radio" name="r2" disabled>Недоступно</label>
+      </div>
+      <div class="col">
+        <label class="switch"><input type="checkbox" checked>Подтверждать каждое изменение</label>
+        <label class="switch"><input type="checkbox">Показывать подсказки агента на вкладках</label>
+      </div>
+    </section>
+
+    <!-- ЧАТ -->
+    <section class="card ds-card span-7" style="--i:7">
+      <div class="ds-label"><b>Чат с агентом</b><span>Капсула сверху, ответ — по словам</span></div>
+      <div class="chat demo">
+        <button type="button" class="peek"><span class="orb xs"></span><span class="t">Открываю «Должники» — группа ИДБ-24-11.</span><span class="open">Открыть<i data-icon="down"></i></span></button>
+        <div class="composer"><div class="input-row">
+          <button type="button" class="icon-btn" aria-label="Прикрепить"><i data-icon="clip"></i></button>
+          <textarea rows="1" placeholder="Спросите агента или попросите изменить данные…" aria-label="Сообщение"></textarea>
+          <kbd class="kbd">⌘K</kbd>
+          <button type="button" class="icon-btn send" disabled aria-label="Отправить"><i data-icon="up"></i></button>
+          <button type="button" class="icon-btn toggle" aria-label="Развернуть"><i data-icon="down"></i></button>
+        </div></div>
+      </div>
+      <div class="demo-thread" id="demoThread">
+        <div class="msg user"><div class="bubble">Пары ИДБ-23-12 на сегодня</div></div>
+        <div class="msg agent" style="--wd:26ms;--after:420ms"><span class="orb"></span><div class="body"><p class="stream" id="demoStream"><b>ИДБ-23-12</b> · сегодня, пятница, 2 октября — 2 занятия:</p>
+          <div class="block"><div class="mini-list">
+            <div class="ml-row" style="--i:0"><span class="ml-time">08:30<small>1 пара</small></span><span class="ml-main"><b>Проектирование информационных систем</b><small>Лекция · А-101 · Козлов И. П.</small></span></div>
+            <div class="ml-row" style="--i:1"><span class="ml-time">12:10<small>3 пара</small></span><span class="ml-main"><b>Тестирование программного обеспечения</b><small>Практика · Б-302 · Козлова С. С.</small></span></div>
+          </div></div>
+          <div class="acts"><button class="btn sm primary go" type="button"><span>Открыть в расписании</span><i data-icon="arrow"></i></button></div></div></div>
+        <div class="msg agent"><span class="orb busy"></span><div class="dots3"><i></i><i></i><i></i></div></div>
+      </div>
+    </section>
+
+    <!-- ИЗМЕНЕНИЕ -->
+    <section class="card ds-card span-5" style="--i:8">
+      <div class="ds-label"><b>Изменение «было → стало»</b><span>Окно подтверждения и итог</span></div>
+      <div class="diff"><div class="entity"><b>Заявка №237</b><small>Справка об обучении · Орлов Д. И.</small></div>
+        <div class="diff-row" style="--i:0"><span class="k">Статус</span><span class="old">В работе</span><span class="to"><i data-icon="arrow"></i></span><span class="new">Готова к выдаче</span></div>
+        <div class="diff-row" style="--i:1"><span class="k">Исполнитель</span><span class="old">—</span><span class="to"><i data-icon="arrow"></i></span><span class="new">Белова А. О.</span></div></div>
+      <div class="diff applied"><div class="entity"><b>Соловьёв Роман Олегович</b><small>Зачётка 23-1101</small><span class="done-tick"><i data-icon="check"></i></span></div>
+        <div class="diff-row" style="--i:0"><span class="k">Статус</span><span class="old">Обучается</span><span class="to"><i data-icon="arrow"></i></span><span class="new">Академический отпуск</span></div></div>
+      <div class="row"><button class="btn sm soft" type="button" id="toastBtn">Показать тост</button><button class="btn sm ghost" type="button" id="dialogBtn">Открыть окно подтверждения</button></div>
+    </section>
+
+    <!-- ТАБЛИЦА -->
+    <section class="card ds-card" style="--i:9">
+      <div class="ds-label"><b>Таблица</b><span>Колонки — как в представлении v_student_summary; строки появляются каскадом</span></div>
+      <div class="ds-table table-card">
+        <div class="table-head"><h2></h2><span class="count">Всего записей: <b>40</b></span></div>
+        <div class="table-wrap"><table>
+        <thead><tr><th>Зачётка</th><th>ФИО</th><th>Группа</th><th class="num">Курс</th><th>Статус</th><th>Основа</th><th class="num">Ср. балл</th><th class="num">Долги</th><th class="num">Посещ., %</th><th>Стипендия</th><th>Категория</th></tr></thead>
+        <tbody id="demoRows">
+          <tr style="--r:0"><td>23-1101</td><td><span class="person"><span class="avatar t0">СР</span><span class="pc"><b>Соловьёв Роман Олегович</b></span></span></td><td>ИДБ-23-11</td><td class="num">4</td><td>Обучается</td><td>Договор</td><td class="num">40.4</td><td class="num">—</td><td class="num"><span class="meter" style="--v:0.9540000000000001"><i></i>95.4</span></td><td class="wrap-sm">—</td><td><span class="badge ">Есть тройки</span></td></tr>
+          <tr style="--r:1"><td>23-1102</td><td><span class="person"><span class="avatar t1">МИ</span><span class="pc"><b>Морозов Илья Русланович</b></span></span></td><td>ИДБ-23-11</td><td class="num">4</td><td>Обучается</td><td>Бюджет</td><td class="num">45.5</td><td class="num"><span class="late">1</span></td><td class="num"><span class="meter low" style="--v:0.727"><i></i>72.7</span></td><td class="wrap-sm">—</td><td><span class="badge warn">Есть задолженности</span></td></tr>
+          <tr style="--r:2"><td>23-1103</td><td><span class="person"><span class="avatar t3">СВ</span><span class="pc"><b>Смирнова Вера Дмитриевна</b></span></span></td><td>ИДБ-23-11</td><td class="num">4</td><td>Обучается</td><td>Бюджет</td><td class="num">38.2</td><td class="num"><span class="late">1</span></td><td class="num"><span class="meter" style="--v:0.8809999999999999"><i></i>88.1</span></td><td class="wrap-sm">—</td><td><span class="badge bad">Кандидат на отчисление</span></td></tr>
+        </tbody></table></div>
+        <div class="pager"><span>1–20 из 40</span><div class="pages" data-pages><button disabled aria-label="Назад"><i data-icon="left"></i></button><button class="cur">1</button><button>2</button><button aria-label="Вперёд"><i data-icon="right"></i></button></div></div>
+      </div>
+      <div class="row"><button class="btn sm soft" type="button" id="flashBtn">Подсветить изменённую строку</button></div>
+    </section>
+
+    <!-- ИНДИКАТОРЫ -->
+    <section class="card ds-card" style="--i:10">
+      <div class="ds-label"><b>Индикаторы</b></div>
+      <div class="ind-grid">
+        <div class="col"><div class="ds-sub">Загрузка и агент</div><div class="row" style="gap:20px;margin-top:10px"><span class="spinner"></span><span class="spinner grad"></span><span class="dots3"><i></i><i></i><i></i></span><span class="orb xs"></span><span class="orb"></span><span class="orb busy"></span></div></div>
+        <div class="col"><div class="ds-sub">Превью файла</div><div class="col" style="gap:8px;margin-top:10px"><span class="skel" style="height:14px;width:70%"></span><span class="skel" style="height:14px;width:90%"></span><span class="skel" style="height:14px;width:45%"></span></div></div>
+        <div class="col"><div class="ds-sub">Посещаемость и попытки</div><div class="row" style="gap:16px;margin-top:10px"><span class="meter" style="--v:.95"><i></i>95</span><span class="meter low" style="--v:.72"><i></i>72</span></div>
+          <div class="row" style="gap:14px"><span class="dots"><i class="on"></i><i></i><i></i></span><span class="dots"><i class="on"></i><i class="on"></i><i></i></span><span class="dots max"><i class="on"></i><i class="on"></i><i class="on"></i></span></div></div>
+        <div class="col"><div class="ds-sub">Доля бюджета в группе</div><div class="split" style="--v:.75;margin-top:16px"><i></i></div></div>
+      </div>
+    </section>
+
+    <!-- АККОРДЕОН -->
+    <section class="card ds-card span-5" style="--i:11">
+      <div class="ds-label"><b>Аккордеон</b><span>Высота меняется плавно</span></div>
+      <div>
+        <div class="acc open"><button type="button" aria-expanded="true">Как агент вносит изменения?<span class="pm"></span></button>
+          <div class="panel"><div><p>Агент готовит правку и показывает «было → стало». В базе ничего не меняется, пока вы не нажмёте «Применить изменения».</p></div></div></div>
+        <div class="acc"><button type="button" aria-expanded="false">Что агент видит?<span class="pm"></span></button>
+          <div class="panel"><div><p>Текущую вкладку и её фильтры. Он может открыть нужный раздел, подставить фильтры и подсветить строку.</p></div></div></div>
+        <div class="acc"><button type="button" aria-expanded="false">Можно ли прикрепить файл?<span class="pm"></span></button>
+          <div class="panel"><div><p>PDF, DOCX, TXT, JPG и PNG — превью появится прямо в поле ввода, по нажатию файл откроется целиком.</p></div></div></div>
+      </div>
+    </section>
+
+    <!-- ЯЧЕЙКИ -->
+    <section class="card ds-card span-7" style="--i:12">
+      <div class="ds-label"><b>Карточки и ячейки</b><span>Наведите — карточка приподнимется</span></div>
+      <div class="cards" style="grid-template-columns: repeat(2, minmax(0, 1fr))">
+        <article class="card gcard" style="box-shadow:0 0 0 1px var(--line)">
+          <div class="gc-top"><span class="gc-name">ИДБ-24-11</span><span class="badge info plain">3 курс</span></div>
+          <p class="gc-spec">09.03.03 Прикладная информатика</p>
+          <dl class="kv"><dt>Куратор</dt><dd>Белова Д. О.</dd><dt>Староста</dt><dd>Фёдоров Р. Р.</dd></dl>
+          <div class="gc-split"><div class="split" style="--v:.8"><i></i></div><span><b>8</b> студентов · 6 на бюджете</span></div>
+        </article>
+        <div class="col">
+          <div class="lesson"><div class="l-top"><span class="badge info plain">Лекция</span><span class="l-room"><i data-icon="pin"></i>А-101</span></div><b>Базы данных</b><small>ИДБ-24-11 · Орлова К. С.</small></div>
+          <div class="lesson prac"><div class="l-top"><span class="badge violet plain">Практика</span><span class="l-room"><i data-icon="pin"></i>Б-302</span></div><b>Объектно-ориентированное программирование</b><small>подгр. 1 · Карпов К. В.</small></div>
+          <div class="rcard" style="background:var(--fill)"><span class="person"><span class="avatar t2">БА</span><span class="pc"><b>Белова Алина Олеговна</b><small>Специалист по УМР · Деканат ИИТ</small></span></span>
+            <div class="rc-meta"><span><i data-icon="phone"></i>+7 495 100-42-03</span><span><i data-icon="mail"></i>staff3@univ.ru</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- СТАТИСТИКА -->
+    <section class="card ds-card" style="--i:13">
+      <div class="ds-label"><b>Статистика</b><span>Числа докручиваются до значения</span></div>
+      <div class="stats" style="box-shadow:0 0 0 1px var(--line); border-radius: var(--r-lg)">
+        <div class="stat" style="--s:0"><span class="ico"><i data-icon="users"></i></span><div><div class="v" data-count="34">34</div><div class="l">обучаются сейчас</div></div></div>
+        <div class="stat" style="--s:1"><span class="ico violet"><i data-icon="wallet"></i></span><div><div class="v" data-count="28">28</div><div class="l">на бюджете</div></div></div>
+        <div class="stat" style="--s:2"><span class="ico rose"><i data-icon="alert"></i></span><div><div class="v" data-count="17">17</div><div class="l">с задолженностями</div></div></div>
+        <div class="stat" style="--s:3"><span class="ico mint"><i data-icon="award"></i></span><div><div class="v" data-count="8">8</div><div class="l">получают стипендию</div></div></div>
+      </div>
+    </section>
+
+    <!-- ДВИЖЕНИЕ -->
+    <section class="card ds-card" style="--i:14">
+      <div class="ds-label"><b>Движение</b><span>Учитывает системную настройку «Уменьшить движение»</span></div>
+      <div class="motion">
+        <div class="col" style="gap:16px">
+          <div class="curve"><div><b>Ease</b><small>.22, 1, .36, 1</small></div><div class="track" style="--c:var(--indigo);--e:var(--ease)"><i></i></div></div>
+          <div class="curve"><div><b>Spring</b><small>.34, 1.45, .64, 1</small></div><div class="track" style="--c:var(--violet);--e:var(--spring)"><i></i></div></div>
+          <div class="curve"><div><b>Ease-in</b><small>.55, 0, .75, .2</small></div><div class="track" style="--c:var(--rose);--e:var(--ease-in)"><i></i></div></div>
+          <div class="row"><button class="btn sm primary" type="button" id="curvesBtn">Запустить</button><span class="t-caption">Ease — появление и раскрытие, spring — бегунки и нажатия, ease-in — уход.</span></div>
+          <div class="durations">
+            <div class="dur"><b>160 мс</b><small>уход страницы</small></div>
+            <div class="dur"><b>260 мс</b><small>цвет, наведение</small></div>
+            <div class="dur"><b>440 мс</b><small>фильтры, окна</small></div>
+            <div class="dur"><b>720 мс</b><small>появление блоков</small></div>
+          </div>
+        </div>
+        <ul class="patterns">
+          <li><span class="ico"><i data-icon="layers"></i></span><div>Смена вкладки<small>старая страница уходит в сторону, новая собирается каскадом по 60 мс с направлением перехода</small></div></li>
+          <li><span class="ico"><i data-icon="sparkle"></i></span><div>Чат<small>капсула плавно вырастает в панель, страница уходит в размытие, ответ агента проявляется по словам</small></div></li>
+          <li><span class="ico"><i data-icon="list"></i></span><div>Данные<small>строки таблиц — каскадом, полосы и столбцы графиков растут, числа докручиваются</small></div></li>
+          <li><span class="ico"><i data-icon="edit"></i></span><div>Изменения<small>окно появляется пружиной, «было → стало» по очереди, затем тост и подсветка строки</small></div></li>
+          <li><span class="ico"><i data-icon="grid"></i></span><div>Переключатели<small>бегунки сегментов и вкладок скользят, чипы и дни перекрашиваются без рывков</small></div></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- НАВИГАЦИЯ -->
+    <section class="card ds-card" style="--i:15">
+      <div class="ds-label"><b>Навигация</b><span>«Стеклянная» панель вкладок снизу</span></div>
+      <nav class="tabbar demo" aria-label="Пример вкладок"><div class="tabs" id="demoTabs" style="--n:8;--i:0"><span class="tab-ind"></span></div></nav>
+    </section>
+  </div>
+  <div class="ds-more"><span>И другое — в самом макете</span></div>
+</main>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="modal-scrim" id="confirm" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+    <span class="dialog-ico"><i data-icon="sparkle"></i></span>
+    <div><h3 id="dlgTitle">Применить изменения?</h3><p>Вы уверены, что хотите применить данные изменения?</p></div>
+    <div class="diff"><div class="entity"><b>Заявка №237</b><small>Справка об обучении · Орлов Д. И.</small></div>
+      <div class="diff-row" style="--i:0"><span class="k">Статус</span><span class="old">В работе</span><span class="to"><i data-icon="arrow"></i></span><span class="new">Готова к выдаче</span></div></div>
+    <div class="actions"><button class="btn" data-close>Отменить</button><button class="btn primary" data-close>Применить изменения</button></div>
+  </div>
+</div>
+
+<script>
+// Вкладки для примера навигации — до замены иконок, чтобы они тоже отрисовались
+const DEMO_TABS = [["users", "Студенты"], ["layers", "Группы"], ["calendar", "Расписание"], ["alert", "Должники"], ["file", "Справки"], ["briefcase", "Практики"], ["badge", "Сотрудники"], ["chart", "OLAP"]];
+document.getElementById("demoTabs").insertAdjacentHTML("beforeend",
+  DEMO_TABS.map(([ic, l], i) => `<button class="tab" role="tab" aria-selected="${i === 0}" data-i="${i}"><i data-icon="${ic}"></i><span>${l}</span></button>`).join(""));
+</script>
+<script src="icons.js"></script>
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const grid = $("#grid");
+
+// Текст ответа агента — по словам, как в макете
+function streamify(el) {
+  let n = 0;
+  const walk = (node) => [...node.childNodes].forEach((c) => {
+    if (c.nodeType === 3) {
+      const frag = document.createDocumentFragment();
+      c.nodeValue.split(/(\s+)/).forEach((part) => {
+        if (!part) return;
+        if (/^\s+$/.test(part)) frag.append(part);
+        else { const s = document.createElement("span"); s.className = "w"; s.style.setProperty("--w", n++); s.textContent = part; frag.append(s); }
+      });
+      c.replaceWith(frag);
+    } else if (c.nodeType === 1) walk(c);
+  });
+  walk(el);
+}
+function countUp(root) {
+  $$("[data-count]", root).forEach((el) => {
+    const raw = el.dataset.count, to = +raw, dec = (raw.split(".")[1] || "").length;
+    const fmt = (v) => Number(v).toLocaleString("ru-RU", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+    if (REDUCED) { el.textContent = fmt(to); return; }
+    const t0 = performance.now();
+    const step = (t) => { const p = Math.min(1, (t - t0) / 1000); el.textContent = fmt(to * (1 - Math.pow(1 - p, 4))); if (p < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  });
+}
+const pristine = grid.innerHTML;
+function boot() { streamify($("#demoStream")); countUp(grid); }
+boot();
+
+// «Проиграть анимации» — пересобираем секции, CSS-анимации появления запускаются заново
+$("#replay").addEventListener("click", () => { grid.innerHTML = pristine; boot(); });
+
+document.addEventListener("click", (e) => {
+  const seg = e.target.closest(".seg button");
+  if (seg) {
+    const btns = [...seg.parentElement.children];
+    btns.forEach((b) => b.setAttribute("aria-pressed", b === seg));
+    seg.parentElement.style.setProperty("--i", btns.indexOf(seg));
+    return;
+  }
+  const single = e.target.closest("[data-single] > button");
+  if (single) { [...single.parentElement.children].forEach((b) => b.setAttribute("aria-pressed", b === single)); return; }
+  const tab = e.target.closest("#demoTabs .tab");
+  if (tab) { $$("#demoTabs .tab").forEach((b) => b.setAttribute("aria-selected", b === tab)); $("#demoTabs").style.setProperty("--i", tab.dataset.i); return; }
+  const acc = e.target.closest(".acc > button");
+  if (acc) { const open = acc.parentElement.classList.toggle("open"); acc.setAttribute("aria-expanded", open); return; }
+  const page = e.target.closest("[data-pages] button");
+  if (page && !page.querySelector(".ic")) { $$("[data-pages] button").forEach((b) => b.classList.toggle("cur", b === page)); return; }
+  const sw = e.target.closest(".sw");
+  if (sw) { navigator.clipboard?.writeText(sw.dataset.hex).catch(() => {}); toast(`Скопировано ${sw.dataset.hex}`); return; }
+  if (e.target.closest("#toastBtn")) return toast("Изменение сохранено");
+  if (e.target.closest("#dialogBtn")) { const m = $("#confirm"); m.classList.remove("out"); m.hidden = false; return; }
+  if (e.target.closest("[data-close]") || e.target.id === "confirm") {
+    const m = $("#confirm"); m.classList.add("out");
+    setTimeout(() => { m.hidden = true; m.classList.remove("out"); }, REDUCED ? 0 : 200);
+    return;
+  }
+  if (e.target.closest("#flashBtn")) { const tr = $("#demoRows tr:nth-child(2)"); tr.classList.remove("flash"); void tr.offsetWidth; tr.classList.add("flash"); return; }
+  if (e.target.closest("#curvesBtn")) { const m = e.target.closest(".motion"); m.classList.toggle("run"); }
+});
+
+function toast(text) {
+  const t = document.createElement("div");
+  t.className = "toast";
+  t.innerHTML = `<span class="tick">${icon("check")}</span>${text}`;
+  $("#toasts").append(t);
+  setTimeout(() => { t.classList.add("out"); setTimeout(() => t.remove(), REDUCED ? 0 : 300); }, 2400);
+}
+</script>
+</body>
+</html>
