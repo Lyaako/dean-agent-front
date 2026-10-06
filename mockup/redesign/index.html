@@ -25,7 +25,7 @@
       <section class="chat" id="chat" aria-label="Чат с агентом">
         <div class="chat-head">
           <span class="orb"></span>
-          <div class="who"><b>Агент деканата</b><small id="ctx"></small></div>
+          <div class="who"><b>Агент деканата</b></div>
           <button type="button" class="btn ghost sm" id="clearBtn" aria-label="Новый диалог"><i data-icon="plus"></i><span>Новый диалог</span></button>
         </div>
         <div class="messages" id="messages" aria-live="polite"><div class="thread" id="thread"></div></div>
@@ -35,7 +35,7 @@
           <form class="input-row" id="form">
             <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.jpg,.jpeg,.png" multiple hidden>
             <button type="button" class="icon-btn" id="attachBtn" title="Прикрепить файлы" aria-label="Прикрепить файлы"><i data-icon="clip"></i></button>
-            <textarea id="input" rows="1" placeholder="Спросите агента или попросите изменить данные…" aria-label="Сообщение"></textarea>
+            <textarea id="input" rows="1" placeholder="Сообщение…" aria-label="Сообщение"></textarea>
             <kbd class="kbd" id="kbd">⌘K</kbd>
             <button type="submit" class="icon-btn send" id="sendBtn" title="Отправить" aria-label="Отправить" disabled><i data-icon="up"></i></button>
             <button type="button" class="icon-btn toggle" id="toggle" title="Развернуть чат" aria-label="Развернуть чат" aria-expanded="false"><i data-icon="down"></i></button>
@@ -364,6 +364,50 @@ students.filter((s) => s.course >= 2 && s.status === ACTIVE).forEach((s, i) => {
     semester: prod ? 6 : 2, organization, supervisor: pick(teachers).full_name, org_supervisor: `${contact}, ${job}`,
     start_date: `${year}-06-29`, end_date: prod ? "2026-07-26" : `${year}-07-12`, order_number: prod ? "116-с/26" : `${int(100, 130)}-с/${String(year).slice(2)}` });
 });
+/* ── Курсовые и ВКР (v_academic_works) ── */
+// ВКР — у выпускников (набор 2023), 8 семестр
+// Темы из 03_seed.sql; повторная тема получает фамилию студента в скобках, как в данных базы.
+// Темы утверждены приказом «Об утверждении тем и руководителей ВКР» 145-с/26 примерно у половины выпускников.
+const VKR_TOPICS = [
+  "Интеллектуальный агент для автоматизации процессов деканата на основе больших языковых моделей",
+  "Система мониторинга успеваемости студентов с прогнозированием академических задолженностей",
+  "Веб-сервис формирования расписания занятий с учётом ограничений аудиторного фонда",
+  "Анализ посещаемости занятий методами машинного обучения",
+  "Мобильное приложение электронной зачётной книжки",
+  "Цифровой двойник технологического участка механообработки",
+  "Система распознавания дефектов поверхности деталей по изображениям",
+  "Платформа учёта научных публикаций кафедры",
+  "Рекомендательная система выбора элективных дисциплин",
+  "Чат-бот приёмной комиссии",
+  "Система контроля версий учебных планов",
+  "Модуль планирования загрузки станков с ЧПУ",
+  "Информационная система учёта стипендий",
+  "Прогнозирование отказов оборудования по данным датчиков",
+  "Сервис проверки заимствований в курсовых работах",
+];
+const works = [];
+students.filter((s) => s.course === 4 && s.status === ACTIVE).forEach((s, i) => {
+  if (i % 2) return;
+  const n = works.length, [last, first] = s.student.split(" ");
+  const supervisor = pick(teachers);
+  const reviewer = pick(teachers.filter((t) => t !== supervisor));   // CHECK: рецензент ≠ руководитель
+  works.push({ student_id: s.student_id, student: s.student, group_name: s.group_name, work_kind: "ВКР",
+    discipline: "Выполнение и защита ВКР", semester: 8,
+    topic: n < VKR_TOPICS.length ? VKR_TOPICS[n] : `${VKR_TOPICS[n % VKR_TOPICS.length]} (${last} ${first[0]}.)`,
+    supervisor: supervisor.full_name, reviewer: reviewer.full_name, order_number: "145-с/26" });
+});
+// Курсовая работа — у набора 2024 в 5 семестре: тема с фамилией студента, рецензента и приказа нет
+const COURSEWORK_TOPICS = ["Проектирование мобильного клиента библиотеки", "Микросервис уведомлений для портала вуза",
+  "Система бронирования аудиторий", "Проектирование модуля расписания занятий", "Архитектура сервиса электронной зачётной книжки",
+  "Проектирование системы учёта заявок студентов"];
+students.filter((s) => s.course === 3 && s.status === ACTIVE).forEach((s) => {
+  const [last, first] = s.student.split(" ");
+  works.push({ student_id: s.student_id, student: s.student, group_name: s.group_name, work_kind: "Курсовая работа",
+    discipline: "Курсовая работа по проектированию программных систем", semester: 5,
+    topic: `${pick(COURSEWORK_TOPICS)} (${last} ${first[0]}.)`, supervisor: pick(teachers).full_name, reviewer: null, order_number: null });
+});
+const WORK_KINDS = ["ВКР", "Курсовая работа"];
+const WORK_GROUPS = [...new Set(works.map((w) => w.group_name))].sort();
 const UNITS = [...new Set(employees.map((e) => e.unit))];
 
 /* ═════════ ФОРМАТИРОВАНИЕ И МЕЛКИЕ БЛОКИ ═════════ */
@@ -384,7 +428,6 @@ const trim = (s, n) => s.length > n ? s.slice(0, n - 1) + "…" : s;
 const badge = (text, kind = "") => `<span class="badge ${kind}">${esc(text)}</span>`;
 const personCell = (name, sub) => `<span class="person"><span class="avatar t${tone(name)}">${esc(initials(name))}</span><span class="pc"><b>${esc(name)}</b>${sub ? `<small>${esc(sub)}</small>` : ""}</span></span>`;
 const meter = (v, unit = "%") => `<span class="meter ${v < 80 ? "low" : ""}" style="--v:${v / 100}"><i></i>${unit ? fmtNum(v, 1) + unit : v}</span>`;
-const dots = (n, max = 3) => `<span class="dots ${n >= max ? "max" : ""}" title="${n} из ${max}">${Array.from({ length: max }, (_, i) => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</span>`;
 const dueCell = (r) => isOverdue(r) ? `<span class="late" title="Просрочена">${date(r.due_date)}</span>`
   : r.due_date === TODAY && r.status !== "Готова к выдаче" ? `<span class="soon" title="Срок сегодня">${date(r.due_date)}</span>` : date(r.due_date);
 
@@ -393,7 +436,7 @@ const TABS = [
   { id: "students", title: "Студенты", icon: "users" },
   { id: "groups", title: "Группы", icon: "layers" },
   { id: "schedule", title: "Расписание", icon: "calendar" },
-  { id: "debtors", title: "Должники", icon: "alert" },
+  { id: "works", title: "Курсовые и ВКР", short: "КР и ВКР", icon: "cap" },
   { id: "requests", title: "Заявки на справки", short: "Справки", icon: "file" },
   { id: "practice", title: "Практики", icon: "briefcase" },
   { id: "employees", title: "Сотрудники", icon: "badge" },
@@ -405,7 +448,7 @@ const state = {
   students: { q: "", cat: "", group: "" },
   groups: { view: "table" },
   schedule: { view: "table", date: TODAY, group: "" },
-  debtors: { q: "", group: "" },
+  works: { q: "", kind: "", group: "" },
   requests: { q: "", status: "" },
   practice: { q: "", kind: "", group: "" },
   employees: { q: "", unit: "" },
@@ -486,14 +529,10 @@ const SCHEDULE_COLS = [ // v_schedule_calendar
   ["Дисциплина", (r) => esc(r.discipline)], ["Вид", (r) => badge(r.lesson_type, LESSON_KIND[r.lesson_type])],
   ["Преподаватель", (r) => esc(r.teacher)], ["Аудитория", (r) => r.classroom], ["Подгруппа", (r) => r.subgroup ?? "—", "num"], ["Семестр", (r) => r.term],
 ];
-const EXPULSION_COLS = [ // v_expulsion_risk
-  ["Студент", (r) => personCell(r.student)], ["Группа", (r) => r.group_name], ["Долгов", (r) => r.debts, "num"],
-  ["Макс. попыток", (r) => r.max_attempts, "num"], ["Дисциплины", (r) => esc(r.disciplines), "wrap"], ["Причина", (r) => badge(r.reason, "bad")],
-];
-const DEBTOR_COLS = [ // v_debtors
-  ["Студент", (r) => personCell(r.student)], ["Группа", (r) => r.group_name], ["Дисциплина", (r) => esc(r.discipline)],
-  ["Семестр", (r) => r.semester, "num"], ["Контроль", (r) => r.control_type], ["Попыток", (r) => `<span class="att">${dots(r.attempts)}${r.attempts}</span>`, "num"],
-  ["Последний результат", (r) => badge(r.last_result, r.last_result === "Неявка" ? "warn" : "bad")],
+const WORK_COLS = [ // v_academic_works
+  ["Студент", (r) => personCell(r.student)], ["Группа", (r) => r.group_name], ["Вид работы", (r) => r.work_kind],
+  ["Дисциплина", (r) => esc(r.discipline)], ["Семестр", (r) => r.semester, "num"], ["Тема", (r) => esc(r.topic), "wrap"],
+  ["Руководитель", (r) => esc(r.supervisor)], ["Рецензент", (r) => esc(r.reviewer || "—")], ["Приказ", (r) => r.order_number || "—"],
 ];
 const REQUEST_COLS = [ // v_document_queue
   ["№", (r) => r.request_id], ["Студент", (r) => personCell(r.student)], ["Группа", (r) => r.group_name], ["Документ", (r) => esc(r.document)],
@@ -585,15 +624,14 @@ PAGES.schedule = () => {
   return view("schedule", [head("schedule"), bar, groupChips, strip, `<div class="enter rise" data-k="${dayKey}">${title}${body}</div>`]);
 };
 
-PAGES.debtors = () => {
-  const s = state.debtors;
-  const exp = expulsionNow().filter((e) => (!s.group || e.group_name === s.group) && matchQ(s.q, e.student, e.disciplines));
-  const rows = debtorsNow().filter((d) => (!s.group || d.group_name === s.group) && matchQ(s.q, d.student, d.discipline));
-  return view("debtors", [
-    head("debtors"),
-    `<div class="toolbar">${search("debtors.q", s.q, "Студент или дисциплина", pillSelect("debtors.group", GROUP_NAMES, s.group, "Все группы"))}</div>`,
-    tableCard("expulsion", "Кандидаты на отчисление", EXPULSION_COLS, exp, (r) => r.student_id),
-    tableCard("debtors", "Все задолженности", DEBTOR_COLS, rows, (r) => `${r.student_id}|${r.discipline}|${r.semester}`),
+PAGES.works = () => {
+  const s = state.works;
+  const rows = works.filter((w) => (!s.kind || w.work_kind === s.kind) && (!s.group || w.group_name === s.group)
+    && matchQ(s.q, w.student, w.topic, w.supervisor, w.reviewer));
+  return view("works", [
+    head("works"),
+    `<div class="toolbar">${search("works.q", s.q, "Студент, тема или руководитель", pillSelect("works.group", WORK_GROUPS, s.group, "Все группы"))}${chips("works.kind", [["", "Все"], ...WORK_KINDS.map((k) => [k, k])], s.kind)}</div>`,
+    tableCard("works", "", WORK_COLS, rows, (r) => `${r.student_id}|${r.work_kind}`),
   ]);
 };
 
@@ -762,7 +800,6 @@ async function showTab(tab) {
   const prev = currentTab, idx = TABS.findIndex((t) => t.id === tab), pidx = TABS.findIndex((t) => t.id === prev);
   currentTab = tab;
   markTab(idx);
-  $("#ctx").textContent = `Видит вкладку «${TAB[tab].title}»`;
   if (tab !== prev) {
     const dir = Math.sign(idx - pidx);
     enterDx = dir * 28;
@@ -876,8 +913,7 @@ function setPeek(who, text) {
   });
 }
 function renderHello() {
-  thread.innerHTML = `<div class="hello" id="hello"><span class="orb xl"></span><h2>Чем помочь?</h2>
-    <p>Найду студента, группу или пару, открою нужную вкладку с фильтрами и внесу точечные правки — каждое изменение вы подтверждаете сами.</p></div>`;
+  thread.innerHTML = `<div class="hello" id="hello"><span class="orb xl"></span><h2>Чем помочь?</h2></div>`;
 }
 const hideHello = () => $("#hello")?.remove();
 const scrollDown = () => requestAnimationFrame(() => box.scrollTo({ top: box.scrollHeight, behavior: REDUCED ? "auto" : "smooth" }));
@@ -972,10 +1008,6 @@ input.addEventListener("input", () => { autoGrow(); updateSend(); });
 input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
 $("#clearBtn").addEventListener("click", () => { renderHello(); smoothHeight(() => { $("#peek").hidden = true; }); input.focus(); });
 $("#kbd").textContent = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K";
-const narrow = matchMedia("(max-width: 600px)");
-const setPlaceholder = () => { input.placeholder = narrow.matches ? "Спросите агента…" : "Спросите агента или попросите изменить данные…"; };
-narrow.addEventListener("change", setPlaceholder);
-setPlaceholder();
 
 /* ── Подтверждение изменений ── */
 const diffHtml = (c, applied) => `<div class="diff ${applied ? "applied" : ""}"><div class="entity"><b>${esc(c.title)}</b><small>${esc(c.sub)}</small>${applied ? `<span class="done-tick">${icon("check")}</span>` : ""}</div>
@@ -1117,7 +1149,7 @@ function studentChange(s, label, key, to) {
     apply: () => {
       const from = s[key];
       s[key] = to;
-      if (key === "group_name") [results, debtors, expulsion, practices].forEach((list) => list.forEach((r) => { if (r.student_id === s.student_id && r.group_name === from) r.group_name = to; }));
+      if (key === "group_name") [results, debtors, expulsion, practices, works].forEach((list) => list.forEach((r) => { if (r.student_id === s.student_id && r.group_name === from) r.group_name = to; }));
       // Староста перестаёт быть старостой при переводе или уходе в академ (trg_headman_release)
       if (key === "group_name" || (key === "status" && to !== ACTIVE)) s.is_headman = false;
       if (key === "status" && to !== ACTIVE) s.attendance_pct = null;
@@ -1136,8 +1168,7 @@ function expulsionReply() {
   const rows = expulsionNow();
   if (!rows.length) return { text: "Кандидатов на отчисление сейчас нет." };
   return { text: `Кандидатов на отчисление — <b>${rows.length}</b>:`,
-    html: mini([["Студент", (r) => personCell(r.student)], ["Группа", (r) => r.group_name], ["Долгов", (r) => r.debts, "num"], ["Причина", (r) => badge(r.reason, "bad")]], rows),
-    actions: [["Открыть «Должники»", () => go("debtors", { q: "", group: "" }), true]] };
+    html: mini([["Студент", (r) => personCell(r.student)], ["Группа", (r) => r.group_name], ["Долгов", (r) => r.debts, "num"], ["Причина", (r) => badge(r.reason, "bad")]], rows) };
 }
 function overdueReply() {
   const rows = requests.filter(isOverdue);
@@ -1154,14 +1185,13 @@ function studentReply(st) {
       <div><small>Долги</small><b class="${s.debts ? "late" : ""}">${s.debts || "нет"}</b></div><div><small>Посещаемость</small>${meter(s.attendance_pct)}</div>
       <div><small>Основа</small><b>${s.funding}</b></div><div><small>Стипендия</small><b>${s.scholarships ? (s.scholarships.startsWith("Повышенная") ? "Повышенная" : "Академическая") : "—"}</b></div></div></div>`;
     return { text: `Нашёл: <b>${esc(s.student)}</b>.`, html: card,
-      actions: [["Показать в таблице", () => go("students", { q: s.student, cat: "", group: "" }, ["students", s.student_id]), true],
-        ...(s.debts ? [["Долги студента", () => go("debtors", { q: s.student, group: "" })]] : [])] };
+      actions: [["Показать в таблице", () => go("students", { q: s.student, cat: "", group: "" }, ["students", s.student_id]), true]] };
   }
   return { text: `Нашёл ${st.length} ${plural(st.length, "студента", "студентов", "студентов")}:`,
     html: mini([["Зачётка", (r) => r.record_book_number], ["ФИО", (r) => personCell(r.student)], ["Группа", (r) => r.group_name], ["Категория", (r) => badge(r.category, CATEGORY_KIND[r.category])]], st),
     actions: [["Показать всех в таблице", () => go("students", { q: stemOf(st[0].student.split(" ")[0]), cat: "", group: "" }), true]] };
 }
-const TAB_WORDS = [["schedule", /расписан/], ["debtors", /должник|задолж|долг/], ["requests", /справк|заявк/], ["practice", /практик/],
+const TAB_WORDS = [["schedule", /расписан/], ["works", /вкр|диплом|выпускн|курсов/], ["requests", /справк|заявк/], ["practice", /практик/],
   ["employees", /сотрудник|преподавател|кадр/], ["olap", /olap|олап|аналит|анализ/], ["students", /студент/], ["groups", /групп/]];
 function navReply(t, g) {
   if (!/(^|[^а-я])(открой|открыть|покажи|показать|перейди|перейти|вкладк)/.test(t)) return null;
@@ -1219,8 +1249,7 @@ function debtsReply(g) {
   if (!rows.length) return { text: `${g ? `У <b>${g}</b>` : "У студентов"} задолженностей нет.` };
   const people = new Set(rows.map((r) => r.student)).size;
   return { text: `${g ? `<b>${g}</b>: ` : ""}${rows.length} ${plural(rows.length, "задолженность", "задолженности", "задолженностей")} у ${people} ${plural(people, "студента", "студентов", "студентов")}:`,
-    html: mini([["Студент", (r) => esc(r.student)], ["Группа", (r) => r.group_name], ["Дисциплина", (r) => esc(r.discipline)], ["Попыток", (r) => r.attempts, "num"]], rows),
-    actions: [["Открыть «Должники»", () => go("debtors", { group: g || "", q: "" }), true]] };
+    html: mini([["Студент", (r) => esc(r.student)], ["Группа", (r) => r.group_name], ["Дисциплина", (r) => esc(r.discipline)], ["Попыток", (r) => r.attempts, "num"]], rows) };
 }
 function groupReply(g) {
   const r = groupRow(GROUPS.find((x) => x.name === g));
