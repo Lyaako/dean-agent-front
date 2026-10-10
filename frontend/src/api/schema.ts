@@ -60,5 +60,7 @@ export function fieldHint(spec: FieldSpec | undefined) {
   const d = spec?.description?.trim() ?? "";
   const label = fieldLabel(spec, "");
   const rest = d.slice(label.length).replace(/^[\s:—\-;]+/, "").replace(/^\((.*)\)$/, "$1").trim();
+  // Технические пометки схемы («1:1», «M:N») пользователю не нужны
+  if (/^\d+\s*:\s*[\dNMnm]+$/.test(rest)) return undefined;
   return rest || undefined;
 }

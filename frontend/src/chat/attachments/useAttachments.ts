@@ -21,13 +21,23 @@ export const thumbCache = new Map<string, Thumb>();
 export const fileCache = new Map<string, File>();
 
 interface Limits { maxCount: number; maxTotal: number }
+type Drafts = Record<string, Item[]>;
 
-// Вложение загружается сразу при прикреплении: POST /files → ждём job → файл готов к отправке агенту
-export function useAttachments(limits: Limits) {
-  const [items, setItems] = useState<Item[]>([]);
+const mapAll = (d: Drafts, fn: (l: Item[]) => Item[]): Drafts => Object.fromEntries(Object.entries(d).map(([k, l]) => [k, fn(l)]));
+
+// Вложения загружаются сразу при прикреплении: POST /files → ждём job → файл готов к отправке агенту.
+// У каждого чата свой черновик (draftKey): при переключении чатов вложения остаются в своём чате.
+export function useAttachments(limits: Limits, draftKey: string) {
+  const [drafts, setDrafts] = useState<Drafts>({});
   const [notice, setNotice] = useState<string | null>(null);
   const aborts = useRef(new Map<string, AbortController>());
-  const patch = (id: string, p: Partial<Item>) => setItems((l) => l.map((x) => (x.id === id ? { ...x, ...p } : x)));
+  const items = drafts[draftKey] ?? [];
+  const draftsRef = useRef(drafts);
+  draftsRef.current = drafts;
+
+  const patch = (id: string, p: Partial<Item>) => setDrafts((d) => mapAll(d, (l) => l.map((x) => (x.id === id ? { ...x, ...p } : x))));
+
+  useEffect(() => setNotice(null), [draftKey]);
 
   const upload = useCallback(async (item: Item) => {
     const ac = new AbortController();
@@ -49,14 +59,12 @@ export function useAttachments(limits: Limits) {
     }
   }, []);
 
-  const itemsRef = useRef<Item[]>([]);
-  itemsRef.current = items;
-
   const add = useCallback((files: FileList | File[]) => {
+    const current = draftsRef.current[draftKey] ?? [];
     const errors: string[] = [];
     const accepted: Item[] = [];
-    let count = itemsRef.current.length;
-    let total = itemsRef.current.reduce((s, x) => s + x.file.size, 0);
+    let count = current.length;
+    let total = current.reduce((s, x) => s + x.file.size, 0);
     for (const file of [...files]) {
       if (!ATTACH_TYPES.includes(extOf(file.name))) { errors.push(`«${file.name}»: можно только ${ATTACH_TYPES.join(", ")}`); continue; }
       if (file.size > MAX_FILE_BYTES) { errors.push(`«${file.name}» больше 10 МБ`); continue; }
@@ -66,37 +74,37 @@ export function useAttachments(limits: Limits) {
       total += file.size;
       accepted.push({ id: newKey(), file, thumb: null, status: "uploading" });
     }
-    if (accepted.length) setItems((l) => [...l, ...accepted]);
+    if (accepted.length) setDrafts((d) => ({ ...d, [draftKey]: [...(d[draftKey] ?? []), ...accepted] }));
     setNotice(errors.length ? errors.join(". ") : null);
     for (const item of accepted) {
       upload(item);
       makeThumb(item.file, item.file.name).then((thumb) => patch(item.id, { thumb }));
     }
-  }, [limits.maxCount, limits.maxTotal, upload]);
+  }, [draftKey, limits.maxCount, limits.maxTotal, upload]);
 
   const remove = useCallback((id: string) => {
     aborts.current.get(id)?.abort();
-    setItems((l) => l.filter((x) => x.id !== id));
+    setDrafts((d) => mapAll(d, (l) => l.filter((x) => x.id !== id)));
   }, []);
 
   const retry = useCallback((id: string) => {
-    const it = itemsRef.current.find((x) => x.id === id);
+    const it = Object.values(draftsRef.current).flat().find((x) => x.id === id);
     if (it) upload(it);
   }, [upload]);
 
-  // Забрать готовые вложения для отправки и очистить поле
+  // Забрать готовые вложения текущего черновика для отправки и очистить его
   const take = useCallback(() => {
-    const ready = items.filter((x) => x.status === "ready" && x.meta);
+    const ready = (draftsRef.current[draftKey] ?? []).filter((x) => x.status === "ready" && x.meta);
     for (const x of ready) if (x.thumb) thumbCache.set(x.meta!.version_id, x.thumb);
-    setItems([]);
+    setDrafts((d) => ({ ...d, [draftKey]: [] }));
     setNotice(null);
     return ready.map((x) => x.meta!);
-  }, [items]);
+  }, [draftKey]);
 
   useEffect(() => () => { for (const ac of aborts.current.values()) ac.abort(); }, []);
 
   return {
-    items, add, remove, retry, take, notice, clearNotice: () => setNotice(null),
+    items, add, remove, retry, take, notice,
     pending: items.some((x) => x.status === "uploading" || x.status === "processing"),
     hasErrors: items.some((x) => x.status === "error"),
   };

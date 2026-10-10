@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Modal, ErrorNote, useToast } from "../ui";
+import { Modal, ErrorNote, UnsavedDialog, useToast } from "../ui";
 import { Icon } from "../Icon";
 import { LookupSelect } from "./fields";
 import { newKey } from "../../api/client";
@@ -25,8 +25,23 @@ export function WorkflowDialog({ def, studentId, subtitle, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<unknown>(null);
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [askUnsaved, setAskUnsaved] = useState(false);
+  const dirty = Object.values(values).some((v) => v.trim() !== "");
+
+  // Проверка до отправки: обязательные поля и порядок дат
+  function validate() {
+    const e: Record<string, string> = {};
+    for (const f of def.fields) if (f.required && !values[f.name]?.trim()) e[f.name] = "Заполните поле";
+    if (values.start && values.end && values.end < values.start) e.end = "Окончание не может быть раньше начала";
+    setErrors(e);
+    return !Object.keys(e).length;
+  }
+
+  async function submit(e?: FormEvent) {
+    e?.preventDefault();
+    setAskUnsaved(false);
+    if (!validate()) return;
     setBusy(true);
     setErr(null);
     try {
@@ -48,31 +63,40 @@ export function WorkflowDialog({ def, studentId, subtitle, onClose }: Props) {
     }
   }
 
-  const set = (n: string) => (v: string) => setValues((s) => ({ ...s, [n]: v }));
+  const requestClose = () => { if (dirty && !busy) setAskUnsaved(true); else onClose(); };
+
+  const set = (n: string) => (v: string) => {
+    setErrors((e) => { const { [n]: _, ...rest } = e; return rest; });
+    setValues((s) => ({ ...s, [n]: v }));
+  };
 
   return (
-    <Modal onClose={onClose} label={def.title}>
-      <form className="dialog form-dialog" onSubmit={submit}>
+    <Modal onClose={requestClose} label={def.title} outsideClose={false}>
+      <form className="dialog form-dialog" onSubmit={submit} noValidate>
         <div className="form-head">
-          <span className="dialog-ico"><Icon name="file" /></span>
           <div><h3>{def.title}</h3>{subtitle && <p>{subtitle}</p>}</div>
-          <button type="button" className="icon-btn" aria-label="Закрыть" onClick={onClose}><Icon name="x" /></button>
+          <button type="button" className="icon-btn" aria-label="Закрыть" onClick={requestClose}><Icon name="x" /></button>
         </div>
-        <div className="form-grid">
-          {def.fields.map((f) => <WfInput key={f.name} f={f} value={values[f.name] ?? ""} onChange={set(f.name)} disabled={busy} />)}
+        <div className="form-body">
+          <div className="form-grid">
+            {def.fields.map((f) => <WfInput key={f.name} f={f} value={values[f.name] ?? ""} onChange={set(f.name)} disabled={busy} error={errors[f.name]} />)}
+          </div>
+          {!!err && <ErrorNote text={errorText(err)} requestId={requestIdOf(err)} />}
         </div>
-        {!!err && <ErrorNote text={errorText(err)} requestId={requestIdOf(err)} />}
         <div className="actions">
           <span className="spacer" />
-          <button type="button" className="btn" onClick={onClose}>Отменить</button>
           <button className="btn primary" disabled={busy}>{busy ? "Проводим…" : def.confirm}</button>
         </div>
       </form>
+      {askUnsaved && (
+        <UnsavedDialog title="Провести приказ?" text="Форма приказа заполнена, но приказ ещё не проведён." saveLabel={def.confirm}
+          onSave={() => submit()} onDiscard={onClose} onCancel={() => setAskUnsaved(false)} />
+      )}
     </Modal>
   );
 }
 
-function WfInput({ f, value, onChange, disabled }: { f: WfField; value: string; onChange: (v: string) => void; disabled: boolean }) {
+function WfInput({ f, value, onChange, disabled, error }: { f: WfField; value: string; onChange: (v: string) => void; disabled: boolean; error?: string }) {
   const id = `wf-${f.name}`;
   let input;
   switch (f.kind) {
@@ -105,10 +129,10 @@ function WfInput({ f, value, onChange, disabled }: { f: WfField; value: string; 
         onChange={(e) => onChange(e.target.value)} disabled={disabled} required={f.required} />;
   }
   return (
-    <div className={`field form-field${f.kind === "textarea" ? " wide" : ""}`}>
+    <div className={`field form-field${f.kind === "textarea" ? " wide" : ""}${error ? " invalid" : ""}`}>
       <label htmlFor={id}>{f.label}{f.required && <i className="req" aria-label="обязательное">*</i>}</label>
       {input}
-      {f.hint && <small className="hint">{f.hint}</small>}
+      {error ? <small className="field-error" role="alert">{error}</small> : f.hint && <small className="hint">{f.hint}</small>}
     </div>
   );
 }

@@ -50,9 +50,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     session.onExpired(reset);
-    // После перезагрузки страницы: пробуем обновить токен по cookie
+    // Токен уже в памяти (повторное монтирование) — просто проверяем его; после перезагрузки страницы — обновляем по cookie.
+    // Лишнее обновление опасно: если страница уйдёт до ответа, новая cookie потеряется и бэкенд закроет сессию.
     (async () => {
-      if (session.hasCsrf() && (await refreshSession())) {
+      if (session.hasAccess() || (session.hasCsrf() && (await refreshSession()))) {
         try { await enter(); return; } catch { /* упадём на вход */ }
       }
       setStatus("anon");

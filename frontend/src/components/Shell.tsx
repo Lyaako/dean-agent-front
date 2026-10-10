@@ -23,8 +23,8 @@ export function Shell() {
     <div className={`app${scrolled ? " scrolled" : ""}`}>
       <header className="topbar">
         <div className="brand">
-          <span className="mark"><Icon name="cap" /></span>
-          <div><b>Деканат</b><small>Агент для сотрудников</small></div>
+          <span className="orb logo-orb" aria-hidden="true" />
+          <b>Деканат</b>
         </div>
         <ChatBar open={chatOpen} setOpen={setChatOpen} />
         <Me />

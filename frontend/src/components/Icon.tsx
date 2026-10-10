@@ -42,6 +42,7 @@ const ICONS = {
   "message": "<path d=\"M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z\"/>",
   "refresh": "<path d=\"M21 12a9 9 0 1 1-2.6-6.4L21 8\"/><path d=\"M21 3v5h-5\"/>",
   "sidebar": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"3\"/><path d=\"M9 4v16\"/>",
+  "copy": "<rect x=\"9\" y=\"9\" width=\"12\" height=\"12\" rx=\"2.5\"/><path d=\"M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5\"/>",
 } as const;
 
 export type IconName = keyof typeof ICONS;

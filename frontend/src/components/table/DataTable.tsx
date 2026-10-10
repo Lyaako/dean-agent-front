@@ -10,7 +10,6 @@ interface Props<R> {
   set: (patch: Partial<TableState>) => void;
   rowKey: (r: R) => string;
   title?: ReactNode;
-  actions?: ReactNode;
   onRowClick?: (r: R) => void;
   loading?: boolean;
   error?: string | null;
@@ -20,7 +19,7 @@ interface Props<R> {
   startAt?: (r: R) => boolean;
 }
 
-export function DataTable<R>({ cols, rows, base, state, set, rowKey, title, actions, onRowClick, loading, error, onRetry, flashKey, startAt }: Props<R>) {
+export function DataTable<R>({ cols, rows, base, state, set, rowKey, title, onRowClick, loading, error, onRetry, flashKey, startAt }: Props<R>) {
   const cardRef = useRef<HTMLElement>(null);
   const [avail, setAvail] = useState(0);
   useLayoutEffect(() => {
@@ -76,13 +75,7 @@ export function DataTable<R>({ cols, rows, base, state, set, rowKey, title, acti
 
   return (
     <section ref={cardRef} className="card table-card">
-      <div className="table-head">
-        <h2>{title}</h2>
-        <div className="table-head-r">
-          {!loading && !error && <span className="count">Всего записей: <b>{rows.length}</b></span>}
-          {actions}
-        </div>
-      </div>
+      {title && <div className="table-head"><h2>{title}</h2></div>}
       <div className="table-wrap">
         <table className="fixed" style={cw ? { width: cw.sum } : undefined}>
           {cw && <colgroup>{cw.widths.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>}

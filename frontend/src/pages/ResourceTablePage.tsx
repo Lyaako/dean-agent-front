@@ -41,14 +41,14 @@ export function ResourceTablePage({ id, title, view, table, keyField, cols, form
 
   return (
     <Page title={title}>
-      <TableTools state={state} set={set} cols={cols} rows={rows} />
+      <TableTools state={state} set={set} cols={cols} rows={rows} count={data.isLoading || data.error ? undefined : filtered.length}>
+        <span className="spacer" />
+        {actions}
+        {can(table, "create") && <button className="btn sm primary" onClick={() => setOpen({ row: null })}><Icon name="plus" />Добавить</button>}
+      </TableTools>
       <DataTable cols={cols} rows={filtered} base={rows} state={state} set={set}
         rowKey={(r) => String(r[keyField])} onRowClick={(r) => setOpen({ row: r })}
-        loading={data.isLoading} error={data.error ? errorText(data.error) : null} onRetry={() => data.refetch()} flashKey={flash}
-        actions={<>
-          {actions}
-          {can(table, "create") && <button className="btn sm primary" onClick={() => setOpen({ row: null })}><Icon name="plus" />Добавить</button>}
-        </>} />
+        loading={data.isLoading} error={data.error ? errorText(data.error) : null} onRetry={() => data.refetch()} flashKey={flash} />
       {open && (
         <RecordDialog table={table} config={form} initial={initial}
           recordKey={open.row ? { [keyField]: open.row[keyField] } : null}

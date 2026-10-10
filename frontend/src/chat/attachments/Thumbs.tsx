@@ -7,8 +7,6 @@ import { makeFull, type Full, type Thumb } from "./preview";
 import { fileCache, thumbCache, type Item } from "./useAttachments";
 import type { AttachmentMeta } from "../store/ChatStore";
 
-const STATUS: Record<string, string> = { uploading: "Загрузка…", processing: "Проверка…" };
-
 function Pic({ thumb, loading }: { thumb: Thumb | null | undefined; loading?: boolean }) {
   if (!thumb) return <span className={`pic-inner${loading ? "" : " ext"}`}>{loading ? "" : "файл"}</span>;
   if (thumb.kind === "img") return <img src={thumb.src} alt="" />;
@@ -26,7 +24,7 @@ export function ComposerThumbs({ items, onRemove, onRetry, onOpen }: {
         <div key={it.id} className={`thumb st-${it.status}`}>
           <button type="button" className={`pic${!it.thumb ? " loading" : ""}`} onClick={() => onOpen(it.file)} title={it.file.name}>
             <Pic thumb={it.thumb} loading={!it.thumb} />
-            {STATUS[it.status] && <span className="thumb-state"><span className="spinner sm" />{STATUS[it.status]}</span>}
+            {(it.status === "uploading" || it.status === "processing") && <span className="thumb-busy" aria-label="Загружается"><span className="spinner" /></span>}
             {it.status === "error" && <span className="thumb-state bad" title={it.error}>Ошибка</span>}
           </button>
           <span className="name" title={it.error ?? it.file.name}>{it.status === "error" ? it.error : it.file.name}</span>
@@ -59,15 +57,12 @@ export type ViewTarget = { name: string; file?: File; meta?: AttachmentMeta };
 export function FileViewer({ target, onClose }: { target: ViewTarget; onClose: () => void }) {
   const [full, setFull] = useState<Full | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [blob, setBlob] = useState<Blob | null>(null);
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         const b = target.file ?? (target.meta && fileCache.get(target.meta.version_id)) ?? (target.meta ? await downloadVersion(target.meta.file_id, target.meta.version_id) : null);
         if (!b) throw new Error("Файл недоступен");
-        if (!alive) return;
-        setBlob(b);
         const f = await makeFull(b, target.name);
         if (alive) setFull(f);
       } catch (e) {
@@ -77,25 +72,17 @@ export function FileViewer({ target, onClose }: { target: ViewTarget; onClose: (
     return () => { alive = false; };
   }, [target]);
 
-  const save = () => {
-    if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    const a = Object.assign(document.createElement("a"), { href: url, download: target.name });
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
-
+  // Окно только показывает документ: название, крестик и сам документ во всю ширину
   return (
     <Modal onClose={onClose} label={target.name}>
       <div className="viewer">
         <div className="viewer-head">
           <span>{target.name}</span>
-          {blob && <button className="btn sm ghost" onClick={save}>Скачать</button>}
           <button className="icon-btn" aria-label="Закрыть" onClick={onClose}><Icon name="x" /></button>
         </div>
-        <div className="viewer-body">
+        <div className={`viewer-body${!full && !err ? " loading" : ""}`}>
           {err ? <p className="form-error">{err}</p>
-            : !full ? <div className="spinner" />
+            : !full ? <span className="spinner" aria-label="Загружается" />
             : full.kind === "pdf" ? full.pages.map((c, i) => <CanvasView key={i} canvas={c} />)
             : full.kind === "html" ? <div className="doc html" dangerouslySetInnerHTML={{ __html: full.html }} />
             : full.kind === "text" ? <div className="doc">{full.text}</div>

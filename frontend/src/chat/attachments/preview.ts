@@ -32,9 +32,9 @@ export async function makeThumb(file: Blob, name: string): Promise<Thumb> {
     if (ext === ".docx") {
       const mammoth = (await import("mammoth")).default;
       const { value } = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
-      return { kind: "text", text: value.slice(0, 600) };
+      return { kind: "text", text: value.trim().slice(0, 600) };
     }
-    if (ext === ".txt") return { kind: "text", text: (await file.text()).slice(0, 600) };
+    if (ext === ".txt") return { kind: "text", text: (await file.text()).trim().slice(0, 600) };
   } catch { /* повреждённый файл — покажем расширение */ }
   return { kind: "ext", ext: ext.replace(".", "") || "файл" };
 }

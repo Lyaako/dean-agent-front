@@ -23,15 +23,17 @@ let onExpired: (() => void) | null = null;
 export const session = {
   start(access: string, csrf: string) {
     accessToken = access;
-    // CSRF-токен выдаётся только при входе; в sessionStorage — чтобы перезагрузка страницы не выкидывала на логин
-    try { sessionStorage.setItem(CSRF_KEY, csrf); } catch { /* приватный режим — останется только в памяти */ }
+    // CSRF-токен выдаётся только при входе. Храним в localStorage: перезагрузка не выкидывает на логин,
+    // и все вкладки работают в одной сессии (cookie обновления у них и так общая)
+    try { localStorage.setItem(CSRF_KEY, csrf); } catch { /* приватный режим — останется только в памяти */ }
   },
   clear() {
     accessToken = null;
-    try { sessionStorage.removeItem(CSRF_KEY); } catch { /* нет доступа к хранилищу */ }
+    try { localStorage.removeItem(CSRF_KEY); } catch { /* нет доступа к хранилищу */ }
   },
+  hasAccess() { return !!accessToken; },
   hasCsrf() {
-    try { return !!sessionStorage.getItem(CSRF_KEY); } catch { return false; }
+    try { return !!localStorage.getItem(CSRF_KEY); } catch { return false; }
   },
   onExpired(fn: () => void) { onExpired = fn; },
 };
@@ -50,10 +52,15 @@ export async function readError(res: Response): Promise<ApiError> {
   return new ApiError(res.status, code, message, requestId, details);
 }
 
+// Обновление идёт строго по одному и между вкладками браузера (Web Locks): cookie общая, и если две вкладки
+// отправят одну и ту же cookie одновременно, бэкенд примет это за повторное использование и закроет сессию
+const exclusive = <T,>(fn: () => Promise<T>): Promise<T> =>
+  navigator.locks ? (navigator.locks.request("deanery-refresh", fn) as Promise<T>) : fn();
+
 export function refreshSession(): Promise<boolean> {
-  refreshing ??= (async () => {
+  refreshing ??= exclusive(async () => {
     let csrf: string | null = null;
-    try { csrf = sessionStorage.getItem(CSRF_KEY); } catch { /* нет доступа */ }
+    try { csrf = localStorage.getItem(CSRF_KEY); } catch { /* нет доступа */ }
     if (!csrf) return false;
     try {
       const res = await fetch(`${API_BASE}/auth/refresh`, {
@@ -69,7 +76,7 @@ export function refreshSession(): Promise<boolean> {
     } catch {
       return false;
     }
-  })().finally(() => { refreshing = null; });
+  }).finally(() => { refreshing = null; });
   return refreshing;
 }
 

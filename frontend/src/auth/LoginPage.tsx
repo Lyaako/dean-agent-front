@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useAuth } from "./AuthProvider";
 import { errorText } from "../api/errors";
-import { Icon } from "../components/Icon";
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -27,8 +26,8 @@ export function LoginPage() {
     <div className="login">
       <form className="card login-card" onSubmit={submit}>
         <div className="brand">
-          <span className="mark"><Icon name="cap" /></span>
-          <div><b>Деканат</b><small>Агент для сотрудников</small></div>
+          <span className="orb logo-orb" aria-hidden="true" />
+          <b>Деканат</b>
         </div>
         <h1>Вход</h1>
         <label className="field">

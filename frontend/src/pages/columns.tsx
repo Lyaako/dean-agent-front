@@ -27,10 +27,10 @@ export const STUDENT_COLS: Column<Row>[] = [
     render: (r) => (r.debts ? <span className="late">{String(r.debts)}</span> : "—") },
   { label: "Посещ., %", field: "attendance_pct", filter: "num", className: "num", text: (r) => fmtNum(r.attendance_pct, 1) },
   { label: "Стипендия", field: "scholarships", filter: "enum", className: "wrap-sm" },
-  { label: "Староста", field: "is_headman", filter: "bool", text: (r) => yes(r.is_headman) },
-  { label: "Иностранец", field: "is_foreign", filter: "bool", text: (r) => yes(r.is_foreign) },
-  { label: "Общежитие", field: "needs_dormitory", filter: "bool", text: (r) => yes(r.needs_dormitory) },
-  { label: "Категория", field: "category", filter: "enum", badge: true,
+  { label: "Ста\u00ADроста", field: "is_headman", filter: "bool", text: (r) => yes(r.is_headman), grow: 0.3 },
+  { label: "Ино\u00ADстранец", field: "is_foreign", filter: "bool", text: (r) => yes(r.is_foreign), grow: 0.3 },
+  { label: "Обще\u00ADжитие", field: "needs_dormitory", filter: "bool", text: (r) => yes(r.needs_dormitory), grow: 0.3 },
+  { label: "Категория", field: "category", filter: "enum", badge: true, grow: 3,
     render: (r) => <Badge kind={CATEGORY_KIND[String(r.category)]}>{t(r.category)}</Badge> },
 ];
 
@@ -49,8 +49,8 @@ export const GROUP_COLS: Column<Row>[] = [
 ];
 
 export const SCHEDULE_COLS: Column<Row>[] = [
-  { label: "Дата", field: "lesson_date", filter: "date" },
-  { label: "День", field: "weekday_name", filter: "enum" },
+  { label: "Дата", field: "lesson_date", text: (r) => fmtDate(r.lesson_date) },   // даты задаёт переключатель недель
+  { label: "День", field: "weekday_name", filter: "enum", order: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"] },
   { label: "Пара", field: "pair_number", filter: "enum", className: "num" },
   { label: "Начало", field: (r) => fmtTime(r.start_time), filter: "enum" },
   { label: "Окончание", field: (r) => fmtTime(r.end_time), filter: "enum" },

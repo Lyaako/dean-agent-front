@@ -68,9 +68,12 @@ export function useChat() {
 
   const send = useCallback(async (text: string, attachments: AttachmentMeta[] = []) => {
     if (!store || busyChat) return;
+    // Бэкенд не принимает пустое сообщение — если написаны только файлы, агенту уходят их имена
+    const names = attachments.map((a) => a.filename).join(", ");
+    const message = text || `Вложения: ${names}`;
     let c = chatRef.current;
     if (!c) {
-      c = { id: newKey(), title: titleFrom(text), sessionId: null, createdAt: now(), updatedAt: now(), messages: [] };
+      c = { id: newKey(), title: titleFrom(text || names), sessionId: null, createdAt: now(), updatedAt: now(), messages: [] };
       await store.save(c);
       chatRef.current = c;
       setChat(c);
@@ -87,7 +90,7 @@ export function useChat() {
     const refs = att?.agent_supported ? attachments.map(({ file_id, version_id }) => ({ file_id, version_id })) : [];
     let gotAnswer = false;
     try {
-      await streamChat({ message: text, session_id: c.sessionId, attachments: refs }, (ev: ChatEvent) => {
+      await streamChat({ message, session_id: c.sessionId, attachments: refs }, (ev: ChatEvent) => {
         switch (ev.event) {
           case "status": setStatus(ev.data.message || "Агент думает…"); break;
           case "session": update(id, (x) => ({ ...x, sessionId: ev.data.session_id })); break;

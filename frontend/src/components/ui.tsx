@@ -26,9 +26,14 @@ export function Seg<T extends string>({ value, options, onChange, dark }: {
 const modalStack: symbol[] = [];
 export const anyModalOpen = () => modalStack.length > 0;
 
-export function Modal({ onClose, children, label }: { onClose: () => void; children: ReactNode; label?: string }) {
+export function Modal({ onClose, children, label, outsideClose = true }: {
+  onClose: () => void; children: ReactNode; label?: string;
+  /** Закрывать кликом мимо окна. Формы с изменениями — нет: там закрытие только крестиком или Esc */
+  outsideClose?: boolean;
+}) {
   const close = useRef(onClose);
   close.current = onClose;
+  const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const me = Symbol();
     modalStack.push(me);
@@ -44,8 +49,12 @@ export function Modal({ onClose, children, label }: { onClose: () => void; child
     };
   }, []);
   return createPortal(
-    <div className="modal-scrim" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div role="dialog" aria-modal="true" aria-label={label} className="modal-box">{children}</div>
+    // События окна не уходят в компоненты, внутри которых оно открыто (React передаёт их через портал):
+    // иначе отправка формы приказа отправляла бы и форму карточки под ней
+    // Клик мимо — только по подложке именно этого окна (вложенные окна сюда тоже «всплывают»)
+    <div className="modal-scrim" role="presentation" onSubmit={(e) => e.stopPropagation()}
+      onMouseDown={(e) => { if (outsideClose && (e.target === e.currentTarget || e.target === box.current)) onClose(); }}>
+      <div ref={box} role="dialog" aria-modal="true" aria-label={label} className="modal-box">{children}</div>
     </div>,
     document.body,
   );
@@ -58,13 +67,32 @@ export function ConfirmDialog({ title, text, confirm, danger, busy, error, onCon
 }) {
   return (
     <Modal onClose={onCancel} label={title}>
-      <div className="dialog">
+      <div className="dialog confirm">
         <span className={`dialog-ico${danger ? " danger" : ""}`}><Icon name={danger ? "trash" : "sparkle"} /></span>
         <div><h3>{title}</h3>{text && <p>{text}</p>}</div>
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="actions">
           <button className="btn" onClick={onCancel}>Отменить</button>
           <button className={`btn ${danger ? "danger" : "primary"}`} onClick={onConfirm} disabled={busy} autoFocus>{busy ? "Подождите…" : confirm}</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/* ── Закрытие формы с несохранёнными изменениями: сохранить, не сохранять или вернуться к форме ── */
+export function UnsavedDialog({ onSave, onDiscard, onCancel, saveLabel = "Сохранить", title = "Сохранить изменения?", text = "В форме есть несохранённые изменения." }: {
+  onSave: () => void; onDiscard: () => void; onCancel: () => void; saveLabel?: string; title?: string; text?: string;
+}) {
+  return (
+    <Modal onClose={onCancel} label={title}>
+      <div className="dialog confirm">
+        <div><h3>{title}</h3><p>{text}</p></div>
+        <div className="actions">
+          <button className="btn ghost" onClick={onCancel}>Отменить</button>
+          <span className="spacer" />
+          <button className="btn" onClick={onDiscard}>Не сохранять</button>
+          <button className="btn primary" onClick={onSave} autoFocus>{saveLabel}</button>
         </div>
       </div>
     </Modal>
@@ -99,6 +127,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 }
 
 /* ── Ошибка с идентификатором запроса (для диагностики) ── */
+// Код запроса не показываем в тексте — он в подсказке при наведении, для диагностики
 export const ErrorNote = ({ text, requestId }: { text: string; requestId?: string }) => (
-  <p className="form-error" role="alert">{text}{requestId && <small className="req-id">Код запроса: {requestId}</small>}</p>
+  <p className="form-error" role="alert" title={requestId ? `Код запроса: ${requestId}` : undefined}>{text}</p>
 );

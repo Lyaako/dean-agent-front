@@ -8,11 +8,11 @@ const MESSAGES: Record<string, string> = {
   invalid_token: "Сессия истекла — войдите снова",
   inactive_session: "Сессия завершена — войдите снова",
   forbidden: "Недостаточно прав для этого действия",
-  validation_error: "Проверьте заполнение полей",
+  validation_error: "Сервер не принял данные — проверьте заполнение полей",
   invalid_filter: "Недопустимый фильтр",
   invalid_value: "Недопустимое значение",
-  required_field: "Не заполнено обязательное поле",
-  constraint_violation: "Значения не проходят проверку базы данных",
+  required_field: "Не заполнено обязательное поле — оно отмечено звёздочкой",
+  constraint_violation: "Значение вне допустимых пределов — проверьте числа и даты в форме (например, дата окончания не раньше даты начала)",
   duplicate: "Такая запись уже есть",
   relationship_conflict: "Запись связана с другими данными — сначала измените или удалите их",
   period_conflict: "Периоды пересекаются",
@@ -45,11 +45,20 @@ const BY_TABLE: Record<string, Record<string, string>> = {
     domain_conflict: "Пересечение в расписании: преподаватель, группа или аудитория уже заняты в это время, аудитория мала или даты вне семестра",
   },
   study_group: { relationship_conflict: "В группе есть студенты или занятия — удалить её нельзя" },
+  employee: {
+    constraint_violation: "Доля ставки должна быть от 0,25 до 1,50, а дата увольнения — не раньше даты приёма",
+    relationship_conflict: "Сотрудник связан с другими данными (занятия, работы, приказы) — удалить его нельзя",
+    duplicate: "Такой табельный номер уже есть, или у этого человека уже есть запись сотрудника",
+  },
 };
 
 export function errorText(e: unknown, table?: string): string {
   if (e instanceof ApiError) {
-    return (table && BY_TABLE[table]?.[e.code]) || MESSAGES[e.code] || (e.status >= 500 ? "Ошибка сервера" : e.message || "Ошибка запроса");
+    const known = (table && BY_TABLE[table]?.[e.code]) || MESSAGES[e.code];
+    if (known) return known;
+    if (e.status >= 500) return "Ошибка сервера — попробуйте ещё раз";
+    // Служебные сообщения бэкенда на английском пользователю не показываем
+    return /[а-яё]/i.test(e.message) ? e.message : "Сервер не принял данные — проверьте заполнение формы";
   }
   if (e instanceof DOMException && e.name === "AbortError") return "Остановлено";
   if (e instanceof TypeError) return "Нет связи с сервером";

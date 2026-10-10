@@ -25,10 +25,9 @@ export function ProposalDialog({ id, onClose, onDecided }: { id: string; onClose
   const st = p ? STATUS[p.status] : null;
 
   return (
-    <Modal onClose={onClose} label="Изменение от агента">
+    <Modal onClose={onClose} label="Изменение от агента" outsideClose={false}>
       <div className="dialog proposal-dialog">
         <div className="form-head">
-          <span className="dialog-ico"><Icon name="sparkle" /></span>
           <div>
             <h3>{p?.status === "pending" || !p ? "Применить изменения?" : "Изменение от агента"}</h3>
             <p>{p?.explanation || "Агент подготовил изменение. Пока вы его не примените, в базе ничего не меняется."}</p>
