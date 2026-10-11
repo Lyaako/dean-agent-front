@@ -159,10 +159,10 @@ function tableTools(id, cols, rows, count, extra = "") {
   const plaques = active.length ? `<div class="fplaques" data-k="plaques">${active.map(([i, f]) => `<span class="fplaque" data-k="f${i}">${esc(cols[i].label)}: ${esc(plaqueText(cols[i], f))}
       <button type="button" data-a="tclear" data-id="${id}" data-i="${i}" aria-label="Убрать фильтр «${esc(cols[i].label)}»">${icon("x")}</button></span>`).join("")}
       <button type="button" class="btn sm ghost" data-a="tclear" data-id="${id}" data-i="*">Сбросить всё</button></div>` : "";
-  const meta = active.length || count != null
-    ? `<div class="table-meta" data-k="meta">${plaques}${count != null ? `<span class="count" data-k="count">Всего записей: <b>${count}</b></span>` : ""}</div>` : "";
+  const meta = active.length ? `<div class="table-meta" data-k="meta">${plaques}</div>` : "";
   return `<div class="toolbar" data-k="toolbar">${search}
-    <button type="button" class="btn sm ${s.open || active.length ? "soft" : "ghost"} filter-btn" data-a="tpanel" data-id="${id}" aria-expanded="${s.open}">${icon("list")}<span>Фильтры</span></button>${extra}</div>${panel}${meta}`;
+    <button type="button" class="btn sm ${s.open || active.length ? "soft" : "ghost"} filter-btn" data-a="tpanel" data-id="${id}" aria-expanded="${s.open}">${icon("list")}<span>Фильтры</span></button>
+${extra}</div>${panel}${meta}`;
 }
 function filterField(id, c, i, rows, value) {
   const title = `<span class="ff-l">${esc(c.label)}</span>`;
@@ -472,7 +472,8 @@ function morph(a, b) {
     else if (a !== document.activeElement) a.value = b.getAttribute("value") ?? "";
     return;
   }
-  if (a.tagName === "TEXTAREA") { if (a !== document.activeElement) a.value = b.textContent; return; }
+  // Поле с курсором переписываем, только если текст в состоянии другой (например, очищен после отправки) — иначе прыгнет курсор
+  if (a.tagName === "TEXTAREA") { if (a.value !== b.textContent) a.value = b.textContent; return; }
   const v = a.tagName === "SELECT" ? b.value : null;
   morphChildren(a, b);
   if (v != null) a.value = v;

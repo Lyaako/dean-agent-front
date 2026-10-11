@@ -75,7 +75,8 @@ const shellHtml = () => `<div class="app" id="app">
 let meOpen = false;
 const meHtml = () => `<div class="when"><b>${WD_FULL[D(TODAY).getUTCDay()]}, ${human(TODAY)}</b></div>
   <button class="avatar t${tone(ME.full_name)} avatar-btn" data-a="me" title="${esc(`${ME.full_name} — ${ROLE_NAME}`)}" aria-haspopup="menu" aria-expanded="${meOpen}">${initials(ME.full_name)}</button>
-  ${meOpen ? `<div class="menu" role="menu"><div class="menu-head"><b>${esc(ME.full_name)}</b><small>${ROLE_NAME} · ${esc(auth.login)}</small></div>
+  ${meOpen ? `<div class="menu" role="menu"><div class="menu-head"><b>${esc(ME.full_name)}</b><small>${ROLE_NAME} · ${esc(myLogin())}</small></div>
+    <button role="menuitem" class="menu-item" data-a="account">${icon("users")}<span>Личный кабинет</span></button>
     <button role="menuitem" class="menu-item" data-a="logout">${icon("logout")}<span>Выйти</span></button></div>` : ""}`;
 function tabsHtml() {
   const cur = currentTab(), i = TABS.findIndex((x) => x.id === cur);
@@ -100,9 +101,9 @@ const STUDENT_COLS = [
   { label: "Долги", field: "debts", filter: "num", className: "num", text: (r) => (r.debts ? String(r.debts) : "—"), render: (r) => (r.debts ? `<span class="late">${r.debts}</span>` : "—") },
   { label: "Посещ., %", field: "attendance_pct", filter: "num", className: "num", text: (r) => fmtNum(r.attendance_pct, 1) },
   { label: "Стипендия", field: "scholarships", filter: "enum", className: "wrap-sm" },
-  { label: "Ста­роста", field: "is_headman", filter: "bool", text: (r) => yes(r.is_headman), grow: 0.3 },
-  { label: "Ино­странец", field: "is_foreign", filter: "bool", text: (r) => yes(r.is_foreign), grow: 0.3 },
-  { label: "Обще­житие", field: "needs_dormitory", filter: "bool", text: (r) => yes(r.needs_dormitory), grow: 0.3 },
+  { label: "Староста", field: "is_headman", filter: "bool", text: (r) => yes(r.is_headman), grow: 0.3 },
+  { label: "Иностранец", field: "is_foreign", filter: "bool", text: (r) => yes(r.is_foreign), grow: 0.3 },
+  { label: "Общежитие", field: "needs_dormitory", filter: "bool", text: (r) => yes(r.needs_dormitory), grow: 0.3 },
   { label: "Категория", field: "category", filter: "enum", badge: true, grow: 3, render: (r) => badge(t(r.category), CATEGORY_KIND[r.category]) },
 ];
 const GROUP_COLS = [
@@ -551,94 +552,3 @@ PAGES.schedule = () => {
   return pageView("schedule", "Расписание", [bar, picker + `<div class="enter" data-k="${esc(`${sched.by}|${who}|${mon}`)}">${grid}</div>`]);
 };
 
-/* ── OLAP: анализ успеваемости (во фронте вкладка пока «Скоро» — здесь макет следующего этапа) ── */
-const olap = { op: "rollup-group", group: GROUPS[0].name, discipline: CURRICULUM[0][0], dGroup: "", dDisc: "", dSem: "" };
-const OPS = [["rollup-group", "Roll-up по группе"], ["rollup-discipline", "Roll-up по дисциплине"], ["rollup-semester", "Roll-up по семестру"],
-  ["slice-group", "Срез по группе"], ["slice-discipline", "Срез по дисциплине"], ["dice", "Dice"],
-  ["drilldown-group", "Drill-down по группе"], ["cross-group-semester", "Кросс-таблица Группа × Семестр"]];
-function rollup(key, rows = results) {
-  const mp = new Map();
-  rows.forEach((r) => { const k = key(r); if (!mp.has(k)) mp.set(k, []); mp.get(k).push(r); });
-  return [...mp.entries()].map(([name, rs]) => ({ name, avg: avg(rs), debts: rs.filter((r) => r.points == null).length,
-    students: new Set(rs.map((r) => r.student)).size, results: rs.length, excellent: rs.filter((r) => mark(r.points) === 5).length }));
-}
-const ROLLUP_COLS = (first) => [{ label: first, field: "name", filter: "enum" }, { label: "Средний балл", field: "avg", filter: "num", className: "num" },
-  { label: "Результатов", field: "results", filter: "num", className: "num" }, { label: "На «отлично»", field: "excellent", filter: "num", className: "num" },
-  { label: "Долгов", field: "debts", filter: "num", className: "num" }];
-const markOf = (r) => (r.points == null ? "долг" : isGraded(r.control_type) ? mark(r.points) : "зачтено");
-const RESULT_COLS = [{ label: "Студент", field: "student", filter: "text" }, { label: "Группа", field: "group_name", filter: "enum" },
-  { label: "Дисциплина", field: "discipline", filter: "enum" }, { label: "Семестр", field: "semester", filter: "enum", className: "num" },
-  { label: "Контроль", field: "control_type", filter: "enum" }, { label: "Баллы", field: "points", filter: "num", className: "num" },
-  { label: "Оценка", field: markOf, filter: "enum", render: (r) => (r.points == null ? badge("долг", "bad") : String(markOf(r))) }];
-const DRILL_COLS = [{ label: "Студент", field: "student", filter: "text" }, { label: "Ср. балл", field: "avg_points", filter: "num", className: "num" },
-  { label: "Долги", field: "debts", filter: "num", className: "num", text: (r) => (r.debts ? String(r.debts) : "—") },
-  { label: "Категория", field: "category", filter: "enum", badge: true, render: (r) => badge(r.category, CATEGORY_KIND[r.category]) }];
-const semAvg = (g, s) => avg(results.filter((x) => x.group_name === g && x.semester === s));
-const DISC_NAMES = [...new Set(results.map((r) => r.discipline))];
-const SEMS = [...new Set(results.map((r) => r.semester))].sort((a, b) => a - b);
-const SCALE_MIN = 25, SCALE_MAX = 54;
-const BANDS = [[25, 35, "удовл."], [35, 45, "хорошо"], [45, 54, "отлично"]];
-const pct = (v) => Math.max(0, Math.min(100, (v - SCALE_MIN) / (SCALE_MAX - SCALE_MIN) * 100));
-const bandOf = (v) => (v >= 45 ? 5 : v >= 35 ? 4 : 3);
-const meanAll = () => avg(results);
-const chartLegend = (mean) => `<span class="chart-legend">${BANDS.map(([, , l], i) => `<span><i class="b${i + 3}"></i>${l}</span>`).join("")}<span><i class="mean"></i>среднее ${mean}</span></span>`;
-const chartCard = (label, inner, mean) => `<section class="card chart-card"><div class="table-head"><h2>${label}</h2>${chartLegend(mean)}</div>${inner}</section>`;
-function dotPlot(rows, mean = meanAll()) {
-  const bands = BANDS.map(([a, b], i) => `<i class="b${i + 3}" style="left:${pct(a)}%;width:${pct(b) - pct(a)}%"></i>`).join("");
-  const sorted = rows.filter((r) => r.avg != null).sort((a, b) => b.avg - a.avg);
-  return `<div class="dotplot" style="--mean:${pct(mean)}%">
-    ${sorted.map((r, i) => `<div class="dp-row" style="--i:${i}"><span class="dp-l" title="${esc(r.name)}">${esc(r.name)}</span>
-      <div class="dp-track">${bands}<b class="dp-dot m${bandOf(r.avg)}" style="left:${pct(r.avg)}%" title="${esc(r.name)}: ${r.avg}"></b></div><b class="dp-v">${r.avg}</b></div>`).join("")}
-    <div class="dp-row dp-ticks"><span></span><div class="dp-track">${[25, 30, 35, 40, 45, 50, 54].map((x) => `<span style="left:${pct(x)}%">${x}</span>`).join("")}</div><span></span></div></div>`;
-}
-function lineChart(rows, mean = meanAll()) {
-  const W = 1000, H = 230, L = 44, R = 24, T = 26, B = 34, X0 = L + 50, X1 = W - R - 90;
-  const x = (i) => (rows.length === 1 ? (X0 + X1) / 2 : X0 + i * (X1 - X0) / (rows.length - 1));
-  const y = (v) => T + (H - T - B) * (1 - pct(v) / 100);
-  const pts = rows.map((r, i) => [x(i), y(r.avg ?? SCALE_MIN), r]);
-  let g = BANDS.map(([a, b, l], i) => `<rect class="band b${i + 3}" x="${L}" y="${y(b)}" width="${W - L - R}" height="${y(a) - y(b)}"/>
-    <text class="band-l" x="${W - R - 8}" y="${y(b) + 14}" text-anchor="end">${l}</text>`).join("");
-  g += [25, 35, 45, 54].map((v) => `<text x="${L - 10}" y="${y(v) + 4}" text-anchor="end">${v}</text>`).join("");
-  g += `<line class="mean" x1="${L}" x2="${W - R}" y1="${y(mean)}" y2="${y(mean)}"/>`;
-  g += `<path class="line" d="${pts.map(([px, py], i) => `${i ? "L" : "M"}${px},${py}`).join("")}"/>`;
-  g += pts.map(([px, py, r], i) => `<g class="pt" style="--i:${i}"><circle class="m${bandOf(r.avg)}" cx="${px}" cy="${py}" r="6"><title>${esc(r.name)}: ${r.avg}</title></circle>
-    <text class="pt-v" x="${px}" y="${py - 12}" text-anchor="middle">${r.avg}</text><text x="${px}" y="${H - 10}" text-anchor="middle">${esc(r.name)}</text></g>`).join("");
-  return `<div class="chart line-chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Средний балл по семестрам">${g}</svg></div>`;
-}
-const olapSelect = (label, key, opts, value, all) => `<label class="field"><span>${label}</span><select class="select" data-olap="${key}">${all ? `<option value="">${all}</option>` : ""}${opts.map(([v, l]) =>
-  `<option value="${esc(v)}" ${String(v) === String(value) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>`;
-PAGES.olap = () => {
-  const o = olap, k = Object.values(o).join("|");
-  const groupOpts = GROUP_NAMES.map((g) => [g, g]), discOpts = DISC_NAMES.map((d) => [d, d]);
-  let filters = "", chartLabel = "", title = "", cols, all, key = (r) => r.name;
-  if (o.op === "rollup-group") { all = rollup((r) => r.group_name); cols = ROLLUP_COLS("Группа"); chartLabel = "Средний балл по группам"; }
-  else if (o.op === "rollup-discipline") { all = rollup((r) => r.discipline); cols = ROLLUP_COLS("Дисциплина"); chartLabel = "Средний балл по дисциплинам"; }
-  else if (o.op === "rollup-semester") {
-    all = rollup((r) => r.semester).sort((a, b) => a.name - b.name).map((r) => ({ ...r, name: r.name + " семестр" }));
-    cols = ROLLUP_COLS("Семестр"); chartLabel = "Средний балл по семестрам";
-  } else if (o.op === "slice-group") {
-    filters = olapSelect("Группа", "group", groupOpts, o.group);
-    all = rollup((r) => r.discipline, results.filter((r) => r.group_name === o.group)); cols = ROLLUP_COLS("Дисциплина"); title = "По дисциплинам";
-  } else if (o.op === "slice-discipline") {
-    filters = olapSelect("Дисциплина", "discipline", discOpts, o.discipline);
-    all = rollup((r) => r.group_name, results.filter((r) => r.discipline === o.discipline)); cols = ROLLUP_COLS("Группа"); title = "По группам";
-  } else if (o.op === "dice") {
-    filters = olapSelect("Группа", "dGroup", groupOpts, o.dGroup, "Все") + olapSelect("Дисциплина", "dDisc", discOpts, o.dDisc, "Все")
-      + olapSelect("Семестр", "dSem", SEMS.map((s) => [s, s + " семестр"]), o.dSem, "Все");
-    all = results.filter((r) => (!o.dGroup || r.group_name === o.dGroup) && (!o.dDisc || r.discipline === o.dDisc) && (!o.dSem || r.semester == o.dSem));
-    cols = RESULT_COLS; title = "Результаты по фильтрам"; key = (r) => `${r.student_id}|${r.discipline}|${r.semester}`;
-  } else if (o.op === "drilldown-group") {
-    filters = olapSelect("Группа", "group", groupOpts, o.group);
-    all = students.filter((s) => s.group_name === o.group); cols = DRILL_COLS; title = "Студенты группы"; key = (r) => r.student_id;
-  } else {
-    all = GROUP_NAMES.map((name) => ({ name }));
-    cols = [{ label: "Группа", field: "name", filter: "enum" }, ...SEMS.map((s) => ({ label: s + " сем.", field: (r) => semAvg(r.name, s), filter: "num", className: "num" }))];
-    title = "Средний балл: группа × семестр";
-  }
-  const rows = applyTable("olap1", cols, all);
-  const graph = !chartLabel || !rows.length ? [] : [chartCard(chartLabel, o.op === "rollup-semester" ? lineChart(rows) : dotPlot(rows), meanAll())];
-  const out = [tableTools("olap1", cols, all, rows.length), ...graph, dataTable("olap1", cols, rows, all, { rowKey: key, title })];
-  return pageView("olap", "OLAP-анализ", [
-    `<section class="card ops"><div class="chips">${OPS.map(([v, l]) => `<button type="button" class="fchip" data-a="olap-op" data-v="${v}" aria-pressed="${v === o.op}">${l}</button>`).join("")}</div>${filters ? `<div class="filters">${filters}</div>` : ""}</section>`,
-    ...out.map((x, i) => (i ? `<div class="enter" data-k="${esc(k)}#${i}">${x}</div>` : x))]);
-};

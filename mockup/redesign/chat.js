@@ -35,7 +35,7 @@ function chatHtml() {
           ${busy ? `<div class="msg agent" data-k="typing"><span class="orb busy"></span><div class="typing"><div class="dots3"><i></i><i></i><i></i></div>${chat.status ? `<small>${esc(chat.status)}</small>` : ""}</div></div>` : ""}
         </div></div>
         <div class="composer">
-          ${items.length ? `<div class="thumbs" data-k="thumbs">${items.map(composerThumb).join("")}</div>` : ""}
+          ${items.length ? `<div class="thumbs${items.every((i) => leaving.has(i.id)) ? " out" : ""}" data-k="thumbs">${items.map(composerThumb).join("")}</div>` : ""}
           ${chat.notice ? `<small class="form-error attach-hint" data-k="notice">${esc(chat.notice)}</small>` : ""}
           <form class="input-row" data-chat-form data-k="form">
             <input type="file" id="fileInput" accept="${ATTACH_TYPES.join(",")}" multiple hidden>
@@ -166,7 +166,8 @@ function upload(it) {
 }
 const picHtml = (th, loading) => (!th ? `<span class="pic-inner${loading ? "" : " ext"}">${loading ? "" : "файл"}</span>`
   : th.kind === "img" ? `<img src="${th.src}" alt="">` : th.kind === "text" ? `<div class="page">${esc(th.text)}</div>` : `<div class="ext">${esc(th.ext)}</div>`);
-const composerThumb = (it) => `<div class="thumb st-${it.status}" data-k="${it.id}">
+const leaving = new Set();   // файлы, которые сейчас плавно исчезают
+const composerThumb = (it) => `<div class="thumb st-${it.status}${leaving.has(it.id) ? " out" : ""}" data-k="${it.id}">
   <button type="button" class="pic${!it.thumb ? " loading" : ""}" data-a="att-open" data-id="${it.id}" title="${esc(it.name)}">${picHtml(it.thumb, !it.thumb)}
     ${it.status === "uploading" || it.status === "processing" ? `<span class="thumb-busy" aria-label="Загружается"><span class="spinner"></span></span>` : ""}
     ${it.status === "error" ? `<span class="thumb-state bad" title="${esc(it.error)}">Ошибка</span>` : ""}</button>
@@ -444,6 +445,7 @@ function groupReply(g) {
 const ACT = {
   me: () => { meOpen = !meOpen; render(); },
   logout: () => logout(),
+  account: () => { meOpen = false; accountDialog(); },
   scrim: () => { chat.open = false; render(); },
   // таблицы
   tpanel: (el) => { const s = ts(el.dataset.id); s.open = !s.open; s.dd = null; render(); },
@@ -470,7 +472,11 @@ const ACT = {
   week: (el) => { sched.date = el.dataset.v; ts("schedule").page = 1; render(); },
   slot: (el) => openSlot(slotById(el.dataset.id)),
   "slot-new": (el) => openSlot(null, { weekday: el.dataset.wd, pair_number: el.dataset.p, term_id: TERM_NAME }),
-  "olap-op": (el) => { olap.op = el.dataset.v; delete tstore.olap1; render(); },
+  "olap-op": (el) => { olap.op = el.dataset.v; olap.pick = null; render(); },
+  "olap-crumb": (el) => { olap.path = olap.path.slice(0, +el.dataset.i); render(); },
+  "olap-level": (el) => { olap.level = el.dataset.v; render(); },
+  "olap-period": (el) => { olap.period = el.dataset.v; olap.pick = null; render(); },
+  "olap-pick": (el) => { olap.pick = olap.pick === el.dataset.v ? null : el.dataset.v; render(); },
   // чат
   "chat-list": () => { chat.listOpen = !chat.listOpen; render(); },
   "chat-toggle": () => { chat.open = !chat.open; render(); },
@@ -481,7 +487,12 @@ const ACT = {
     confirmDialog({ title: "Удалить чат?", text: `«${c.title}» исчезнет из списка вместе с перепиской.`, confirm: "Удалить", danger: true, busyMs: 0,
       onConfirm: () => { chat.chats.splice(chat.chats.indexOf(c), 1); if (chat.activeId === c.id) chat.activeId = null; render(); } }); },
   attach: () => $("#fileInput").click(),
-  "att-remove": (el) => { for (const k in chat.att) chat.att[k] = chat.att[k].filter((x) => x !== el.dataset.id); delete ATT[el.dataset.id]; render(); },
+  "att-remove": (el) => {
+    // Сначала файл (а если он последний — и вся полоса) плавно исчезает, потом убираем его из черновика
+    const id = el.dataset.id, last = draftItems().every((i) => i.id === id || leaving.has(i.id));
+    leaving.add(id); render();
+    setTimeout(() => { leaving.delete(id); for (const k in chat.att) chat.att[k] = chat.att[k].filter((x) => x !== id); delete ATT[id]; render(); }, REDUCED ? 0 : last ? 320 : 200);
+  },
   "att-retry": (el) => { upload(ATT[el.dataset.id]); render(); },
   "att-open": (el) => fileViewer(ATT[el.dataset.id]),
   "msg-file": (el) => fileViewer(ATT[el.dataset.id] ?? { name: el.title }),
@@ -549,7 +560,7 @@ document.addEventListener("change", (e) => {
     s.f[i] = el.checked ? [...cur, el.value] : cur.filter((x) => x !== el.value);
     s.page = 1; render();
   } else if (d.who != null) { sched.who = el.value; render(); }
-  else if (d.olap) { olap[d.olap] = el.value; render(); }
+  else if (d.olap) { olap[d.olap] = el.value; if (d.olap === "course") olap.group = ""; render(); }
   else if (el.id === "fileInput") { if (el.files.length) addFiles([...el.files]); el.value = ""; }
 });
 document.addEventListener("submit", (e) => {

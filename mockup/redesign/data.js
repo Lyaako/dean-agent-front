@@ -127,6 +127,8 @@ GROUPS.forEach((g, gi) => {
       is_headman: false, is_foreign: rnd() < 0.05, needs_dormitory: rnd() < 0.3,
     };
     const weak = rnd() < 0.25;
+    // У слабых студентов и посещаемость ниже — на этом строится срез OLAP «Посещаемость и долги»
+    if (weak && st.attendance_pct != null) st.attendance_pct = +(st.attendance_pct - 24).toFixed(1);
     const pts = [];
     let n = 0;
     CURRICULUM.filter(([, s]) => s <= doneSemesters(g.year)).forEach(([discipline, semester, control_type]) => {
