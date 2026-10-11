@@ -31,15 +31,19 @@ const PW_FIELDS = [["cur", "Текущий пароль", "current-password"], [
 
 function accountDialog() {
   const m = { label: "Личный кабинет", tab: "profile", pw: { cur: "", next: "", rep: "" }, errors: {}, busy: false };
-  const years = Math.floor((D(TODAY) - D(ME.hire_date)) / (365.25 * 864e5));
   const kv = (label, value) => `<div><small>${label}</small><b>${esc(value)}</b></div>`;
-
-  const profile = () => `<div class="kv-grid acc-kv">
-      ${kv("Логин", myLogin())}${kv("Табельный номер", ME.personnel_number)}
-      ${kv("Должность", ME.position)}${kv("Подразделение", ME.unit)}
-      ${kv("Ставка", String(ME.employment_rate).replace(".", ","))}${kv("Работает с", `${fullDate(ME.hire_date)} · ${years} ${plural(years, "год", "года", "лет")}`)}
-      ${kv("Телефон", ME.phone)}${kv("Почта", ME.email)}</div>
-    <p class="hint acc-note">Данные ведёт отдел кадров. Если что-то неверно — напишите администратору.</p>`;
+  // Поля зависят от роли: у студента — учёба, у сотрудника — работа, у администратора — только учётная запись
+  const fields = () => {
+    if (ROLE === "student") return [["Логин", myLogin()], ["Зачётная книжка", ME.record_book_number], ["Группа", ME.group_name], ["Курс", `${ME.course} курс`],
+      ["Основа обучения", ME.funding], ["Статус", ME.status], ["Телефон", ME.phone], ["Почта", ME.email]];
+    if (ROLE === "admin") return [["Логин", myLogin()], ["Роль", ROLE_NAME], ["Почта", ME.email], ["Телефон", ME.phone]];
+    const years = Math.floor((D(TODAY) - D(ME.hire_date)) / (365.25 * 864e5));
+    return [["Логин", myLogin()], ["Табельный номер", ME.personnel_number], ["Должность", ME.position], ["Подразделение", ME.unit],
+      ["Ставка", String(ME.employment_rate).replace(".", ",")], ["Работает с", `${fullDate(ME.hire_date)} · ${years} ${plural(years, "год", "года", "лет")}`],
+      ["Телефон", ME.phone], ["Почта", ME.email]];
+  };
+  const profile = () => `<div class="kv-grid acc-kv">${fields().map(([l, v]) => kv(l, v)).join("")}</div>
+    <p class="hint acc-note">${ROLE === "student" ? "Данные ведёт деканат. Если что-то неверно — обратитесь в деканат." : "Данные ведёт отдел кадров. Если что-то неверно — напишите администратору."}</p>`;
 
   const theme = () => `<div class="theme-opts" role="radiogroup" aria-label="Тема">${THEMES.map(([v, l]) =>
       `<button type="button" class="theme-opt" role="radio" data-a="theme" data-v="${v}" aria-checked="${themePref === v}">

@@ -110,7 +110,7 @@ const employees = [
 }));
 const teachers = employees.filter((e) => e.category === "teaching");
 const deanStaff = employees.filter((e) => e.unit === "Деканат");
-const ME = deanStaff[0];
+let ME = deanStaff[0];   // кто вошёл — меняется с ролью (roles.js)
 
 /* ── Студенты, результаты, долги (v_student_summary, v_last_result, v_debtors, v_expulsion_risk) ── */
 const ACTIVE = "Обучается";                      // student_status.is_active

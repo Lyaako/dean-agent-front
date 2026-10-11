@@ -253,7 +253,7 @@ function proposalDialog(pid) {
       m.busy = a; m.error = null; render();
       await wait(600);
       try {
-        if (a === "approve") p.apply();
+        if (a === "approve") { p.apply(); window.onProposalApplied?.(p); }
         Object.assign(p, { status: a === "approve" ? "approved" : "rejected", decision_reason: m.reason.trim() });
       } catch (e) { m.error = e.message; }
       m.busy = null; render();

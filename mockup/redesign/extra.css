@@ -518,3 +518,106 @@ body {
 @media (max-width: 720px) { body { background-size: 420px auto, 420px auto; } }
 /* Поиск и таблица ближе друг к другу: 16 px вместо общего отступа между блоками страницы (28) */
 .view > .rise:has(> .toolbar) { margin-bottom: -12px; }
+
+/* ═════════ Роли (roles.js) ═════════ */
+.muted { color: var(--muted); }
+/* Ведомость и таблицы в карточках */
+.sheet-dialog { width: min(720px, 100%); }
+.sheet-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; font-size: 13.5px; color: var(--ink-2); }
+.sheet-meta span { display: inline-flex; align-items: center; gap: 6px; }
+.sheet-meta .ic { width: 15px; height: 15px; color: var(--muted); }
+.sheet-wrap { overflow-x: auto; padding: 0 8px 12px; }
+.sheet-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.sheet-table th { padding: 8px 12px; font-size: 12px; font-weight: 500; color: var(--muted); text-align: left; border-bottom: 1px solid var(--line); background: none; }
+.sheet-table td { padding: 8px 12px; border-bottom: 1px solid var(--line); white-space: normal; }
+.sheet-table tbody tr:last-child td { border-bottom: 0; }
+.sheet-table tbody tr { animation: none; }
+.sheet-table tbody tr:hover td { background: none; }
+.sheet-table th:not(:first-child), .sheet-table td:not(:first-child) { text-align: center; }
+.sheet-table .pts { width: 84px; height: 36px; text-align: center; }
+.sheet-table input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--indigo); }
+.grades td:first-child { font-weight: 500; }
+/* Посещаемость: список группы с переключателем «был / не был» */
+.att-list { display: flex; flex-direction: column; border-radius: 16px; background: var(--fill); padding: 0 4px; }
+.att-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line);
+  animation: rise var(--t3) var(--ease) backwards; animation-delay: calc(var(--i) * 25ms); }
+.att-row:last-child { border-bottom: 0; }
+.att-row b { font-weight: 500; }
+.att-seg { min-width: 200px; }
+.att-seg[data-unset="true"]::before { opacity: 0; }
+.att-seg button[data-v="0"][aria-pressed="true"] { color: var(--rose-700); }
+@media (max-width: 600px) { .att-row { grid-template-columns: minmax(0, 1fr); } .att-row .avatar { display: none; } .att-seg { min-width: 0; } }
+/* Карточки студента */
+.me-card { padding-bottom: 18px; }
+.me-kv { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0 24px; }
+.me-kv b { overflow-wrap: anywhere; }
+@media (max-width: 640px) { .me-kv { grid-template-columns: minmax(0, 1fr); } }
+.debts-card { box-shadow: 0 0 0 1.5px var(--rose-100), var(--shadow-1); }
+.debt-list { display: flex; flex-direction: column; gap: 8px; padding: 0 24px 20px; }
+.debt-row { display: flex; align-items: flex-start; gap: 10px; }
+.debt-row .ic { width: 18px; height: 18px; margin-top: 2px; color: var(--rose-700); flex: none; }
+.debt-row b { display: block; font-weight: 600; }
+.debt-row small { color: var(--muted); font-size: 12.5px; }
+.miss-list { display: flex; flex-direction: column; padding: 0 24px 18px; }
+.miss-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.miss-row:last-child { border-bottom: 0; }
+.miss-row b { min-width: 92px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.miss-row span { color: var(--ink-2); }
+/* Справочники */
+.ref-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.ref-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; padding: 18px; border: 0; text-align: left; color: var(--ink);
+  transition: transform var(--t3) var(--spring), box-shadow var(--t2); animation: rise var(--t4) var(--ease) backwards; animation-delay: calc(var(--i) * 30ms); }
+.ref-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
+.ref-card b { display: block; font-size: 15px; font-weight: 600; }
+.ref-card small { font-size: 12px; color: var(--muted); font-family: ui-monospace, monospace; }
+.ref-n { align-self: start; min-width: 28px; height: 24px; padding: 0 8px; border-radius: 999px; display: grid; place-items: center; background: var(--sky-100); color: var(--indigo); font-size: 12.5px; font-weight: 600; }
+.ref-card p { grid-column: 1 / -1; margin: 4px 0 0; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ref-dialog { width: min(560px, 100%); }
+.ref-list { display: flex; flex-direction: column; border-radius: 16px; background: var(--fill); padding: 4px 16px; }
+.ref-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.ref-row:last-child { border-bottom: 0; }
+.ref-row b { font-weight: 500; }
+.ref-row small { color: var(--muted); }
+
+/* Переключатель (seg): белая подложка с тенью, как у поиска — на любом фоне выглядит одинаково;
+   выбранный вариант — голубая «таблетка». Рамка фокуса — только с клавиатуры и внутри кнопки */
+.seg { background: var(--surface); box-shadow: var(--shadow-1); }
+.seg::before { background: var(--sky-100); box-shadow: none; }
+.seg button[aria-pressed="true"] { color: var(--indigo); }
+.seg button:focus:not(:focus-visible) { outline: 0; }
+.seg button:focus-visible { outline-offset: -2px; }
+:root[data-theme="dark"] .seg::before { background: var(--sky-100); box-shadow: none; }
+
+/* ═════════ Элементы прямо на фоне страницы (не в карточке): белые с мягкой тенью, как поиск ═════════
+   Серые и бледно-голубые подложки на пятнах фона выглядели грязно */
+.olap-filters .select, .olap-filters .text-input, .toolbar .pill-select, .toolbar .select, .week-bar .pill-select {
+  background-color: var(--surface); box-shadow: var(--shadow-1);
+}
+.olap-filters .select:hover, .toolbar .pill-select:hover, .toolbar .select:hover, .week-bar .pill-select:hover { background-color: var(--surface); box-shadow: var(--shadow-2); }
+.olap-filters .text-input:focus { box-shadow: 0 0 0 1.5px var(--sky), 0 0 0 6px rgba(100, 145, 240, .16); }
+/* «Фильтры» и «Сбросить всё»: при наведении — белая подложка вместо серой */
+.toolbar .btn.ghost:hover, .table-meta .btn.ghost:hover { background: var(--surface); box-shadow: var(--shadow-1); }
+/* Плашки активных фильтров: белые с синим текстом — голубые сливались с пятном фона */
+.fplaque { background: var(--surface); box-shadow: var(--shadow-1); }
+.fplaque button:hover { background: var(--sky-100); }
+/* Ссылки в «хлебных крошках» OLAP */
+.olap-crumbs .link:hover { background: var(--surface); box-shadow: var(--shadow-1); }
+/* «Фильтры» при включённых фильтрах: белая с синей обводкой — бледно-голубая терялась на пятне фона */
+.toolbar .btn.soft { background: var(--surface); box-shadow: var(--shadow-1), inset 0 0 0 1.5px var(--sky); }
+.toolbar .btn.soft:hover { background: var(--surface); box-shadow: var(--shadow-2), inset 0 0 0 1.5px var(--sky); }
+
+/* Посещаемость неделей: на занятии — статус отметок; будущие занятия бледные и не нажимаются */
+.lesson .l-att { display: inline-flex; align-items: center; gap: 4px; margin-top: 2px; font-size: 11.5px; font-weight: 600; }
+.lesson .l-att .ic { width: 13px; height: 13px; }
+.l-att.ok { color: var(--mint-700); } .l-att.info { color: var(--indigo); } .l-att.warn { color: var(--orchid-700); }
+.lesson.future { opacity: .55; cursor: default; }
+.lesson.future:hover { transform: none; box-shadow: none; }
+.att-dialog { width: min(620px, 100%); }
+.att-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--muted); }
+.att-head b { color: var(--ink); }
+.att-dialog .att-row { animation: none; padding: 8px 10px; }
+.att-dialog .seg { background: var(--surface); }
+/* Статистика одной строкой (журнал изменений) */
+.stat-line { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: -6px 0 0; font-size: 14px; color: var(--muted); }
+.stat-line b { margin-left: 4px; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat-line b.neg { color: var(--rose-700); }

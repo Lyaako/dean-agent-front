@@ -3,7 +3,7 @@
    таблицы с окнами записей, приказы по студентам, расписание, чаты с агентом и окно «применить изменения».
    Данные выдуманы (data.js), агент — заглушка: отвечает по ключевым словам. Пользователь — сотрудник деканата. */
 
-const ROLE_NAME = "Сотрудник деканата";
+let ROLE_NAME = "Сотрудник деканата";   // меняется с ролью (roles.js)
 const CATEGORY_KIND = { "Отличник": "ok", "Хорошист": "ok", "Есть тройки": "info", "Есть задолженности": "warn", "Кандидат на отчисление": "bad",
   "Академический отпуск": "muted", "Отчислен": "muted", "Выпускник": "muted", "Ещё не сдавал сессию": "info" };
 const LESSON_KIND = { "Лекция": "info plain", "Практика": "violet plain", "Лабораторная": "warn plain" };
@@ -13,7 +13,7 @@ const EMPLOYEE_CATEGORY = CATEGORY_NAME;
 /* ═════════ ВХОД ═════════ */
 const auth = { on: false, login: "", busy: false, error: null };
 try { const s = JSON.parse(sessionStorage.getItem("deanery.mock.session") || "null"); if (s) Object.assign(auth, { on: true, login: s.login }); } catch { /* нет доступа */ }
-const loginHtml = () => `<div class="login"><form class="card login-card" data-login>
+let loginHtml = () => `<div class="login"><form class="card login-card" data-login>
   <div class="brand"><span class="orb logo-orb" aria-hidden="true"></span><b>Деканат</b></div>
   <h1>Вход</h1>
   <label class="field"><span>Логин</span><input class="text-input" name="login" autocomplete="username" value="${esc(auth.login)}" required></label>
@@ -49,7 +49,7 @@ const TABS = [
   { id: "employees", title: "Сотрудники", icon: "badge" },
   { id: "olap", title: "OLAP-анализ", short: "OLAP", icon: "chart" },
 ];
-const currentTab = () => { const id = location.hash.replace(/^#\/?/, "").split("?")[0]; return TABS.some((x) => x.id === id) ? id : "students"; };
+const currentTab = () => { const id = location.hash.replace(/^#\/?/, "").split("?")[0]; return TABS.some((x) => x.id === id) ? id : TABS[0].id; };
 // Переход с другой вкладки: фильтры сбрасываются и ставится фильтр по колонке (как ?group_name=… во фронте)
 function goTab(tab, filters = {}) {
   const cols = TABLE_COLS[tab];
@@ -339,7 +339,7 @@ function renameGroup(from, to) {
 }
 
 /* ═════════ РАСПИСАНИЕ ═════════ */
-const sched = { view: "table", date: TODAY, by: "group", who: "" };
+const sched = { view: "table", date: TODAY, by: "group", who: "", own: false };   // own — своё расписание (преподаватель, студент): без выбора и правок
 const SCHEDULE_BY = [["group", "Группа", "group_name"], ["teacher", "Преподаватель", "teacher"], ["classroom", "Аудитория", "classroom"]];
 const byField = (by) => SCHEDULE_BY.find(([v]) => v === by)[2];
 const whoOptions = () => [...new Set(schedule.map((l) => String(l[byField(sched.by)] ?? "")).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru", { numeric: true }));
@@ -521,8 +521,8 @@ PAGES.schedule = () => {
       <button class="icon-btn soft" data-a="week" data-v="${prev}" ${prev < mondayOf(TERM_FIRST) ? "disabled" : ""} aria-label="Предыдущая неделя">${icon("left")}</button>
       <div class="week-label"><b>${human(mon)} — ${human(addDays(mon, 5))}</b></div>
       <button class="icon-btn soft" data-a="week" data-v="${next}" ${next > TERM_LAST ? "disabled" : ""} aria-label="Следующая неделя">${icon("right")}</button>
-    </div>${seg("sched-view", [["table", "Таблица", "list"], ["week", "Неделя", "calendar"]], sched.view)}</div>`;
-  if (sched.view === "table") {
+    </div>${sched.own ? "" : seg("sched-view", [["table", "Таблица", "list"], ["week", "Неделя", "calendar"]], sched.view)}</div>`;
+  if (sched.view === "table" && !sched.own) {
     // Таблица показывает выбранную неделю: даты задаёт переключатель недель, а не фильтр
     const weekRows = schedule.filter((r) => r.lesson_date >= mon && r.lesson_date <= addDays(mon, 6));
     const rows = applyTable("schedule", SCHEDULE_COLS, weekRows);
@@ -533,22 +533,24 @@ PAGES.schedule = () => {
         title: `${TERM_NAME} семестр · ${human(mon)} — ${human(addDays(mon, 5))}`, onRow: (r) => openSlot(slotById(r.slot_id)) })}</div>`]);
   }
   const f = byField(sched.by), who = curWho();
-  const picker = `<div class="toolbar">${seg("sched-by", SCHEDULE_BY.map(([v, l]) => [v, l]), sched.by)}
+  const picker = sched.own ? "" : `<div class="toolbar">${seg("sched-by", SCHEDULE_BY.map(([v, l]) => [v, l]), sched.by)}
     <select class="pill-select who-select" data-who aria-label="${esc(SCHEDULE_BY.find(([v]) => v === sched.by)[1])}">${whoOptions().map((o) =>
       `<option value="${esc(o)}" ${o === who ? "selected" : ""}>${esc(o)}</option>`).join("")}</select><span class="spacer"></span>${addBtn("add-schedule")}</div>`;
   const days = Array.from({ length: 6 }, (_, i) => addDays(mon, i));
   const week = schedule.filter((l) => String(l[f]) === who && l.lesson_date >= mon && l.lesson_date <= days[5]);
   const pairs = Array.from({ length: Math.max(4, ...week.map((l) => l.pair_number)) }, (_, i) => i + 1);
-  const lesson = (l) => `<button type="button" class="lesson ${l.lesson_type === "Лекция" ? "lec" : "prac"}" data-a="slot" data-id="${l.slot_id}">
+  const lesson = (l) => `<button type="button" class="lesson ${l.lesson_type === "Лекция" ? "lec" : "prac"}" ${sched.own ? "" : `data-a="slot" data-id="${l.slot_id}"`}>
     <div class="l-top">${badge(l.lesson_type, LESSON_KIND[l.lesson_type])}<span class="l-room">${icon("pin")}${esc(l.classroom)}</span></div>
     <b>${esc(l.discipline)}</b><small>${[f !== "group_name" && l.group_name, l.subgroup && `подгруппа ${l.subgroup}`, f !== "teacher" && l.teacher].filter(Boolean).map(esc).join(" · ")}</small></button>`;
   const grid = `<section class="card week-card"><div class="week-grid"><div class="wg-h"></div>
     ${days.map((d) => `<div class="wg-h${d === TODAY ? " today" : ""}"><b>${WD_SHORT[D(d).getUTCDay()]}, ${human(d)}</b>${HOLIDAYS.includes(d) ? "<small>праздник</small>" : ""}</div>`).join("")}
     ${pairs.map((p) => `<div class="wg-time"><b>${PAIRS[p][0]}</b><small>${p} пара · до ${PAIRS[p][1]}</small></div>${days.map((d, di) => {
       const here = week.filter((l) => l.lesson_date === d && l.pair_number === p);
-      return `<div class="wg-cell${d === TODAY ? " today" : ""}${here.length ? "" : " can-add"}" ${here.length ? "" : `data-a="slot-new" data-wd="${di + 1}" data-p="${p}" title="Добавить занятие"`}>
-        ${here.map(lesson).join("")}${here.length ? "" : `<span class="wg-add">${icon("plus")}</span>`}</div>`; }).join("")}`).join("")}
+      const add = !here.length && !sched.own;
+      return `<div class="wg-cell${d === TODAY ? " today" : ""}${add ? " can-add" : ""}" ${!add ? "" : `data-a="slot-new" data-wd="${di + 1}" data-p="${p}" title="Добавить занятие"`}>
+        ${here.map(lesson).join("")}${add ? `<span class="wg-add">${icon("plus")}</span>` : ""}</div>`; }).join("")}`).join("")}
   </div></section>`;
-  return pageView("schedule", "Расписание", [bar, picker + `<div class="enter" data-k="${esc(`${sched.by}|${who}|${mon}`)}">${grid}</div>`]);
+  const title = !sched.own ? "Расписание" : sched.by === "teacher" ? "Моё расписание" : `Расписание ${who}`;
+  return pageView("schedule", title, [bar, picker + `<div class="enter" data-k="${esc(`${sched.by}|${who}|${mon}`)}">${grid}</div>`]);
 };
 
