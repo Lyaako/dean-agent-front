@@ -621,3 +621,69 @@ body {
 .stat-line { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: -6px 0 0; font-size: 14px; color: var(--muted); }
 .stat-line b { margin-left: 4px; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
 .stat-line b.neg { color: var(--rose-700); }
+
+/* ═════════ Пакетное изменение (batch.js) ═════════ */
+.batch-card .warn-t { display: inline-flex; align-items: center; gap: 3px; color: var(--orchid-700); }
+.batch-card .warn-t .ic { width: 12px; height: 12px; }
+.batch-card { flex-wrap: wrap; }
+.batch-dialog { width: min(760px, 100%); }
+.batch-sum { display: flex; gap: 12px; padding: 14px 16px; border-radius: 16px; background: var(--sky-50); }
+.batch-sum > .ic { width: 18px; height: 18px; margin-top: 2px; color: var(--violet); flex: none; }
+.batch-sum p { margin: 0 0 4px; font-size: 14px; color: var(--ink); }
+.batch-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.batch-tools .fchip { height: 32px; padding: 0 12px; font-size: 13px; background: var(--fill); box-shadow: none; }
+.batch-tools .fchip .ic { width: 13px; height: 13px; }
+.batch-tools .fchip[aria-pressed="true"] { background: var(--indigo); }
+.search.sm { height: 36px; flex: 0 1 220px; background: var(--fill); box-shadow: none; }
+.batch-list { display: flex; flex-direction: column; border-radius: 16px; background: var(--fill); padding: 2px 12px; }
+.b-row { display: grid; grid-template-columns: 20px minmax(0, 1fr) minmax(0, 1fr) 210px; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.b-row:last-child { border-bottom: 0; }
+.batch-dialog .b-row:not(:has(input)) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 210px; }
+.b-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--indigo); }
+.b-row.off .b-rec, .b-row.off .b-val { opacity: .45; }
+.b-row.invalid .b-rec, .b-row.invalid .b-val { opacity: .6; }
+.b-head { grid-template-columns: 20px auto 1fr; font-size: 13px; color: var(--ink-2); cursor: pointer; }
+.b-head .hint { text-align: right; }
+.b-rec b { display: block; font-weight: 500; }
+.b-rec small { font-size: 12px; color: var(--muted); }
+.b-val { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.b-val .old, .b-val .new { white-space: nowrap; }
+.b-val .k { font-size: 12.5px; color: var(--muted); margin-right: 2px; }
+.b-val .old, .b-val .new { padding: 3px 9px; border-radius: 9px; font-size: 13px; }
+.b-val .old { background: var(--rose-100); color: var(--rose-700); text-decoration: line-through; text-decoration-color: rgba(200, 19, 63, .45); }
+.b-val .new { background: var(--mint-100); color: var(--mint-700); font-weight: 600; }
+.b-val .ic { width: 14px; height: 14px; color: var(--muted); }
+.b-note { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-start; }
+.b-note .badge { white-space: normal; height: auto; min-height: 24px; padding-top: 3px; padding-bottom: 3px; line-height: 1.25; }
+.b-empty { padding: 14px 0; text-align: center; }
+.b-more { align-self: center; margin: 6px 0 8px; }
+.batch-error { display: flex; gap: 12px; margin: 0 28px 12px; padding: 14px 16px; border-radius: 16px; background: var(--rose-100); color: var(--rose-700); animation: rise var(--t3) var(--ease); }
+.batch-error.warn { background: var(--orchid-100); color: var(--orchid-700); }
+.batch-error.info, .batch-error.checking { background: var(--sky-100); color: var(--indigo); }
+.batch-error > .ic { width: 20px; height: 20px; flex: none; margin-top: 1px; }
+.batch-error > div { flex: 1; min-width: 0; }
+.batch-error > div > b { display: block; }
+.batch-error p { margin: 4px 0 0; font-size: 13.5px; color: var(--ink-2); }
+.batch-error .err-data { font-weight: 600; color: var(--ink); }
+.err-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.err-acts .btn { background: var(--surface); }
+/* Подробности для IT — всегда видны: код, пакет, время, пользователь */
+.err-details { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-top: 10px; padding-top: 8px; border-top: 1px dashed currentColor; font: 12.5px/1.4 ui-monospace, monospace; color: var(--ink-2); }
+.err-details .btn { height: 28px; padding: 0 10px; font-family: var(--font); }
+.err-code { display: inline-block; padding: 0 5px; border-radius: 5px; background: var(--fill); font: 600 11.5px/1.6 ui-monospace, monospace; color: var(--ink-2); }
+.b-note .badge { font-variant-numeric: tabular-nums; }
+.b-row.culprit { margin: 0 -12px; padding-left: 12px; padding-right: 12px; background: var(--rose-100); border-radius: 12px; }
+.b-row.culprit .b-rec, .b-row.culprit .b-val { opacity: 1; }
+/* Мягкое уведомление над кнопками: что-то изменилось само, пока окно было открыто */
+.batch-note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 28px 12px; padding: 10px 14px; border-radius: 14px; background: var(--orchid-100); color: var(--orchid-700); font-size: 13.5px; animation: rise var(--t3) var(--ease); }
+.batch-note > .ic { width: 16px; height: 16px; flex: none; }
+.batch-note > span { flex: 1; min-width: 200px; color: var(--ink-2); }
+.batch-note .btn { background: var(--surface); }
+.batch-error > .ic { width: 20px; height: 20px; flex: none; margin-top: 1px; }
+.batch-error > div > b { display: block; }
+.batch-error p { margin: 4px 0 0; font-size: 13.5px; color: var(--ink-2); }
+@media (max-width: 640px) { .b-row { grid-template-columns: 20px minmax(0, 1fr); } .b-val, .b-note { grid-column: 2; justify-content: flex-start; } }
+.b-was { font-size: 13px; color: var(--muted); } .btn.hidden { display: none; }
+/* Строка, которую уже изменили после подготовки пакета: значения бледные и зачёркнутые — применять нечего */
+.b-row.stale .b-val { text-decoration: line-through; text-decoration-color: var(--muted); }
+.b-row.stale { animation: flash 1.6s var(--ease); }

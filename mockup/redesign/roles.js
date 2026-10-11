@@ -48,7 +48,21 @@ function personOf(u) {
   return employees.find((e) => e.email.split("@")[0] === u.login);
 }
 
-function applyRole(role, person) {
+/* ── Чаты у каждого пользователя свои: при входе подставляется его история, черновики и вложения ── */
+const CHAT_STORE = new Map();                  // логин → { chats, activeId, texts, att }
+const SEED_CHATS = chat.chats.slice();          // демо-история из макета — только у сотрудника деканата
+let chatOwner = null;
+function switchChats(login) {
+  if (login === chatOwner) return;
+  chat.timers.forEach(clearTimeout);
+  if (chatOwner) CHAT_STORE.set(chatOwner, { chats: chat.chats, activeId: chat.activeId, texts: chat.texts, att: chat.att });
+  const mine = CHAT_STORE.get(login) ?? { chats: login === deanStaff[0].email.split("@")[0] ? SEED_CHATS : [], activeId: null, texts: {}, att: {} };
+  Object.assign(chat, mine, { open: false, busyId: null, status: null, timers: [], notice: null, queued: false, editing: null, inputH: 40, shownCount: -1 });
+  chatOwner = login;
+}
+
+function applyRole(role, person, login) {
+  switchChats(login);
   ROLE = ROLES[role] ? role : "dean_staff";
   ME = person;
   ROLE_NAME = ROLES[ROLE].name;
@@ -57,8 +71,6 @@ function applyRole(role, person) {
   if (ROLE === "teacher") Object.assign(sched, { by: "teacher", who: ME.full_name, view: "week", own: true });
   else if (ROLE === "student") Object.assign(sched, { by: "group", who: ME.group_name, view: "week", own: true });
   else Object.assign(sched, { own: false, who: sched.own ? "" : sched.who });
-  // История чатов в макете — от лица деканата; у других ролей чаты начинаются с чистого листа
-  if (!["dean_staff", "director"].includes(ROLE)) { chat.chats = []; chat.activeId = null; }
   if (!TABS.some((t) => t.id === currentTab())) location.hash = `#/${TABS[0].id}`;
 }
 
@@ -76,7 +88,7 @@ doLogin = async (form) => {
   if (!u.active) { auth.error = "Доступ отключён. Обратитесь в деканат или к администратору"; return render(); }
   u.last = TODAY;
   auth.on = true;
-  applyRole(u.role, personOf(u));
+  applyRole(u.role, personOf(u), u.login);
   try { sessionStorage.setItem("deanery.mock.session", JSON.stringify({ login })); } catch { /* нет доступа */ }
   render();
 };
@@ -525,7 +537,7 @@ const replyBase = reply;
 reply = (raw) => {
   const s = norm(raw);
   if (ROLE === "student") {
-    if (CHANGE_WORDS.test(s) && !/справк/.test(s)) return { html: P("Изменять данные через чат может только сотрудник деканата или преподаватель. Я могу подсказать ваше расписание, оценки, долги и статус справок.") };
+    if (CHANGE_WORDS.test(s) && !/справк/.test(s)) return { html: P("Изменять данные через чат может только сотрудник деканата или преподаватель. Я могу подсказать ваше расписание, оценки, долги и статус справок.") + `<p class="hint">Код ${codeTag("AG-01")} — нет прав на это действие</p>` };
     if (/справк|заявк/.test(s)) { const rs = requests.filter((r) => r.student_id === ME.student_id);
       return q(rs.length ? P("Ваши заявки на справки:") + mdTable(["№", "Документ", "Статус", "Готова к"], rs.map((r) => [r.request_id, esc(r.document), r.status, fmtDate(r.due_date)])) : P("Заявок на справки у вас нет. Заказать справку можно во вкладке «Справки».")); }
     if (/долг|задолж|пересда/.test(s)) { const ds = debtors.filter((d) => d.student_id === ME.student_id);
@@ -534,6 +546,8 @@ reply = (raw) => {
     if (/распис|пар[аыу]?([^а-я]|$)|занят/.test(s)) return scheduleReply(s, ME.group_name);
     return { html: P("Я отвечаю на вопросы о вашей учёбе: расписание, оценки, долги, справки. Например: «какие пары завтра?» или «какие у меня долги?»") };
   }
+  // Администратор отвечает за пользователей и справочники; учебные данные меняют деканат и преподаватели
+  if (ROLE === "admin" && CHANGE_WORDS.test(s)) return { html: P("Учебные данные — заявки, оценки, студентов, расписание — меняют сотрудники деканата и преподаватели. Пользователей и справочники вы можете изменить во вкладках «Доступ» и «Списки». Спросить о данных можно и здесь, например: «сколько просроченных заявок?»") + `<p class="hint">Код ${codeTag("AG-01")} — нет прав на это действие</p>` };
   if (ROLE === "teacher") {
     // Исправление баллов в своих открытых ведомостях — через окно подтверждения, как у деканата
     if (CHANGE_WORDS.test(s)) {
@@ -553,7 +567,7 @@ reply = (raw) => {
     if (/распис|пар[аыу]?([^а-я]|$)|занят/.test(s)) { const d = dateIn(s) || TODAY, ls = schedule.filter((l) => l.teacher === ME.full_name && l.lesson_date === d);
       return q(ls.length ? P(`Ваши занятия ${fmtDate(d)}:`) + mdTable(["Пара", "Дисциплина", "Группа", "Аудитория"], ls.map((l) => [`${l.pair_number} (${l.start_time})`, esc(l.discipline), l.group_name, l.classroom])) : P(`${fmtDate(d)} занятий у вас нет.`)); }
     const g = groupIn(raw);
-    if (g && !myGroups().includes(g)) return { html: P(`Вы не ведёте занятия у <b>${esc(g)}</b> — данные этой группы вам недоступны.`) };
+    if (g && !myGroups().includes(g)) return { html: P(`Вы не ведёте занятия у <b>${esc(g)}</b> — данные этой группы вам недоступны.`) + `<p class="hint">Код ${codeTag("AG-01")} — нет доступа к данным</p>` };
     return replyBase(raw);
   }
   return replyBase(raw);
@@ -573,5 +587,5 @@ document.addEventListener("change", (e) => {
 });
 
 { const u = users.find((x) => x.login === auth.login);
-  if (auth.on && u?.active) applyRole(u.role, personOf(u)); else if (auth.on) { auth.on = false; try { sessionStorage.removeItem("deanery.mock.session"); } catch { /* нет доступа */ } } }
+  if (auth.on && u?.active) applyRole(u.role, personOf(u), u.login); else if (auth.on) { auth.on = false; try { sessionStorage.removeItem("deanery.mock.session"); } catch { /* нет доступа */ } } }
 render();

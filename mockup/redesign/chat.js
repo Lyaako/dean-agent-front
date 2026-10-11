@@ -63,6 +63,7 @@ function messageHtml(m) {
   }
   return `<div class="msg agent" data-k="${m.id}"><span class="orb"></span><div class="body"><div class="md">${m.html}</div>
     ${(m.proposals ?? []).map((pid) => { const p = PROPOSALS[pid], d = p.status !== "pending" ? p.status : null;
+      if (p.batch) return batchCard(pid);   // много записей — сводка (batch.js)
       return `<div class="proposal-card">${icon("sparkle")}<div><b>${esc(p.explanation)}</b><small>${esc(p.table)} · ${p.operation === "INSERT" ? "новая запись" : `полей: ${p.rows.length}`}</small></div>
         ${d ? badge(d === "approved" ? "Применено" : "Отклонено", d === "approved" ? "ok" : "muted") : ""}
         <button class="btn sm soft go" data-a="proposal" data-id="${pid}">${d ? "Открыть" : "Посмотреть изменение"}${icon("arrow")}</button></div>`; }).join("")}
@@ -227,7 +228,8 @@ function proposalDialog(pid) {
   const m = { label: "Изменение от агента", outsideClose: false, reason: "", busy: null, error: null,
     html: () => {
       const st = { pending: ["Ждёт решения", "info"], approved: ["Применено", "ok"], rejected: ["Отклонено", "muted"] }[p.status];
-      const can = p.status === "pending", ok = m.reason.trim().length >= REASON_MIN;
+      // Отклонение не окончательное: отклонённое изменение можно открыть снова и применить
+      const can = p.status === "pending" || p.status === "rejected", ok = m.reason.trim().length >= REASON_MIN;
       return `<div class="dialog proposal-dialog">
         <div class="form-head"><div><h3>${can ? "Применить изменения?" : "Изменение от агента"}</h3><p>${esc(p.explanation)}</p></div>
           <button type="button" class="icon-btn" aria-label="Закрыть" data-a="close">${icon("x")}</button></div>
@@ -239,7 +241,7 @@ function proposalDialog(pid) {
         ${can ? `<label class="field"><span>Комментарий к решению (не короче ${REASON_MIN} символов)</span>
           <textarea class="text-input textarea" rows="2" data-reason maxlength="2000" placeholder="Например: подтверждаю по заявлению студента">${esc(m.reason)}</textarea></label>` : ""}
         ${m.error ? `<p class="form-error" role="alert">${esc(m.error)}</p>` : ""}
-        <div class="actions">${can ? `<button class="btn ghost danger-text" data-a="reject" ${!ok || m.busy ? "disabled" : ""}>${m.busy === "reject" ? "Отклоняем…" : "Отклонить"}</button>
+        <div class="actions">${can ? `${p.status === "rejected" ? "" : `<button class="btn ghost danger-text" data-a="reject" ${!ok || m.busy ? "disabled" : ""}>${m.busy === "reject" ? "Отклоняем…" : "Отклонить"}</button>`}
           <span class="spacer"></span><button class="btn" data-a="close">Позже</button>
           <button class="btn primary" data-a="approve" ${!ok || m.busy ? "disabled" : ""}>${m.busy === "approve" ? "Применяем…" : "Применить изменения"}</button>`
           : `<span class="spacer"></span><button class="btn" data-a="close">Закрыть</button>`}</div></div>`;
