@@ -1,0 +1,11 @@
+FROM python:3.12-slim@sha256:423ed6ab25b1921a477529254bfeeabf5855151dc2c3141699a1bfc852199fbf
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TOKENIZERS_PARALLELISM=false OMP_NUM_THREADS=2 MKL_NUM_THREADS=2
+WORKDIR /app
+COPY backend/requirements-bge.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt && pip check
+RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('BAAI/bge-m3', revision='5617a9f61b028005a4858fdac845db406aefb181', local_dir='/model', allow_patterns=['*.json','pytorch_model.bin','sentencepiece.bpe.model','sparse_linear.pt','colbert_linear.pt','1_Pooling/config.json'])"
+ENV HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 BGE_MODEL_PATH=/model
+COPY backend/bge_service.py /app/bge_service.py
+USER 65534:65534
+EXPOSE 8087
+CMD ["python", "/app/bge_service.py"]

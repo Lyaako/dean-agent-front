@@ -1,0 +1,207 @@
+name: deanery-p13
+
+x-bind: &bind
+  type: bind
+  bind: {create_host_path: false}
+x-app: &app
+  image: deanery-p13-app:local
+  pull_policy: never
+  build: {context: ., dockerfile: backend/Dockerfile}
+  read_only: true
+  init: true
+  user: "10001:10001"
+  cpus: 1
+  mem_limit: 768m
+  pids_limit: 64
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: ["/tmp:size=64m,mode=1777"]
+x-setup: &setup
+  <<: *app
+  profiles: [setup]
+  depends_on:
+    db: {condition: service_healthy}
+  volumes:
+    - {<<: *bind, source: "${P13_SECRET_DIR:?Set the private secret directory}/admin.json", target: /run/secrets/admin.json, read_only: true}
+    - {<<: *bind, source: "${P13_SECRET_DIR:?Set the private secret directory}", target: /app/.local}
+
+services:
+  db:
+    image: postgres:17-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
+    user: postgres
+    entrypoint: [postgres]
+    command: ["-c", "log_min_messages=panic", "-c", "log_min_error_statement=panic", "-c", "log_parameter_max_length=0", "-c", "log_parameter_max_length_on_error=0"]
+    environment: {PGDATA: /var/lib/postgresql/data}
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=1777", "/var/run/postgresql:size=16m,mode=1777"]
+    mem_limit: 512m
+    cpus: 1
+    pids_limit: 128
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d deanery_p13"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  bootstrap:
+    <<: *setup
+    command: [python, -m, deploy.setup_database, bootstrap]
+  provision:
+    <<: *setup
+    command: [python, -m, deploy.setup_database, runtime]
+  synthetic-seed:
+    <<: *setup
+    command: [python, -m, deploy.setup_database, synthetic-seed]
+  migrate:
+    <<: *app
+    command: [python, -m, backend.db.upgrade_local, /run/secrets/migration.json]
+    depends_on:
+      db: {condition: service_healthy}
+    volumes:
+      - {<<: *bind, source: "${P13_SECRET_DIR:?Set the private secret directory}/migration.json", target: /run/secrets/migration.json, read_only: true}
+
+  api:
+    <<: *app
+    mem_limit: 512m
+    command: [python, /app/deploy/run_service.py, api]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    environment:
+      DEANERY_ORIGIN: https://localhost:8443
+      FILES_STORAGE_ROOT: /data/files
+      KNOWLEDGE_STORAGE_ROOT: /data/files
+      KNOWLEDGE_BGE_URL: ${KNOWLEDGE_BGE_URL:?Set the root-approved existing BGE URL}
+      KNOWLEDGE_QDRANT_URL: http://qdrant:6333
+      LANGSMITH_TRACING: "false"
+    volumes:
+      - {<<: *bind, source: "${P13_SECRET_DIR}/api.json", target: /run/secrets/database.json, read_only: true}
+      - {<<: *bind, source: "${P13_SECRET_DIR}/agent.env", target: /app/.local/agent.env, read_only: true}
+      - {<<: *bind, source: "${P13_FILES_ROOT:?Set the private files directory}/originals", target: /data/files/originals}
+      - {<<: *bind, source: "${P13_FILES_ROOT}/derived", target: /data/files/derived, read_only: true}
+      - {<<: *bind, source: "${P13_HEALTH_ROOT:?Set the private health directory}/agent", target: /run/health/agent, read_only: true}
+      - {<<: *bind, source: "${P13_HEALTH_ROOT}/file", target: /run/health/file, read_only: true}
+      - {<<: *bind, source: "${P13_HEALTH_ROOT}/knowledge", target: /run/health/knowledge, read_only: true}
+      - {<<: *bind, source: "${P13_HEALTH_ROOT}/order", target: /run/health/order, read_only: true}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=2).read(1024)"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+
+  agent-worker:
+    <<: *app
+    profiles: [agent-start]
+    command: [python, -m, backend.agent_worker]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    environment:
+      AGENT_DATABASE_FILE: /run/secrets/agent.json
+      FILES_STORAGE_ROOT: /data/files
+      KNOWLEDGE_STORAGE_ROOT: /data/files
+      KNOWLEDGE_BGE_URL: ${KNOWLEDGE_BGE_URL:?Set the root-approved existing BGE URL}
+      KNOWLEDGE_QDRANT_URL: http://qdrant:6333
+      LANGSMITH_TRACING: "false"
+    volumes:
+      - {<<: *bind, source: "${P13_SECRET_DIR}/agent.json", target: /run/secrets/agent.json, read_only: true}
+      - {<<: *bind, source: "${P13_SECRET_DIR}/agent.env", target: /app/.local/agent.env, read_only: true}
+      - {<<: *bind, source: "${P13_FILES_ROOT}/originals", target: /data/files/originals, read_only: true}
+      - {<<: *bind, source: "${P13_FILES_ROOT}/derived", target: /data/files/derived, read_only: true}
+      - {<<: *bind, source: "${P13_HEALTH_ROOT}/agent", target: /run/health/agent}
+    healthcheck:
+      test: [CMD, python, -m, backend.service_status, check-marker, agent]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+
+  order-worker:
+    <<: *app
+    mem_limit: 256m
+    command: [python, /app/deploy/run_service.py, order]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    volumes:
+      - {<<: *bind, source: "${P13_SECRET_DIR}/order.json", target: /run/secrets/database.json, read_only: true}
+      - {<<: *bind, source: "${P13_HEALTH_ROOT}/order", target: /run/health/order}
+    healthcheck:
+      test: [CMD, python, -m, backend.service_status, check-marker, order]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+
+  file-worker:
+    image: deanery-p13-file-worker:local
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    volumes:
+      - {<<: *bind, source: "${P13_HEALTH_ROOT}/file", target: /run/health/file}
+    healthcheck:
+      test: [CMD, python, -m, backend.service_status, check-marker, file]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+
+  knowledge-worker:
+    image: deanery-p13-file-worker:local
+    environment:
+      KNOWLEDGE_BGE_URL: ${KNOWLEDGE_BGE_URL:?Set the root-approved existing BGE URL}
+    depends_on:
+      bge: {condition: service_started, required: false}
+      qdrant: {condition: service_started}
+      migrate: {condition: service_completed_successfully}
+    volumes:
+      - {<<: *bind, source: "${P13_HEALTH_ROOT}/knowledge", target: /run/health/knowledge}
+    healthcheck:
+      test: [CMD, python, -m, backend.service_status, check-marker, knowledge]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+
+  qdrant:
+    ports: !reset []
+  bge:
+    profiles: [knowledge-start]
+    ports: !reset []
+    pull_policy: never
+
+  operator:
+    <<: *app
+    profiles: [operator]
+    command: [python, -m, backend.regulations, --help]
+    environment:
+      KNOWLEDGE_DATABASE_FILE: /run/secrets/operator.json
+      KNOWLEDGE_TOKEN_FILE: /run/secrets/operator-token.txt
+      KNOWLEDGE_STORAGE_ROOT: /data/files
+      KNOWLEDGE_BGE_URL: ${KNOWLEDGE_BGE_URL:?Set the root-approved existing BGE URL}
+      KNOWLEDGE_QDRANT_URL: http://qdrant:6333
+    volumes:
+      - {<<: *bind, source: "${P13_SECRET_DIR}/operator.json", target: /run/secrets/operator.json, read_only: true}
+      - {<<: *bind, source: "${P13_SECRET_DIR}/operator-token.txt", target: /run/secrets/operator-token.txt, read_only: true}
+      - {<<: *bind, source: "${P13_FILES_ROOT}/regulations", target: /data/files/regulations}
+      - {<<: *bind, source: "${P13_FILES_ROOT}/derived", target: /data/files/derived, read_only: true}
+
+  proxy:
+    image: deanery-p13-proxy:local
+    pull_policy: never
+    build: {context: ./frontend, dockerfile: Dockerfile}
+    read_only: true
+    user: "10001:10001"
+    ports: ["127.0.0.1:8443:8443"]
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 32
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:size=32m,mode=1777"]
+    depends_on:
+      api: {condition: service_healthy}
+    volumes:
+      - {<<: *bind, source: ./deploy/nginx.conf, target: /etc/nginx/nginx.conf, read_only: true}
+      - {<<: *bind, source: "${P13_TLS_DIR:?Set the private TLS directory}/cert.pem", target: /run/tls/cert.pem, read_only: true}
+      - {<<: *bind, source: "${P13_TLS_DIR}/key.pem", target: /run/tls/key.pem, read_only: true}
+
+volumes:
+  postgres_data:

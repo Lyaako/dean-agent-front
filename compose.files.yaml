@@ -1,0 +1,34 @@
+name: dean-plan-p10
+services:
+  file-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.file-worker
+    image: dean-plan-p10-file-worker:local
+    read_only: true
+    init: true
+    cpus: 2
+    mem_limit: 2g
+    pids_limit: 32
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:size=268435456,mode=1777"]
+    volumes:
+      - type: bind
+        source: ${P13_FILES_ROOT:-./.local/files}/originals
+        target: /data/files/originals
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${P13_FILES_ROOT:-./.local/files}/derived
+        target: /data/files/derived
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${P13_FILES_ROOT:-./.local/files}/temporary
+        target: /data/files/temporary
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${FILES_WORKER_SECRET:?Set FILES_WORKER_SECRET to the chosen database credential file}
+        target: /run/secrets/files-connection.json
+        read_only: true
+        bind: {create_host_path: false}

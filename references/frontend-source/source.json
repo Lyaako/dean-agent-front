@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/Lyaako/dean-agent-front",
+  "branch": "react-frontend",
+  "commit": "9c68ae0c5f062b87811058599151bc135576b33d",
+  "source_directories": ["frontend", "mockup"],
+  "prototype_directory": "mockup/redesign",
+  "prototype_files": ["index.html", "styles.css", "app.css", "extra.css", "icons.js", "data.js", "ui.js", "app.js", "chat.js", "logo.svg"]
+}

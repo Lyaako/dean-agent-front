@@ -1,0 +1,765 @@
+[
+  {
+    "id": "HTTP-01",
+    "role": "admin",
+    "action": "Вход на локальный HTTP-стенд",
+    "result": "PASS",
+    "evidence": "Страница Студенты, 508 записей; восемь вкладок"
+  },
+  {
+    "id": "TABLE-01",
+    "role": "admin",
+    "action": "Следующая/предыдущая/номер/последняя страница",
+    "result": "PASS",
+    "evidence": "1–20 → 21–40 → 1–20 → 501–508; крайние кнопки disabled"
+  },
+  {
+    "id": "TABLE-02",
+    "role": "admin",
+    "action": "Поиск без результата",
+    "result": "PASS",
+    "evidence": "Всего записей 0; Ничего не найдено"
+  },
+  {
+    "id": "TABLE-03",
+    "role": "admin",
+    "action": "Очистить поиск, фильтр статуса, удалить фильтр, диапазон, сброс",
+    "result": "PASS",
+    "evidence": "508 → 3 (отпуск) → 508 → 38 (45–50); поиск зачётки → 1"
+  },
+  {
+    "id": "FORM-01",
+    "role": "admin",
+    "action": "Открыть карточку студента",
+    "result": "PASS",
+    "evidence": "Финансирование, общежитие, иностранец; группа и статус только приказом"
+  },
+  {
+    "id": "FORM-02",
+    "role": "admin",
+    "action": "Закрыть dirty-форму; Отменить; Не сохранять",
+    "result": "PASS",
+    "evidence": "Показан вложенный диалог; отмена сохраняет черновик, отбрасывание возвращает unchecked"
+  },
+  {
+    "id": "WORKFLOW-00",
+    "role": "admin",
+    "action": "Приказ → Перевести; пустая форма",
+    "result": "PASS",
+    "evidence": "Обязательные новая группа, номер, подписант показывают Заполните поле; окно остаётся"
+  },
+  {
+    "id": "GROUPS-01",
+    "role": "admin",
+    "action": "Таблица/Карточки; сортировка в обе стороны; Студенты группы",
+    "result": "PASS",
+    "evidence": "22 группы; ↑ ИДБ-23-11, ↓ ИДБ-26-15; переход даёт фильтр группы/24 записи"
+  },
+  {
+    "id": "SCHEDULE-01",
+    "role": "admin",
+    "action": "Группа → Расписание; следующая/предыдущая неделя; Таблица/Неделя; Группа/Преподаватель/Аудитория",
+    "result": "PASS",
+    "evidence": "ИДБ-23-11; 5–10 ↔ 12–17 октября; таблица 206; смена Новиков/А-101 отображает занятия"
+  },
+  {
+    "id": "MODEL-01",
+    "role": "admin",
+    "action": "Список ресурсов, структура, чтение студента через чат",
+    "result": "PARTIAL",
+    "evidence": "Ресурсы/поля/student_id 1/ФИО/группа/статус показаны; group_id модель оставила без отдельного запроса"
+  },
+  {
+    "id": "REQUEST-01",
+    "role": "admin",
+    "action": "Добавить заявку, lookup студент/тип/статус, Сохранить через UnsavedDialog",
+    "result": "PASS",
+    "evidence": "Создана заявка 46 с маркером QA-CLICK-20261011; 2→3 экземпляра в таблице"
+  },
+  {
+    "id": "REQUEST-02",
+    "role": "admin",
+    "action": "Удалить → Отменить; затем подтверждённое пользователем удаление №46",
+    "result": "PASS",
+    "evidence": "Удаление назначенной заявки отвергнуто без потери данных; Очистить исполнителя/Сохранить → разрешённое удаление №46; исходная №29 осталась"
+  },
+  {
+    "id": "OLAP-Roll-up по группе",
+    "role": "admin",
+    "action": "Roll-up по группе",
+    "result": "PASS",
+    "evidence": "  - generic: \"Всего записей: 16\" |   - generic: \"Всего по выбранному срезу: средний балл 38.05 · результатов 8719 · на «отлично» 989 · долгов 78\" |   - heading \"Средний балл по группам\" [level=2]"
+  },
+  {
+    "id": "OLAP-Roll-up по дисциплине",
+    "role": "admin",
+    "action": "Roll-up по дисциплине",
+    "result": "PASS",
+    "evidence": "  - generic: \"Всего записей: 47\" |   - generic: \"Всего по выбранному срезу: средний балл 38.05 · результатов 8719 · на «отлично» 989 · долгов 78\" |   - heading \"Средний балл по дисциплинам\" [level=2]"
+  },
+  {
+    "id": "OLAP-Roll-up по семестру",
+    "role": "admin",
+    "action": "Roll-up по семестру",
+    "result": "PASS",
+    "evidence": "  - generic: \"Всего записей: 6\" |   - generic: \"Всего по выбранному срезу: средний балл 38.05 · результатов 8719 · на «отлично» 989 · долгов 78\" |   - heading \"Средний балл по семестрам\" [level=2]"
+  },
+  {
+    "id": "OLAP-Срез по группе",
+    "role": "admin",
+    "action": "Срез по группе",
+    "result": "PASS",
+    "evidence": "  - generic: \"Всего записей: 32\" |   - generic: \"Всего по выбранному срезу: средний балл 37.93 · результатов 824 · на «отлично» 121 · долгов 6\""
+  },
+  {
+    "id": "OLAP-Срез по дисциплине",
+    "role": "admin",
+    "action": "Срез по дисциплине",
+    "result": "PASS",
+    "evidence": "  - generic: \"Всего записей: 15\" |   - generic: \"Всего по выбранному срезу: средний балл 35.78 · результатов 717 · на «отлично» 73 · долгов 11\""
+  },
+  {
+    "id": "OLAP-Dice",
+    "role": "admin",
+    "action": "Dice",
+    "result": "PASS",
+    "evidence": "  - generic: \"Всего записей: 8719\" |   - generic: \"Всего по выбранному срезу: средний балл 38.05 · результатов 8719 · на «отлично» 989 · долгов 78\""
+  },
+  {
+    "id": "OLAP-Drill-down по группе",
+    "role": "admin",
+    "action": "Drill-down по группе",
+    "result": "PASS",
+    "evidence": "  - generic: \"Всего записей: 24\" |   - generic: \"Всего по выбранному срезу: средний балл 37.93 · результатов 824 · на «отлично» 121 · долгов 6\""
+  },
+  {
+    "id": "OLAP-Кросс-таблица Группа × Семестр",
+    "role": "admin",
+    "action": "Кросс-таблица Группа × Семестр",
+    "result": "PASS",
+    "evidence": "  - generic: \"Всего записей: 22\" |   - generic: \"Всего по выбранному срезу: средний балл 38.05 · результатов 8719 · на «отлично» 989 · долгов 78\" |   - 'heading \"Средний балл: группа × семестр\" [level=2]'"
+  },
+  {
+    "id": "MODEL-OLAP",
+    "role": "admin",
+    "action": "get_olap_report через отдельный запрос чата",
+    "result": "PASS",
+    "evidence": "Ответ 38.05 / 8719 / 989 / 78 совпадает с UI; ИДБ-23-11 37.93 / 824 / 121 / 6"
+  },
+  {
+    "id": "OLAP-FILTER",
+    "role": "admin",
+    "action": "Выбор группы и Сбросить",
+    "result": "PASS",
+    "evidence": "22→1 строка кросс-таблицы; фильтр ИДБ-23-11; итоги того же среза"
+  },
+  {
+    "id": "PRACTICE-01",
+    "role": "admin",
+    "action": "Добавить практику: обязательные поля и закрытие",
+    "result": "PASS",
+    "evidence": "115 исходных строк; в пустой форме студент/план/руководители/даты требуют заполнения; записи не созданы"
+  },
+  {
+    "id": "MODEL-RECORD",
+    "role": "admin",
+    "action": "prepare_record_change → Посмотреть изменение",
+    "result": "PASS",
+    "evidence": "4c61bd4f-e7dd-4760-9bac-f298cdad57c9; INSERT document_request, перед решением запись отсутствует"
+  },
+  {
+    "id": "QUEUE-TRANSFER",
+    "role": "admin",
+    "action": "Короткий комментарий; Передать/Отменить передачу; Передать предложение; История/Обновить историю; Позже",
+    "result": "PASS",
+    "evidence": "7 символов отключают подтверждение; передано Смирнову; кнопки решения у прежнего согласующего исчезли"
+  },
+  {
+    "id": "EMPLOYEE-01",
+    "role": "admin",
+    "action": "ФИО/Сохранить; дата увольнения до приёма; частичный успех и повтор",
+    "result": "PASS",
+    "evidence": "Дата блокируется; при дублирующем Т-0001 ФИО сохранено, employee отвергнут с понятным сообщением; исходные ФИО/Т-0004/даты восстановлены"
+  },
+  {
+    "id": "DIRECTOR-01",
+    "role": "director",
+    "action": "Вход; scoped сотрудники; переданное предложение → Подтвердить",
+    "result": "PASS",
+    "evidence": "25 сотрудников вместо 28; создание employee скрыто; 4c61bd4f исполнено директором; заявка 48 появилась в UI"
+  },
+  {
+    "id": "WF-FORM-Зачислить",
+    "role": "director",
+    "action": "Зачислить",
+    "result": "PASS",
+    "evidence": "Только Проверочный Браузер / QA-CLICK-20261011; отдельные приказы QA-CLICK; статусы и группы проверены в UI; итог Обучается/ИДБ-26-11"
+  },
+  {
+    "id": "WF-FORM-Перевести",
+    "role": "director",
+    "action": "Перевести",
+    "result": "PASS",
+    "evidence": "Только Проверочный Браузер / QA-CLICK-20261011; отдельные приказы QA-CLICK; статусы и группы проверены в UI; итог Обучается/ИДБ-26-11"
+  },
+  {
+    "id": "WF-FORM-Оформить отпуск",
+    "role": "director",
+    "action": "Оформить отпуск",
+    "result": "PASS",
+    "evidence": "Только Проверочный Браузер / QA-CLICK-20261011; отдельные приказы QA-CLICK; статусы и группы проверены в UI; итог Обучается/ИДБ-26-11"
+  },
+  {
+    "id": "WF-FORM-Оформить выход из отпуска",
+    "role": "director",
+    "action": "Оформить выход из отпуска",
+    "result": "PASS",
+    "evidence": "Только Проверочный Браузер / QA-CLICK-20261011; отдельные приказы QA-CLICK; статусы и группы проверены в UI; итог Обучается/ИДБ-26-11"
+  },
+  {
+    "id": "WF-FORM-Отчислить",
+    "role": "director",
+    "action": "Отчислить",
+    "result": "PASS",
+    "evidence": "Только Проверочный Браузер / QA-CLICK-20261011; отдельные приказы QA-CLICK; статусы и группы проверены в UI; итог Обучается/ИДБ-26-11"
+  },
+  {
+    "id": "WF-FORM-Восстановить",
+    "role": "director",
+    "action": "Восстановить",
+    "result": "PASS",
+    "evidence": "Только Проверочный Браузер / QA-CLICK-20261011; отдельные приказы QA-CLICK; статусы и группы проверены в UI; итог Обучается/ИДБ-26-11"
+  },
+  {
+    "id": "DIRECTOR-PAGE-Студенты",
+    "role": "director",
+    "action": "Вкладка Студенты",
+    "result": "PASS",
+    "evidence": "  - heading \"Студенты\" [level=1] |   - generic: \"Всего записей: 1\""
+  },
+  {
+    "id": "DIRECTOR-PAGE-Группы",
+    "role": "director",
+    "action": "Вкладка Группы",
+    "result": "PASS",
+    "evidence": "  - heading \"Группы\" [level=1]"
+  },
+  {
+    "id": "DIRECTOR-PAGE-Расписание",
+    "role": "director",
+    "action": "Вкладка Расписание",
+    "result": "PASS",
+    "evidence": "  - heading \"Расписание\" [level=1]"
+  },
+  {
+    "id": "DIRECTOR-PAGE-КР и ВКР",
+    "role": "director",
+    "action": "Вкладка КР и ВКР",
+    "result": "PASS",
+    "evidence": "  - heading \"Курсовые и ВКР\" [level=1]"
+  },
+  {
+    "id": "DIRECTOR-PAGE-Справки",
+    "role": "director",
+    "action": "Вкладка Справки",
+    "result": "PASS",
+    "evidence": "  - heading \"Заявки на справки\" [level=1]"
+  },
+  {
+    "id": "DIRECTOR-PAGE-Практики",
+    "role": "director",
+    "action": "Вкладка Практики",
+    "result": "PASS",
+    "evidence": "  - heading \"Практики\" [level=1]"
+  },
+  {
+    "id": "DIRECTOR-PAGE-Сотрудники",
+    "role": "director",
+    "action": "Вкладка Сотрудники",
+    "result": "PASS",
+    "evidence": "  - heading \"Сотрудники\" [level=1]"
+  },
+  {
+    "id": "DIRECTOR-PAGE-OLAP",
+    "role": "director",
+    "action": "Вкладка OLAP",
+    "result": "PASS",
+    "evidence": "  - heading \"OLAP-анализ\" [level=1]"
+  },
+  {
+    "id": "OLAP-DICE-FILTERS",
+    "role": "director",
+    "action": "Группа/дисциплина/семестр/статус и Сбросить",
+    "result": "PASS",
+    "evidence": "ИДБ-23-11 + Математический анализ + 1 семестр + Обучается: 22 результата, 35.32, 3 отлично, 0 долгов"
+  },
+  {
+    "id": "MODEL-WF-ENROLL",
+    "role": "director",
+    "action": "prepare_workflow enroll_student и отдельное Подтвердить",
+    "result": "PASS",
+    "evidence": "b62fe6c0-af55-4a0d-9685-49abcee318eb; приказ40; Проверочный Агент/QA-AGENT-20261011/ИДБ-26-11/Обучается в UI"
+  },
+  {
+    "id": "QUEUE-FILTERS",
+    "role": "director",
+    "action": "Автор/даты/история/решение/исполнение/сброс",
+    "result": "PASS",
+    "evidence": "Несуществующий автор → пусто; 13→11 октября → ошибка диапазона и disabled refresh; история фильтрует подтверждённые/исполненные"
+  },
+  {
+    "id": "MODEL-WF-TRANSFER",
+    "role": "director",
+    "action": "prepare_workflow transfer_student; отдельное подтверждение",
+    "result": "PASS",
+    "evidence": "ae238ca0-a427-4835-a69a-0cc8c1d0a6ed; student511, ИДБ-26-11→ИДБ-26-12 в UI"
+  },
+  {
+    "id": "MODEL-WF-LEAVE-FIRST",
+    "role": "director",
+    "action": "prepare_workflow grant_academic_leave через чат",
+    "result": "FAIL",
+    "evidence": "Запуск 4e3bdfca: 3 попытки подготовки отвергнуты; модель повторяла ошибочные запросы до лимита 8 обращений. Данные не изменились"
+  },
+  {
+    "id": "FILES-UPLOAD",
+    "role": "director",
+    "action": "Прикрепить TXT/PDF/DOCX; готовность; reload; manifest",
+    "result": "PASS",
+    "evidence": "TXT1фрагмент; PDF25/25 без ошибок извлечения; DOCX partial с ограничением изображения; refs и manifest сохранились после reload"
+  },
+  {
+    "id": "FILES-PDF-VIEW",
+    "role": "director",
+    "action": "Превью PDF после reload",
+    "result": "FAIL",
+    "evidence": "Ошибка загрузки pdf.worker.min-CjEcRF4W.mjs в видимом браузере сохраняется; MIME исправлен и сервер возвращает application/javascript"
+  },
+  {
+    "id": "MODEL-FILES-FIRST",
+    "role": "director",
+    "action": "Чтение страницы25 PDF + TXT/DOCX",
+    "result": "PARTIAL",
+    "evidence": "TXT/DOCX процитированы; 20 начальных фрагментов исчерпали лимит, страница25 не получена; модель сообщила об ограничении"
+  },
+  {
+    "id": "MODEL-ATTACHMENT-LONG-FIRST",
+    "role": "director",
+    "action": "read_attachment_text для конца TXT",
+    "result": "FAIL",
+    "evidence": "Файл содержит БРАУЗЕР-901; модель прочитала лишь начальные фрагменты и ошибочно заявила, что кода нет. Ответ сохранён в чате"
+  },
+  {
+    "id": "MODEL-REGULATIONS",
+    "role": "director",
+    "action": "search_regulations через чат",
+    "result": "PASS",
+    "evidence": "Найден только синтетический норматив P13 recovery synthetic regulation, версия p13-restore-v2, фрагмент1; version9551954d-c91c-425b-85d2-67be2bb45038"
+  },
+  {
+    "id": "TABLE-WIDTH",
+    "role": "director",
+    "action": "Наличие изменения ширины колонки",
+    "result": "UNAVAILABLE",
+    "evidence": "В текущем интерфейсе нет ручки изменения ширины; th resize=none. Фронтенд не обновлялся"
+  },
+  {
+    "id": "MODEL-WF-LEAVE-RETRY",
+    "role": "director",
+    "action": "prepare_workflow grant_academic_leave с точными реквизитами; подтверждение",
+    "result": "PASS",
+    "evidence": "eef1aecd-bdc7-42ce-a013-e7076045f93e; отпуск студента511 исполнен; исходный неудачный запуск сохранён"
+  },
+  {
+    "id": "MODEL-WF-RETURN",
+    "role": "director",
+    "action": "prepare_workflow return_from_leave и подтверждение",
+    "result": "PASS",
+    "evidence": "40ddd975-2b0c-48b4-aff8-e4a077a1f57e; статус511 Академический отпуск→Обучается; группа17 сохранена"
+  },
+  {
+    "id": "AUTH-BAD-PASSWORD",
+    "role": "director",
+    "action": "Неверный пароль → сообщение отказа → правильный вход",
+    "result": "BLOCKED_ENV",
+    "evidence": "После остановки среды UI показал Нет связи с сервером; это не проверка неверного пароля"
+  },
+  {
+    "id": "PROPOSAL-STALE-RESUME",
+    "role": "director",
+    "action": "Открыть вчерашнее предложение после остановки",
+    "result": "PASS",
+    "evidence": "961619d8: Исходные данные изменились; Подтвердить отсутствует; исполнения нет"
+  },
+  {
+    "id": "CHAT-HISTORY-SCOPE",
+    "role": "director",
+    "action": "Открыть вчерашний чат с файлами после предметных изменений",
+    "result": "LIMITATION",
+    "evidence": "Чат сохранился, но оба сообщения заменены на Сообщение скрыто: изменились права доступа; вложения недоступны из этой истории"
+  },
+  {
+    "id": "MODEL-WF-EXPEL",
+    "role": "director",
+    "action": "prepare_workflow expel_student; подтверждение",
+    "result": "PASS",
+    "evidence": "49da8145-6410-4a8f-baa4-e1f54ced1a21; студент511 Отчислен в UI; вчерашнее устаревшее предложение не исполнено"
+  },
+  {
+    "id": "CHAT-KEYBOARD",
+    "role": "director",
+    "action": "Ctrl+K, Esc, свернуть чат",
+    "result": "PASS",
+    "evidence": "Ctrl+K фокусирует Сообщение; Esc сворачивает; подготовленный запрос не отменяется"
+  },
+  {
+    "id": "MODEL-WF-REINSTATE",
+    "role": "director",
+    "action": "prepare_workflow reinstate_student и подтверждение",
+    "result": "PASS",
+    "evidence": "7d8e4731-6d8d-4b36-ba3b-4d3ceed14c07; студент511 Обучается/ИДБ-26-11; все6 модельных ветвей проверены"
+  },
+  {
+    "id": "MODEL-SQL-FORBIDDEN-TABLE",
+    "role": "director",
+    "action": "SQL для student вне списка root_sql",
+    "result": "PASS_GUARD_FAIL_ANSWER",
+    "evidence": "Таблица не входит в 10 разрешённых SQL-ресурсов; изменение не произошло. Модель исчерпала 8 шагов вместо понятного отказа"
+  },
+  {
+    "id": "MODEL-SQL-VALID",
+    "role": "director",
+    "action": "propose_sql_change для document_request, подтверждение и возврат через форму",
+    "result": "PASS",
+    "evidence": "Заявка48 copies1→2 после Подтвердить, затем возврат к1 через Сохранить; student SQL запрещён"
+  },
+  {
+    "id": "MODEL-SCH-ASSIGN",
+    "role": "director",
+    "action": "prepare_scholarship_assignment, preview и Подтвердить",
+    "result": "PASS",
+    "evidence": "91abda4b-0d0a-40f1-9899-327ef5e47283; только511, период15.10–31.12.2026, приказ QA-SCH-FUTURE-20261012; исполнено"
+  },
+  {
+    "id": "MODEL-SCH-CANCEL-PREPARE",
+    "role": "director",
+    "action": "query_deanery + prepare_scholarship_cancellation",
+    "result": "PASS_PENDING_DECISION",
+    "evidence": "d4b994e3-8d6c-464a-8c5d-018f9f6344f6; точный будущий scholarship210/student511; DELETE preview; ожидается ответ пользователя"
+  },
+  {
+    "id": "MODEL-SCH-TERM-TIMEOUT",
+    "role": "director",
+    "action": "prepare_scholarship_termination для существующей №1",
+    "result": "FAIL",
+    "evidence": "14eb894e: query_timeout подготовки; агент agent_unavailable; предложение и изменения отсутствуют. Snapshot чтением81197 символов/~1с; причина общего таймаута ещё не устранена"
+  },
+  {
+    "id": "SCHEDULE-CELL",
+    "role": "director",
+    "action": "Пустая ячейка недели; dirty-закрытие; Не сохранять; существующее занятие",
+    "result": "PASS",
+    "evidence": "Понедельник/1пара/семестр1 предзаполнены; черновик отброшен, занятие не создано; существующий слот открыт"
+  },
+  {
+    "id": "MODEL-SCH-TERM-RETRY",
+    "role": "director",
+    "action": "Повтор prepare_scholarship_termination №1",
+    "result": "FAIL",
+    "evidence": "Повтор снова завершился Модель временно недоступна; действующее назначение не изменено"
+  },
+  {
+    "id": "ROLE-TEACHER-STUDENT",
+    "role": "teacher",
+    "action": "Поиск, открытие и закрытие карточки студента",
+    "result": "PASS",
+    "evidence": "Только просмотр; нет Сохранить/Приказ; финансовые значения скрыты, видны учебные результаты. Доступны7 разделов, Справки скрыты"
+  },
+  {
+    "id": "ROLE-TEACHER-EMPLOYEE",
+    "role": "teacher",
+    "action": "Сотрудники → собственная карточка",
+    "result": "PASS",
+    "evidence": "1 сотрудник: Новиков; поля отключены, создание и сохранение недоступны"
+  },
+  {
+    "id": "MODEL-GRADE-SUBMIT",
+    "role": "teacher",
+    "action": "prepare_grade_correction → Подать заявку",
+    "result": "PASS",
+    "evidence": "26d567d7-4d7f-4e15-aebb-7756120c42e3; черновик46→47, заявка4 подана; подтверждение автору недоступно"
+  },
+  {
+    "id": "ROLE-TEACHER-WORK-PRACTICE",
+    "role": "teacher",
+    "action": "КР и ВКР/Практики → карточки",
+    "result": "PASS",
+    "evidence": "16 связанных работ,9 практик; карточки только просмотр, нет создания/сохранения"
+  },
+  {
+    "id": "ROLE-TEACHER-GROUP-SCHEDULE-OLAP",
+    "role": "teacher",
+    "action": "Группы → Расписание → занятие; OLAP",
+    "result": "PASS_EMPTY_OLAP",
+    "evidence": "13 групп, переход выбралИДБ-23-11; занятие только просмотр, кнопок добавления нет; OLAP загружен,0 результатов"
+  },
+  {
+    "id": "OLD-SCHEDULED-ORDER",
+    "role": "system",
+    "action": "Уточнение статуса студента1 после запуска",
+    "result": "OBSERVED",
+    "evidence": "Старый P13-restore-98023996/order32 от11.10 вступил12.10; applied_at совпадает с audit136. Новые QA-приказы этот статус не меняли"
+  },
+  {
+    "id": "MODEL-SCH-CANCEL-EXECUTE",
+    "role": "director",
+    "action": "Разрешённое Подтвердить для d4b994e3",
+    "result": "PASS",
+    "evidence": "Удалено только210/student511; Подтверждено/Исполнено14:27:55; приказ53 и история сохранены"
+  },
+  {
+    "id": "MODEL-GRADE-REJECT",
+    "role": "director",
+    "action": "Взять в работу → Отклонить заявку4",
+    "result": "PASS",
+    "evidence": "Другое лицо Смирнов; предложение Отклонено/Не начато; исходная46 сохранена. После решения метка Исходные данные изменились"
+  },
+  {
+    "id": "MODEL-SCHEDULE-FUTURE",
+    "role": "director",
+    "action": "prepare_workflow transfer15.10 → Подтвердить",
+    "result": "PASS",
+    "evidence": "QA-FUT-TR-261012/order55; execution Запланировано, не Исполнено"
+  },
+  {
+    "id": "MODEL-ORDER-CANCEL-PREPARE",
+    "role": "director",
+    "action": "prepare_scheduled_order_cancellation → preview",
+    "result": "PASS_PENDING_DECISION",
+    "evidence": "QA-FUT-TR-261012/order55/student511; DELETE order_student+academic_order, job/proposal отменяются; текущаяИДБ-26-11 сохранена"
+  },
+  {
+    "id": "ROLE-DIRECTOR-CONTACT-MODEL",
+    "role": "director",
+    "action": "Попытка SQL-предложения измененияcontact_person",
+    "result": "FAIL_ANSWER",
+    "evidence": "Вместо понятного отказа UI: Агент не смог завершить запрос; предложение отсутствует. Подробный запрет проверяется в native журнале"
+  },
+  {
+    "id": "AUTH-BAD-PASSWORD-RETRY",
+    "role": "anonymous",
+    "action": "Войти с неверным паролем",
+    "result": "PASS",
+    "evidence": "Неверный логин или пароль; форма осталась, сессии нет"
+  },
+  {
+    "id": "ROLE-STAFF-STUDENT-REQUEST",
+    "role": "dean_staff",
+    "action": "Студенты509 сохранить/вернуть общежитие; заявка48 открыть",
+    "result": "PASS",
+    "evidence": "needs_dormitory false→true→false через UI; статус/группа приказом; справка48 редактируется, студент-заявитель disabled; 26 заявок в области роли"
+  },
+  {
+    "id": "ROLE-STAFF-NAV",
+    "role": "dean_staff",
+    "action": "Кликами все8 разделов",
+    "result": "PASS",
+    "evidence": "[{\"tab\":\"Группы\",\"summary\":\"  - heading \\\"Группы\\\" [level=1] /   - generic: \\\"Всего записей: 22\\\"\"},{\"tab\":\"Расписание\",\"summary\":\"  - heading \\\"Расписание\\\" [level=1] /   - generic: \\\"Всего записей: 177\\\" /   - heading \\\"2026/27, осенний семестр · 12 октября — 17 октября\\\" [level=2]\"},{\"tab\":\"КР и ВКР\",\"summary\":\"  - heading \\\"Курсовые и ВКР\\\" [level=1] /   - generic: \\\"Всего записей: 172\\\"\"},{\"tab\":\"Практики\",\"summary\":\"  - heading \\\"Практики\\\" [level=1] /   - generic: \\\"Всего записей: 115\\\"\"},{\"tab\":\"Сотрудники\",\"summary\":\"  - heading \\\"Сотрудники\\\" [level=1] /   - generic: \\\"Всего записей: 25\\\"\"},{\"tab\":\"OLAP\",\"summary\":\"  - heading \\\"OLAP-анализ\\\" [level=1] /   - generic: \\\"Всего записей: 16\\\" /   - generic: \\\"Всего по выбранному срезу: средний балл 38.05 · результатов 8719 · на «отлично» 989 · долгов 78\\\" /   - heading \\\"Средний балл по группам\\\" [level=2]\"}]"
+  },
+  {
+    "id": "ROLE-STAFF-MODEL-READ",
+    "role": "dean_staff",
+    "action": "query_deanery → заявка48",
+    "result": "PASS",
+    "evidence": "request_id48,copies1 совпали с таблицей"
+  },
+  {
+    "id": "ROLE-STUDENT-OLAP",
+    "role": "student",
+    "action": "Открыть OLAP после входа",
+    "result": "PASS",
+    "evidence": "Только своя группаИДБ-23-11; 48.22/36/24/0 вместо общего8719; сотрудники скрыты"
+  },
+  {
+    "id": "ROLE-STUDENT-STUDENT",
+    "role": "student",
+    "action": "Собственная карточка; поиск другого студента",
+    "result": "PASS",
+    "evidence": "1 собственная запись, только просмотр; Петров→0, Зачислить/Приказ/Сохранить нет"
+  },
+  {
+    "id": "ROLE-STUDENT-REQUEST",
+    "role": "student",
+    "action": "Справки → Добавить свою заявку49; открыть; Удалить/Отменить",
+    "result": "PASS",
+    "evidence": "Только3 свои заявки29/48/49; новая49purposeQA-STUDENT; студент/статус/исполнитель не выбираются; удаление отменено,49 сохранена"
+  },
+  {
+    "id": "ROLE-STUDENT-NAV",
+    "role": "student",
+    "action": "Кликами все7 разделов",
+    "result": "PASS",
+    "evidence": "[{\"tab\":\"Группы\",\"summary\":\"  - heading \\\"Группы\\\" [level=1] /   - generic: \\\"Всего записей: 1\\\"\"},{\"tab\":\"Расписание\",\"summary\":\"  - heading \\\"Расписание\\\" [level=1] /   - generic: \\\"Всего записей: 9\\\" /   - heading \\\"2026/27, осенний семестр · 12 октября — 17 октября\\\" [level=2]\"},{\"tab\":\"КР и ВКР\",\"summary\":\"  - heading \\\"Курсовые и ВКР\\\" [level=1] /   - generic: \\\"Всего записей: 1\\\"\"},{\"tab\":\"Практики\",\"summary\":\"  - heading \\\"Практики\\\" [level=1] /   - generic: \\\"Всего записей: 1\\\"\"}]; создание работ/практик/расписания скрыто"
+  },
+  {
+    "id": "ROLE-STUDENT-MODEL-SCOPE",
+    "role": "student",
+    "action": "query_deanery студент2 под студентом1",
+    "result": "PASS_GUARD_IMPRECISE_ANSWER",
+    "evidence": "Чужих данных нет; модель сказала Строк нет, но неверно назвала невидимую запись отсутствующей в БД"
+  },
+  {
+    "id": "CHAT-STOP-ATTEMPT",
+    "role": "student",
+    "action": "Остановить во время безопасного чтенияdice",
+    "result": "INCONCLUSIVE",
+    "evidence": "Нажатие принято/disabled; итог UI Контекст превышает окно модели вместо Остановлено. Требуется сверка native и повтор без большого ответа"
+  },
+  {
+    "id": "MODEL-ORDER-CANCEL-EXECUTE",
+    "role": "director",
+    "action": "Разрешённое Подтвердить отмены приказа55",
+    "result": "PASS",
+    "evidence": "Подтверждено/Исполнено14:41:59; толькоorder55/student511; текущая группа сохранена"
+  },
+  {
+    "id": "MODEL-ORDER-CANCEL-HISTORY",
+    "role": "director",
+    "action": "История → Исполнение отменено → Открыть",
+    "result": "PASS",
+    "evidence": "Исходное предложение будущего перевода55 Подтверждено/Исполнение отменено, завершено14:41:59"
+  },
+  {
+    "id": "MODEL-SCH-ASSIGN-TODAY",
+    "role": "director",
+    "action": "Назначение509 с сегодняшней даты → Подтвердить",
+    "result": "PASS",
+    "evidence": "QA-SCH-ACT-261012; student509,type1,12.10–31.12,Исполнено14:44:33"
+  },
+  {
+    "id": "MODEL-SCH-TERM-SYNTHETIC",
+    "role": "director",
+    "action": "query_deanery → prepare_scholarship_termination → Подтвердить",
+    "result": "PASS",
+    "evidence": "7ab94aba-c980-4177-b12a-d3aa54aae62e; толькоscholarship212/student509; end31.12→13.10, Исполнено14:46:30; прежние таймауты№1 не устранены"
+  },
+  {
+    "id": "FILE-PDF-VIEWER-RETEST",
+    "role": "admin",
+    "action": "Свежий PDF → открыть, Далее/Назад, все25 страниц",
+    "result": "PASS",
+    "evidence": "MIME исправлен; просмотр работает;1→2→1→25, Назад на1 и Далее на25 отключены; кодСАПФИР-742 виден на25"
+  },
+  {
+    "id": "MODEL-PDF-PAGE25-RETEST",
+    "role": "admin",
+    "action": "read_attachment_text page25 после резерва1фрагмента",
+    "result": "PASS",
+    "evidence": "Модель прочитала25 и вернулаСАПФИР-742/SAPPHIRE-742 со ссылкойстр.25; совпадает с PDF"
+  },
+  {
+    "id": "FILE-CITATION-DOWNLOAD",
+    "role": "admin",
+    "action": "Нажать стр.25 в ответе модели",
+    "result": "FAIL",
+    "evidence": "Ссылка открыла download endpoint сJSON invalid_token; авторизованное превью PDF работает. Загрузка по прямой цитате не подтверждена"
+  },
+  {
+    "id": "FILE-DRAFT-REMOVE-TXT-PREVIEW",
+    "role": "admin",
+    "action": "Убрать statement из черновика; открыть TXT",
+    "result": "PASS",
+    "evidence": "3→2 вложения; полныйTXT показал кодБРАУЗЕР-901 в конце"
+  },
+  {
+    "id": "FILE-DOCX-PREVIEW",
+    "role": "admin",
+    "action": "Открыть DOCX из черновика",
+    "result": "PASS_WITH_LIMITATION",
+    "evidence": "ТекстСАПФИР-742 показан; draft явно сообщаетpartial/docx_images_not_extracted, изображения не распознаны"
+  },
+  {
+    "id": "MODEL-LONG-TXT-RETRY",
+    "role": "admin",
+    "action": "Просьба полностью дочитатьTXT сcursor",
+    "result": "FAIL",
+    "evidence": "Модель увидела2 начальных фрагмента, не вызвала дополнительное чтение, попросила необязательныеpage/cursor; код изконца не получен"
+  },
+  {
+    "id": "MODEL-LONG-TXT-EXPLICIT",
+    "role": "admin",
+    "action": "read_attachment_text cursor=null, далееnext_cursor",
+    "result": "PASS",
+    "evidence": "ТочныйБРАУЗЕР-901, цитата31–38; полныйтекст совпал с просмотром; прежние2 неудачи сохранены; native:2invalid_attachment_selector перед успешным чтением, манифест4фрагмента/2чтения/1цитата"
+  },
+  {
+    "id": "FILE-BROKEN-RETRY",
+    "role": "admin",
+    "action": "Загрузить повреждённыйPDF → Повторить → Убрать",
+    "result": "PASS_EXPECTED_ERROR",
+    "evidence": "Файл не удалось обработать; повтор показалЗагружается и сноваошибку; повреждённыйфайл не отправляется модели"
+  },
+  {
+    "id": "CHAT-STOP-RETRY",
+    "role": "admin",
+    "action": "Отправить безопасное объяснение → сразу Остановить",
+    "result": "PASS",
+    "evidence": "Останавливаю агента→Запуск остановлен. Подготовленные предложения сохранены; запрос беззаписи/чтенияБД"
+  },
+  {
+    "id": "CHAT-DELETE-CANCEL",
+    "role": "admin",
+    "action": "Удалить отдельный чат → Отменить",
+    "result": "PASS_PENDING_FINAL_DELETE",
+    "evidence": "QA-DELETE-20261012 сохранён; предупреждение исчезло; окончательнаякнопка ждёт ответа"
+  },
+  {
+    "id": "FILE-QUEUED-SEND-CANCEL",
+    "role": "admin",
+    "action": "Отправить при загрузке → Ждём загрузку файлов нажать",
+    "result": "FAIL_CANCEL",
+    "evidence": "После нажатия кнопка ожидания осталась; после обработки сообщение всё-таки автоматическиотправлено модели. Запрос былтолько чтением"
+  },
+  {
+    "id": "CHAT-SIDEBAR-TOGGLE",
+    "role": "admin",
+    "action": "Список чатов скрыть/показать",
+    "result": "PASS",
+    "evidence": "complementaryЧаты 1→0→1, чат сохранён"
+  },
+  {
+    "id": "AUTH-REFRESH-MUTATION",
+    "role": "admin",
+    "action": "Первое подтверждение удаления после истеченияaccess",
+    "result": "PASS_REFRESH_REQUIRED",
+    "evidence": "Сессия обновлена — отправьте форму ещё раз; запись сохранена, опаснаяоперация автоматическинe повторена"
+  },
+  {
+    "id": "CHAT-DELETE-CONFIRMED",
+    "role": "admin",
+    "action": "РазрешённоеУдалить QA-DELETE-20261012 послеrefresh",
+    "result": "PASS",
+    "evidence": "Точныйчат исчез; остальныебеседы сохранены; безошибочного автоматическогоповтораDELETE не было"
+  },
+  {
+    "id": "MODEL-MULTI-DRAFT-FIRST",
+    "role": "admin",
+    "action": "Подготовить3 черновика дляпагинации",
+    "result": "FAIL_CLARIFICATION",
+    "evidence": "Модель запросила лишнее подтверждение, сочтя запретисполнения запретомподготовки. Предложений0"
+  },
+  {
+    "id": "QUEUE-PAGINATION-21",
+    "role": "admin",
+    "action": "История21 → Далее → Назад",
+    "result": "PASS",
+    "evidence": "Проверены20+1, Страница2/1; На2Далее disabled,на1Назад disabled; черновикиA/B/C Отклонено,0справок"
+  },
+  {
+    "id": "MODEL-SCH-PAST-DATE",
+    "role": "admin",
+    "action": "prepare_scholarship_assignment start11.10 при дне12.10",
+    "result": "PASS_GUARD_IMPRECISE_ANSWER",
+    "evidence": "prepare отвергнутinvalid_or_conflicting_request, карточки/назначениянет; модельнеточно сказалапредложениеподготовлено иотклонено"
+  }
+]

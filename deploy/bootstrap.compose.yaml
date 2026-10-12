@@ -1,0 +1,15 @@
+# Use only for the first initialization of the absent deanery-p13_postgres_data volume.
+services:
+  db:
+    entrypoint: !reset null
+    command: !reset null
+    environment:
+      POSTGRES_DB: deanery_p13
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
+    volumes:
+      - type: bind
+        source: ${P13_SECRET_DIR:?Set the private secret directory}/postgres-password
+        target: /run/secrets/postgres-password
+        read_only: true
+        bind: {create_host_path: false}

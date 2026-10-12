@@ -1,0 +1,39 @@
+{
+  "offline_tests": {
+    "passed": 334,
+    "skipped": 143,
+    "subtests": 157
+  },
+  "docker_images_built": [
+    "api",
+    "file-worker",
+    "proxy"
+  ],
+  "fresh_database": {
+    "head": "0039_scope_check_latency",
+    "tables": 71,
+    "synthetic_students": 508,
+    "login_roles": [
+      "admin",
+      "dean_staff",
+      "director",
+      "student",
+      "teacher"
+    ],
+    "temporary_admin_password_unmounted": true
+  },
+  "native_calibration": {
+    "model": "qwen_qwen3.5-9b",
+    "base_url": "http://host.docker.internal:1234/v1",
+    "context_window": 20480,
+    "max_tokens": 1536,
+    "temperature": 0.6,
+    "reasoning_effort": "none",
+    "prompt_tokens": 4165,
+    "prompt_fingerprint": "e87f435ee2f6ff7f4ca1df7c5ca68a8bb82bd11687d88b018ffc8b486b16fa9e",
+    "native_provider_requests": 1,
+    "tool_count": 13
+  },
+  "tested_on": "Windows11 Enterprise, Docker Desktop Linux amd64, Python3.13.1, Node22.14.0, RTX4060 Laptop8GB,16GB RAM",
+  "source_stand_unchanged": true
+}

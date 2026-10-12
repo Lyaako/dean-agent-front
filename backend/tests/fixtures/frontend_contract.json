@@ -1,0 +1,405 @@
+{
+  "frontend_commit": "9c68ae0c5f062b87811058599151bc135576b33d",
+  "view_key_projection": {
+    "v_academic_works": {"table": "academic_work", "alias": "aw", "key": "work_id"},
+    "v_practice": {"table": "practice_placement", "alias": "pp", "key": "placement_id"},
+    "v_schedule_hours": {"table": "teaching_assignment", "alias": "ta", "key": "assignment_id"},
+    "v_curriculum": {"table": "curriculum_item", "alias": "ci", "key": "item_id"}
+  },
+  "screens": [
+    {
+      "id": "students",
+      "source": "pages/students/StudentsPage.tsx",
+      "view": "v_student_summary",
+      "table": "student",
+      "key": [
+        "student_id"
+      ],
+      "columns_export": "STUDENT_COLS",
+      "required_view_fields": [
+        "attendance_pct",
+        "avg_points",
+        "category",
+        "course",
+        "debts",
+        "funding",
+        "group_name",
+        "is_foreign",
+        "is_headman",
+        "needs_dormitory",
+        "record_book_number",
+        "scholarships",
+        "status",
+        "student",
+        "student_id"
+      ],
+      "form_fields": [
+        "funding_type_id",
+        "needs_dormitory",
+        "is_foreign"
+      ]
+    },
+    {
+      "id": "groups",
+      "source": "pages/GroupsPage.tsx",
+      "view": "v_groups",
+      "table": "study_group",
+      "key": [
+        "group_id"
+      ],
+      "columns_export": "GROUP_COLS",
+      "required_view_fields": [
+        "active_students",
+        "admission_year",
+        "budget_students",
+        "course",
+        "curator",
+        "current_semester",
+        "group_id",
+        "group_name",
+        "headman",
+        "profile",
+        "specialty",
+        "study_form"
+      ],
+      "form_fields": [
+        "name",
+        "curriculum_id",
+        "curator_id",
+        "headman_id",
+        "is_archived"
+      ]
+    },
+    {
+      "id": "schedule",
+      "source": "pages/schedule/SchedulePage.tsx",
+      "view": "v_schedule_calendar",
+      "table": "schedule_slot",
+      "key": [
+        "slot_id"
+      ],
+      "columns_export": "SCHEDULE_COLS",
+      "required_view_fields": [
+        "classroom",
+        "discipline",
+        "end_time",
+        "group_name",
+        "lesson_date",
+        "lesson_type",
+        "pair_number",
+        "slot_id",
+        "start_time",
+        "subgroup",
+        "teacher",
+        "week",
+        "weekday_name"
+      ],
+      "form_fields": [
+        "assignment_id",
+        "classroom_id",
+        "weekday",
+        "pair_number",
+        "week_parity",
+        "term_id",
+        "valid_from",
+        "valid_to"
+      ]
+    },
+    {
+      "id": "works",
+      "source": "pages/WorksPage.tsx",
+      "view": "v_academic_works",
+      "table": "academic_work",
+      "key": [
+        "work_id"
+      ],
+      "columns_export": "WORK_COLS",
+      "required_view_fields": [
+        "discipline",
+        "group_name",
+        "order_number",
+        "reviewer",
+        "semester",
+        "student",
+        "supervisor",
+        "topic",
+        "work_id",
+        "work_kind"
+      ],
+      "form_fields": [
+        "student_id",
+        "item_id",
+        "topic",
+        "supervisor_id",
+        "reviewer_id",
+        "order_id"
+      ]
+    },
+    {
+      "id": "requests",
+      "source": "pages/RequestsPage.tsx",
+      "view": "v_document_queue",
+      "table": "document_request",
+      "key": [
+        "request_id"
+      ],
+      "columns_export": "REQUEST_COLS",
+      "required_view_fields": [
+        "copies",
+        "created_at",
+        "document",
+        "due_date",
+        "group_name",
+        "processed_by",
+        "purpose",
+        "request_id",
+        "status",
+        "student"
+      ],
+      "form_fields": [
+        "student_id",
+        "document_type_id",
+        "copies",
+        "purpose",
+        "request_status_id",
+        "processed_by_id"
+      ]
+    },
+    {
+      "id": "practice",
+      "source": "pages/PracticePage.tsx",
+      "view": "v_practice",
+      "table": "practice_placement",
+      "key": [
+        "placement_id"
+      ],
+      "columns_export": "PRACTICE_COLS",
+      "required_view_fields": [
+        "end_date",
+        "group_name",
+        "order_number",
+        "org_supervisor",
+        "organization",
+        "placement_id",
+        "practice",
+        "semester",
+        "start_date",
+        "student",
+        "supervisor"
+      ],
+      "form_fields": [
+        "student_id",
+        "item_id",
+        "supervisor_id",
+        "org_contact_id",
+        "start_date",
+        "end_date",
+        "order_id"
+      ]
+    },
+    {
+      "id": "employees",
+      "source": "pages/EmployeesPage.tsx",
+      "view": "v_employees",
+      "table": "employee",
+      "key": [
+        "employee_id"
+      ],
+      "columns_export": "EMPLOYEE_COLS",
+      "required_view_fields": [
+        "category",
+        "dismissal_date",
+        "employee_id",
+        "employment_rate",
+        "full_name",
+        "hire_date",
+        "personnel_number",
+        "position",
+        "unit"
+      ],
+      "form_fields": [
+        "person_id",
+        "personnel_number",
+        "position_id",
+        "employment_rate",
+        "hire_date",
+        "dismissal_date"
+      ]
+    }
+  ],
+  "lookup_fields": {
+    "study_group": [
+      "group_id",
+      "name",
+      "is_archived"
+    ],
+    "v_teachers": [
+      "employee_id",
+      "full_name",
+      "position",
+      "department"
+    ],
+    "v_employees": [
+      "employee_id",
+      "full_name",
+      "position",
+      "unit"
+    ],
+    "v_students": [
+      "student_id",
+      "full_name",
+      "group_name",
+      "record_book_number",
+      "status"
+    ],
+    "person": [
+      "person_id",
+      "last_name",
+      "first_name",
+      "middle_name",
+      "email"
+    ],
+    "dean_office_staff": [
+      "employee_id"
+    ],
+    "v_schedule_hours": [
+      "assignment_id",
+      "group_name",
+      "discipline",
+      "lesson_type",
+      "teacher"
+    ],
+    "v_curriculum": [
+      "item_id",
+      "discipline",
+      "semester",
+      "kind",
+      "control_type",
+      "specialty",
+      "start_year"
+    ],
+    "curriculum": [
+      "curriculum_id",
+      "program_id",
+      "study_form_id",
+      "start_year"
+    ],
+    "study_program": [
+      "program_id",
+      "specialty_id",
+      "profile"
+    ],
+    "specialty": [
+      "specialty_id",
+      "code",
+      "name"
+    ],
+    "study_form": [
+      "study_form_id",
+      "name"
+    ],
+    "classroom": [
+      "classroom_id",
+      "building",
+      "room_number",
+      "capacity",
+      "room_kind"
+    ],
+    "pair_time": [
+      "pair_number",
+      "start_time",
+      "end_time"
+    ],
+    "academic_term": [
+      "term_id",
+      "name",
+      "start_date",
+      "end_date"
+    ],
+    "organization_contact": [
+      "org_contact_id",
+      "organization_id",
+      "last_name",
+      "first_name",
+      "middle_name",
+      "job_title"
+    ],
+    "organization": [
+      "organization_id",
+      "name"
+    ],
+    "academic_order": [
+      "order_id",
+      "order_number",
+      "title",
+      "order_date"
+    ],
+    "position": [
+      "position_id",
+      "title"
+    ]
+  },
+  "supporting_reads": {
+    "employee": {
+      "fields": [
+        "employee_id",
+        "person_id"
+      ],
+      "filter": [
+        "person_id"
+      ]
+    },
+    "dean_office_staff": {
+      "fields": [
+        "employee_id"
+      ],
+      "filter": [
+        "employee_id"
+      ]
+    },
+    "person": {
+      "fields": [
+        "person_id",
+        "last_name",
+        "first_name",
+        "middle_name"
+      ],
+      "filter": [
+        "person_id"
+      ]
+    },
+    "holiday": {
+      "fields": [
+        "holiday_date",
+        "name"
+      ],
+      "filter": []
+    },
+    "v_schedule_calendar": {
+      "fields": [
+        "lesson_date",
+        "slot_id",
+        "pair_number",
+        "group_name",
+        "teacher",
+        "classroom"
+      ],
+      "filter": [
+        "lesson_date__gte",
+        "lesson_date__lte",
+        "sort"
+      ]
+    }
+  },
+  "linked_employee_fields": {
+    "table": "person",
+    "key": [
+      "person_id"
+    ],
+    "fields": [
+      "last_name",
+      "first_name",
+      "middle_name"
+    ]
+  }
+}

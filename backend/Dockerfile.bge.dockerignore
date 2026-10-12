@@ -1,0 +1,5 @@
+**
+!backend/
+backend/**
+!backend/requirements-bge.txt
+!backend/bge_service.py

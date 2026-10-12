@@ -1,0 +1,11 @@
+**
+!*.py
+!db/
+db/**
+!db/*.py
+!requirements.txt
+**/__pycache__/**
+**/*.pyc
+**/.local/**
+**/.env*
+**/tests/**

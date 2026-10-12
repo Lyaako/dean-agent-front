@@ -1,0 +1,70 @@
+name: deanery-knowledge-p11
+services:
+  qdrant:
+    image: deanery-verified-qdrant:1.15.5
+    pull_policy: never
+    ports:
+      - "127.0.0.1:6337:6333"
+    volumes:
+      - knowledge_qdrant:/qdrant/storage
+    mem_limit: 384m
+    cpus: 1
+    restart: "no"
+    environment:
+      QDRANT__TELEMETRY_DISABLED: "true"
+  bge:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.bge
+    image: deanery-bge-m3:p11
+    ports:
+      - "127.0.0.1:8087:8087"
+    mem_limit: 3g
+    memswap_limit: 3g
+    cpus: 2
+    pids_limit: 64
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    restart: "no"
+  knowledge-worker:
+    image: dean-plan-p11-knowledge-worker:local
+    pull_policy: never
+    command: ["python", "-m", "backend.knowledge_worker"]
+    depends_on: [bge, qdrant]
+    environment:
+      KNOWLEDGE_DATABASE_FILE: /run/secrets/knowledge-connection.json
+      KNOWLEDGE_STORAGE_ROOT: /data/files
+      KNOWLEDGE_BGE_URL: http://bge:8087
+      KNOWLEDGE_QDRANT_URL: http://qdrant:6333
+    volumes:
+      - type: bind
+        source: ${KNOWLEDGE_WORKER_SECRET:?Set the private worker connection file}
+        target: /run/secrets/knowledge-connection.json
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${P13_FILES_ROOT:-./.local/files}/regulations
+        target: /data/files/regulations
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${P13_FILES_ROOT:-./.local/files}/derived
+        target: /data/files/derived
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${P13_FILES_ROOT:-./.local/files}/temporary
+        target: /data/files/temporary
+        bind: {create_host_path: false}
+    mem_limit: 2g
+    memswap_limit: 2g
+    cpus: 2
+    pids_limit: 64
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    restart: "no"
+volumes:
+  knowledge_qdrant:

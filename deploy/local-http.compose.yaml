@@ -1,0 +1,16 @@
+# Explicit loopback-only development mode; the default Compose setup keeps HTTPS.
+services:
+  api:
+    environment:
+      DEANERY_ORIGIN: http://localhost:8443
+      DEANERY_DEV_INSECURE_COOKIE: "1"
+  proxy:
+    volumes: !override
+      - type: bind
+        source: ./deploy/nginx-http.conf
+        target: /etc/nginx/nginx.conf
+        read_only: true
+        bind: {create_host_path: false}
+  qdrant:
+    image: qdrant/qdrant:v1.15.5@sha256:0fb8897412abc81d1c0430a899b9a81eb8328aa634e7242d1bc804c1fe8fe863
+    pull_policy: if_not_present

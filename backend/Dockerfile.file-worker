@@ -1,0 +1,9 @@
+FROM python:3.13-slim-bookworm@sha256:a1165e272e578941b84abc79e4ab38a0305cd12803a5c4247979ac7655f4d641
+RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-rus tesseract-ocr-eng poppler-utils fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+RUN pip install --no-cache-dir psycopg[binary]==3.2.3 pydantic-settings==2.14.2 fastapi==0.143.0 httpx==0.28.1 pypdf==6.1.1 Pillow==12.0.0 PyMuPDF==1.26.7 python-multipart==0.0.20 pytest==9.1.1
+COPY . /app/backend
+RUN useradd --uid 10001 --no-create-home worker
+USER worker
+ENV PYTHONDONTWRITEBYTECODE=1 OMP_THREAD_LIMIT=1 FILES_STORAGE_ROOT=/data/files FILES_DATABASE_FILE=/run/secrets/files-connection.json
+CMD ["python", "-m", "backend.file_worker"]

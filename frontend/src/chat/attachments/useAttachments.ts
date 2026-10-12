@@ -1,0 +1,121 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ATTACH_TYPES, MAX_FILE_BYTES, extOf, uploadFile, waitJob, type Upload } from "../../api/files";
+import { errorText } from "../../api/errors";
+import { newKey } from "../../api/client";
+import { makeThumb, type Thumb } from "./preview";
+import type { AttachmentMeta } from "../store/ChatStore";
+
+export type ItemStatus = "uploading" | "processing" | "ready" | "error";
+
+export interface Item {
+  id: string;
+  file: File;
+  thumb: Thumb | null;
+  status: ItemStatus;
+  uploadKey: string;
+  uploaded?: Upload;
+  failedJob?: boolean;
+  error?: string;
+  meta?: AttachmentMeta;
+}
+
+interface Limits { maxCount: number; maxTotal: number }
+type Drafts = Record<string, Item[]>;
+
+const mapAll = (d: Drafts, fn: (l: Item[]) => Item[]): Drafts => Object.fromEntries(Object.entries(d).map(([k, l]) => [k, fn(l)]));
+
+// Вложения загружаются сразу при прикреплении: POST /files → ждём job → файл готов к отправке агенту.
+// У каждого чата свой черновик (draftKey): при переключении чатов вложения остаются в своём чате.
+export function useAttachments(limits: Limits, draftKey: string) {
+  const [drafts, setDrafts] = useState<Drafts>({});
+  const [notice, setNotice] = useState<string | null>(null);
+  const aborts = useRef(new Map<string, AbortController>());
+  const items = drafts[draftKey] ?? [];
+  const draftsRef = useRef(drafts);
+  draftsRef.current = drafts;
+
+  const patch = (id: string, p: Partial<Item>) => setDrafts((d) => mapAll(d, (l) => l.map((x) => (x.id === id ? { ...x, ...p } : x))));
+
+  useEffect(() => setNotice(null), [draftKey]);
+
+  const upload = useCallback(async (item: Item) => {
+    const ac = new AbortController();
+    aborts.current.set(item.id, ac);
+    patch(item.id, { status: "uploading", error: undefined });
+    try {
+      const up = item.uploaded ?? await uploadFile(item.file, item.uploadKey, ac.signal);
+      if (ac.signal.aborted) return;
+      patch(item.id, { status: "processing", uploaded: up });
+      const job = await waitJob(up.job.id, ac.signal);
+      if (ac.signal.aborted) return;
+      if (job.status !== "succeeded") {
+        patch(item.id, { failedJob: true });
+        throw new Error(job.error_code === "infected" ? "Файл не прошёл антивирусную проверку" : "Файл не удалось обработать");
+      }
+      if (!job.result || !["ready", "partial"].includes(job.result.extraction_state)) throw new Error("Извлечение текста ещё не готово. Повторите проверку.");
+      const meta: AttachmentMeta = { file_id: up.file_id, version_id: up.version_id, title: item.file.name, filename: item.file.name, mime: job.result.mime ?? item.file.type, size: item.file.size, extraction: job.result };
+      patch(item.id, { status: "ready", meta });
+    } catch (e) {
+      if (ac.signal.aborted) return;
+      patch(item.id, { status: "error", error: errorText(e) });
+    } finally {
+      aborts.current.delete(item.id);
+    }
+  }, []);
+
+  const add = useCallback((files: FileList | File[]) => {
+    const current = draftsRef.current[draftKey] ?? [];
+    const errors: string[] = [];
+    const accepted: Item[] = [];
+    let count = current.length;
+    let total = current.reduce((s, x) => s + x.file.size, 0);
+    for (const file of [...files]) {
+      if (!ATTACH_TYPES.includes(extOf(file.name))) { errors.push(`«${file.name}»: можно только ${ATTACH_TYPES.join(", ")}`); continue; }
+      if (!file.size) { errors.push(`«${file.name}»: файл пуст`); continue; }
+      if (file.size > MAX_FILE_BYTES) { errors.push(`«${file.name}» больше 10 МБ`); continue; }
+      if (count >= limits.maxCount) { errors.push(`Не больше ${limits.maxCount} файлов в одном сообщении`); break; }
+      if (total + file.size > limits.maxTotal) { errors.push(`Вместе файлы больше ${Math.round(limits.maxTotal / 1e6)} МБ`); break; }
+      count += 1;
+      total += file.size;
+      accepted.push({ id: newKey(), uploadKey: newKey(), file, thumb: null, status: "uploading" });
+    }
+    if (accepted.length) setDrafts((d) => ({ ...d, [draftKey]: [...(d[draftKey] ?? []), ...accepted] }));
+    setNotice(errors.length ? errors.join(". ") : null);
+    for (const item of accepted) {
+      upload(item);
+      makeThumb(item.file, item.file.name).then((thumb) => patch(item.id, { thumb }));
+    }
+  }, [draftKey, limits.maxCount, limits.maxTotal, upload]);
+
+  const remove = useCallback((id: string) => {
+    aborts.current.get(id)?.abort();
+    setDrafts((d) => mapAll(d, (l) => l.filter((x) => x.id !== id)));
+  }, []);
+
+  const retry = useCallback((id: string) => {
+    const it = Object.values(draftsRef.current).flat().find((x) => x.id === id);
+    if (it?.status === "error") {
+      const attempt = it.failedJob ? { ...it, uploadKey: newKey(), uploaded: undefined, failedJob: false } : it;
+      patch(id, attempt);
+      upload(attempt);
+    }
+  }, [upload]);
+
+  const ready = useCallback(() => {
+    const current = draftsRef.current[draftKey] ?? [];
+    if (current.some((x) => x.status !== "ready" || !x.meta)) return null;
+    return current.map((x) => x.meta!);
+  }, [draftKey]);
+  const clear = useCallback(() => {
+    setDrafts((d) => ({ ...d, [draftKey]: [] }));
+    setNotice(null);
+  }, [draftKey]);
+
+  useEffect(() => () => { for (const ac of aborts.current.values()) ac.abort(); }, []);
+
+  return {
+    items, add, remove, retry, ready, clear, notice,
+    pending: items.some((x) => x.status === "uploading" || x.status === "processing"),
+    hasErrors: items.some((x) => x.status === "error"),
+  };
+}

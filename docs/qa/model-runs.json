@@ -1,0 +1,504 @@
+[
+  {
+    "id": "bccc43c3-2f67-4579-a1f8-f0d94d8fa3c4",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "describe_resources",
+      "query_deanery"
+    ],
+    "created_at": "2026-10-11T19:05:04.352248+00:00",
+    "finished_at": "2026-10-11T19:05:33.092407+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 4,
+    "tool_error_codes": []
+  },
+  {
+    "id": "987a0a75-9a38-40c3-9f69-cbc7de0b9f04",
+    "status": "failed",
+    "error_code": "agent_protocol_error",
+    "tools_used": [
+      "query_deanery",
+      "get_olap_report",
+      "describe_resources"
+    ],
+    "created_at": "2026-10-11T19:06:44.803199+00:00",
+    "finished_at": "2026-10-11T19:07:13.473298+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 4,
+    "tool_error_codes": [
+      "column_forbidden_or_ambiguous",
+      "column_forbidden_or_ambiguous",
+      "operator_forbidden",
+      "unsupported_expression",
+      "column_forbidden_or_ambiguous",
+      "unsupported_expression",
+      "column_forbidden_or_ambiguous",
+      "column_forbidden_or_ambiguous"
+    ]
+  },
+  {
+    "id": "931451b5-1a1a-41fb-94a4-fc70ca300669",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "get_olap_report"
+    ],
+    "created_at": "2026-10-11T19:11:52.016246+00:00",
+    "finished_at": "2026-10-11T19:12:20.491548+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 4,
+    "tool_error_codes": []
+  },
+  {
+    "id": "4fbe7aa4-aba6-41ff-bae5-2fd6c25bf1dd",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "prepare_record_change",
+      "describe_resources"
+    ],
+    "created_at": "2026-10-11T19:13:05.022338+00:00",
+    "finished_at": "2026-10-11T19:13:31.836862+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 4,
+    "tool_error_codes": [
+      "invalid_or_conflicting_request"
+    ]
+  },
+  {
+    "id": "6ba65705-6f1b-46f2-940f-d4090913f99c",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "prepare_workflow"
+    ],
+    "created_at": "2026-10-11T19:26:31.807058+00:00",
+    "finished_at": "2026-10-11T19:27:06.10123+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": []
+  },
+  {
+    "id": "7cbe4372-37d3-4687-a22f-d6f6755f720d",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "query_deanery",
+      "describe_resources",
+      "prepare_workflow"
+    ],
+    "created_at": "2026-10-11T19:29:01.500067+00:00",
+    "finished_at": "2026-10-11T19:29:59.832601+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": [
+      "resource_forbidden"
+    ]
+  },
+  {
+    "id": "4e3bdfca-5d32-4040-8cda-a5b439f54daf",
+    "status": "failed",
+    "error_code": "agent_protocol_error",
+    "tools_used": [
+      "prepare_workflow",
+      "describe_resources",
+      "query_deanery"
+    ],
+    "created_at": "2026-10-11T19:30:57.436076+00:00",
+    "finished_at": "2026-10-11T19:32:26.169229+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": [
+      "invalid_or_conflicting_request",
+      "missing_required_fields",
+      "invalid_or_conflicting_request",
+      "column_forbidden_or_ambiguous",
+      "column_forbidden_or_ambiguous"
+    ]
+  },
+  {
+    "id": "d8ef34cc-aad7-466c-8d13-b2b9c3e2ee9e",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "read_attachment_text"
+    ],
+    "created_at": "2026-10-11T19:39:21.320355+00:00",
+    "finished_at": "2026-10-11T19:40:04.709133+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": []
+  },
+  {
+    "id": "9ef82da9-525e-4821-a9c0-b489bec1026a",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [],
+    "created_at": "2026-10-11T19:48:07.114097+00:00",
+    "finished_at": "2026-10-11T19:48:28.568564+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": []
+  },
+  {
+    "id": "65527fee-4e76-497e-b554-e1caf4fbc3c2",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "search_regulations"
+    ],
+    "created_at": "2026-10-11T19:51:25.635142+00:00",
+    "finished_at": "2026-10-11T19:52:20.573492+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": []
+  },
+  {
+    "id": "70a8cf37-bf6b-4ecf-ba84-b10e98ecd6d4",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "prepare_workflow"
+    ],
+    "created_at": "2026-10-11T19:54:10.303133+00:00",
+    "finished_at": "2026-10-11T19:54:37.868288+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": []
+  },
+  {
+    "id": "91ed99ad-60dc-4288-aeb8-7788bc4fb5c8",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "prepare_workflow"
+    ],
+    "created_at": "2026-10-11T19:56:29.963924+00:00",
+    "finished_at": "2026-10-11T19:56:56.358099+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": []
+  },
+  {
+    "id": "9f27a475-b566-49f7-abf2-edb82fa161a0",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "prepare_workflow"
+    ],
+    "created_at": "2026-10-11T19:59:13.627352+00:00",
+    "finished_at": "2026-10-11T19:59:44.113304+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": []
+  },
+  {
+    "id": "4c05a766-c382-4166-86b5-22b7daac0918",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "prepare_workflow"
+    ],
+    "created_at": "2026-10-12T10:17:15.685431+00:00",
+    "finished_at": "2026-10-12T10:17:43.883703+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": []
+  },
+  {
+    "id": "afae05d2-b8e5-4a65-9431-2f871fd3a2d4",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "prepare_workflow"
+    ],
+    "created_at": "2026-10-12T10:24:09.612133+00:00",
+    "finished_at": "2026-10-12T10:24:37.592347+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": []
+  },
+  {
+    "id": "16273eaa-444b-4fb8-85f4-6e53e2d4991a",
+    "status": "failed",
+    "error_code": "agent_protocol_error",
+    "tools_used": [
+      "propose_sql_change",
+      "describe_resources"
+    ],
+    "created_at": "2026-10-12T10:28:12.505141+00:00",
+    "finished_at": "2026-10-12T10:29:41.834673+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": [
+      "resource_forbidden",
+      "resource_forbidden",
+      "resource_forbidden",
+      "resource_forbidden",
+      "resource_forbidden",
+      "resource_forbidden"
+    ]
+  },
+  {
+    "id": "54b8bdda-91c4-4e3b-9c82-2e210e675175",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "propose_sql_change"
+    ],
+    "created_at": "2026-10-12T10:35:29.015953+00:00",
+    "finished_at": "2026-10-12T10:36:00.424366+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": []
+  },
+  {
+    "id": "8563de2a-f22e-49ed-8735-81cf3455f4f0",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "prepare_scholarship_assignment"
+    ],
+    "created_at": "2026-10-12T10:38:18.605011+00:00",
+    "finished_at": "2026-10-12T10:38:55.225455+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": []
+  },
+  {
+    "id": "09ce7a8f-a9e4-43aa-a873-3983148a8d67",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "query_deanery",
+      "prepare_scholarship_cancellation"
+    ],
+    "created_at": "2026-10-12T10:49:03.924615+00:00",
+    "finished_at": "2026-10-12T10:49:48.517266+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": []
+  },
+  {
+    "id": "14eb894e-93bd-4c02-8fa8-cd250f1977f5",
+    "status": "failed",
+    "error_code": "agent_unavailable",
+    "tools_used": [
+      "prepare_scholarship_termination"
+    ],
+    "created_at": "2026-10-12T10:53:24.061828+00:00",
+    "finished_at": "2026-10-12T10:53:46.784386+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": [
+      "query_timeout"
+    ]
+  },
+  {
+    "id": "e451e1bd-288e-4287-8b94-f4de353abcaa",
+    "status": "failed",
+    "error_code": "agent_unavailable",
+    "tools_used": [
+      "prepare_scholarship_termination"
+    ],
+    "created_at": "2026-10-12T11:09:45.849228+00:00",
+    "finished_at": "2026-10-12T11:10:09.996771+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": [
+      "query_timeout"
+    ]
+  },
+  {
+    "id": "6e3f6cb6-a441-4316-8221-9aa0d47e4702",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "prepare_grade_correction"
+    ],
+    "created_at": "2026-10-12T11:24:45.203077+00:00",
+    "finished_at": "2026-10-12T11:25:06.134836+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 5,
+    "tool_error_codes": []
+  },
+  {
+    "id": "a1b71b9b-df89-49f4-901e-bbab8409b78e",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "prepare_workflow"
+    ],
+    "created_at": "2026-10-12T11:29:07.951421+00:00",
+    "finished_at": "2026-10-12T11:29:46.421677+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": []
+  },
+  {
+    "id": "be16e7dc-8664-4c4d-8efd-161eae94fdd0",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "prepare_scheduled_order_cancellation"
+    ],
+    "created_at": "2026-10-12T11:30:24.967778+00:00",
+    "finished_at": "2026-10-12T11:31:05.096008+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": []
+  },
+  {
+    "id": "ea835b91-500e-4ce1-a854-0ee5014504df",
+    "status": "failed",
+    "error_code": "agent_error",
+    "tools_used": [
+      "propose_sql_change"
+    ],
+    "created_at": "2026-10-12T11:32:29.813813+00:00",
+    "finished_at": "2026-10-12T11:32:48.574811+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": []
+  },
+  {
+    "id": "b4b43458-20ab-4a7c-b101-8816c87b20c6",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "query_deanery"
+    ],
+    "created_at": "2026-10-12T11:35:59.418321+00:00",
+    "finished_at": "2026-10-12T11:36:36.001614+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 2,
+    "tool_error_codes": []
+  },
+  {
+    "id": "3ff7a5ad-e6fc-4799-a543-d3d47191f3ca",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "query_deanery"
+    ],
+    "created_at": "2026-10-12T11:39:10.469111+00:00",
+    "finished_at": "2026-10-12T11:39:19.483357+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 6,
+    "tool_error_codes": []
+  },
+  {
+    "id": "e825b6c1-8b4c-41ae-86c8-1e014b6a5ecf",
+    "status": "failed",
+    "error_code": "agent_context_limit",
+    "tools_used": [
+      "get_olap_report"
+    ],
+    "created_at": "2026-10-12T11:40:12.877765+00:00",
+    "finished_at": "2026-10-12T11:40:19.97938+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 6,
+    "tool_error_codes": []
+  },
+  {
+    "id": "266dc5f1-8a09-407b-9e06-11ada8944e51",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "prepare_scholarship_assignment"
+    ],
+    "created_at": "2026-10-12T11:43:06.565714+00:00",
+    "finished_at": "2026-10-12T11:43:45.325091+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": []
+  },
+  {
+    "id": "39e6577d-825d-46c5-a559-b93a18ecd70b",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "query_deanery",
+      "prepare_scholarship_termination"
+    ],
+    "created_at": "2026-10-12T11:45:01.529643+00:00",
+    "finished_at": "2026-10-12T11:45:52.136739+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 1,
+    "tool_error_codes": []
+  },
+  {
+    "id": "fa337efb-6120-4458-81f6-cc454d4a8f0a",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "read_attachment_text"
+    ],
+    "created_at": "2026-10-12T11:48:20.085039+00:00",
+    "finished_at": "2026-10-12T11:48:59.793777+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 4,
+    "tool_error_codes": []
+  },
+  {
+    "id": "96bc2f0b-1f1b-4502-be11-43c00ef05639",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [],
+    "created_at": "2026-10-12T12:59:35.437648+00:00",
+    "finished_at": "2026-10-12T12:59:56.87869+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 4,
+    "tool_error_codes": []
+  },
+  {
+    "id": "dcb4a3d2-e5d6-49a7-9e10-0a984f929387",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [
+      "read_attachment_text"
+    ],
+    "created_at": "2026-10-12T13:02:44.267635+00:00",
+    "finished_at": "2026-10-12T13:03:18.843718+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 4,
+    "tool_error_codes": [
+      "invalid_attachment_selector",
+      "invalid_attachment_selector"
+    ]
+  },
+  {
+    "id": "e316c08b-93e9-4e8b-9102-4d3f95d896e6",
+    "status": "cancelled",
+    "error_code": "agent_cancelled",
+    "tools_used": [],
+    "created_at": "2026-10-12T13:05:46.740174+00:00",
+    "finished_at": "2026-10-12T13:05:47.39169+00:00",
+    "stop_requested_at": "2026-10-12T13:05:47.320327+00:00",
+    "initiator_user_id": 4,
+    "tool_error_codes": []
+  },
+  {
+    "id": "1d63505a-06ed-45f6-a519-8b705aff07f0",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [],
+    "created_at": "2026-10-12T13:07:55.935262+00:00",
+    "finished_at": "2026-10-12T13:08:33.936148+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 4,
+    "tool_error_codes": []
+  },
+  {
+    "id": "f6fb811b-ef53-4f9c-bfde-76c83398fec1",
+    "status": "succeeded",
+    "error_code": null,
+    "tools_used": [],
+    "created_at": "2026-10-12T13:11:19.945145+00:00",
+    "finished_at": "2026-10-12T13:11:34.205616+00:00",
+    "stop_requested_at": null,
+    "initiator_user_id": 4,
+    "tool_error_codes": []
+  }
+]

@@ -1,0 +1,14 @@
+"""Durable attachment context and exact proposal evidence in existing tables."""
+from pathlib import Path
+from alembic import op
+revision = "0029_run_attachments"
+down_revision = "0028_files"
+branch_labels = None
+depends_on = None
+
+def upgrade():
+    path = Path(__file__).resolve().parents[1] / "sql" / "022_run_attachments.sql"
+    op.get_bind().exec_driver_sql(path.read_text(encoding="utf-8"), execution_options={"no_parameters": True})
+
+def downgrade():
+    raise RuntimeError("Attachment provenance is retained; use a forward repair")

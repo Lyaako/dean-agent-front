@@ -1,0 +1,3455 @@
+{
+  "source": "references/database/01_schema.sql",
+  "tables": [
+    {
+      "name": "position",
+      "label": "Должности",
+      "group": "Справочники",
+      "key": [
+        "position_id"
+      ],
+      "fields": [
+        {
+          "name": "position_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "title",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "category",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "academic_degree",
+      "label": "Учёные степени",
+      "group": "Справочники",
+      "key": [
+        "degree_id"
+      ],
+      "fields": [
+        {
+          "name": "degree_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "short_name",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "academic_title",
+      "label": "Учёные звания",
+      "group": "Справочники",
+      "key": [
+        "title_id"
+      ],
+      "fields": [
+        {
+          "name": "title_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "education_level",
+      "label": "Уровни образования",
+      "group": "Справочники",
+      "key": [
+        "level_id"
+      ],
+      "fields": [
+        {
+          "name": "level_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "group_letter",
+          "type": "CHAR(1)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "study_form",
+      "label": "Формы обучения",
+      "group": "Справочники",
+      "key": [
+        "study_form_id"
+      ],
+      "fields": [
+        {
+          "name": "study_form_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(30)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "group_letter",
+          "type": "CHAR(1)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "funding_type",
+      "label": "Финансирование",
+      "group": "Справочники",
+      "key": [
+        "funding_type_id"
+      ],
+      "fields": [
+        {
+          "name": "funding_type_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "student_status",
+      "label": "Статусы студентов",
+      "group": "Справочники",
+      "key": [
+        "status_id"
+      ],
+      "fields": [
+        {
+          "name": "status_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "control_type",
+      "label": "Виды контроля",
+      "group": "Справочники",
+      "key": [
+        "control_type_id"
+      ],
+      "fields": [
+        {
+          "name": "control_type_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "is_graded",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "is_exam",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "lesson_type",
+      "label": "Виды занятий",
+      "group": "Справочники",
+      "key": [
+        "lesson_type_id"
+      ],
+      "fields": [
+        {
+          "name": "lesson_type_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "score_band",
+      "label": "Шкала баллов",
+      "group": "Справочники",
+      "key": [
+        "band_id"
+      ],
+      "fields": [
+        {
+          "name": "band_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "min_points",
+          "type": "SMALLINT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "max_points",
+          "type": "SMALLINT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "mark",
+          "type": "SMALLINT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "mark_name",
+          "type": "VARCHAR(30)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "academic_term",
+      "label": "Учебные периоды",
+      "group": "Справочники",
+      "key": [
+        "term_id"
+      ],
+      "fields": [
+        {
+          "name": "term_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(40)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "start_date",
+          "type": "DATE",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "end_date",
+          "type": "DATE",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "session_start",
+          "type": "DATE",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "session_end",
+          "type": "DATE",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "holiday",
+      "label": "Праздники",
+      "group": "Справочники",
+      "key": [
+        "holiday_date"
+      ],
+      "fields": [
+        {
+          "name": "holiday_date",
+          "type": "DATE",
+          "nullable": false,
+          "identity": false,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "pair_time",
+      "label": "Время пар",
+      "group": "Справочники",
+      "key": [
+        "pair_number"
+      ],
+      "fields": [
+        {
+          "name": "pair_number",
+          "type": "SMALLINT",
+          "nullable": false,
+          "identity": false,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "start_time",
+          "type": "TIME",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "end_time",
+          "type": "TIME",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "order_type",
+      "label": "Типы приказов",
+      "group": "Справочники",
+      "key": [
+        "order_type_id"
+      ],
+      "fields": [
+        {
+          "name": "order_type_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "code",
+          "type": "VARCHAR(30)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "number_suffix",
+          "type": "VARCHAR(10)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "leave_reason",
+      "label": "Причины отпуска",
+      "group": "Справочники",
+      "key": [
+        "reason_id"
+      ],
+      "fields": [
+        {
+          "name": "reason_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "contact_relation",
+      "label": "Родство",
+      "group": "Справочники",
+      "key": [
+        "relation_id"
+      ],
+      "fields": [
+        {
+          "name": "relation_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "scholarship_type",
+      "label": "Виды стипендий",
+      "group": "Справочники",
+      "key": [
+        "scholarship_type_id"
+      ],
+      "fields": [
+        {
+          "name": "scholarship_type_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "amount",
+          "type": "NUMERIC(10,2)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "budget_only",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "document_type",
+      "label": "Виды документов",
+      "group": "Справочники",
+      "key": [
+        "document_type_id"
+      ],
+      "fields": [
+        {
+          "name": "document_type_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(150)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "processing_days",
+          "type": "SMALLINT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "request_status",
+      "label": "Статусы заявок",
+      "group": "Справочники",
+      "key": [
+        "request_status_id"
+      ],
+      "fields": [
+        {
+          "name": "request_status_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "is_final",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "app_role",
+      "label": "Роли",
+      "group": "Справочники",
+      "key": [
+        "role_id"
+      ],
+      "fields": [
+        {
+          "name": "role_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "code",
+          "type": "VARCHAR(30)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "person",
+      "label": "Персоны",
+      "group": "Люди и структура",
+      "key": [
+        "person_id"
+      ],
+      "fields": [
+        {
+          "name": "person_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "last_name",
+          "type": "VARCHAR(60)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "first_name",
+          "type": "VARCHAR(60)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "middle_name",
+          "type": "VARCHAR(60)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "gender",
+          "type": "CHAR(1)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "birth_date",
+          "type": "DATE",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "phone",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "email",
+          "type": "VARCHAR(120)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "passport_series",
+          "type": "CHAR(4)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "passport_number",
+          "type": "CHAR(6)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "snils",
+          "type": "CHAR(14)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "inn",
+          "type": "CHAR(12)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "address",
+          "type": "VARCHAR(255)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "form",
+      "policy": "чтение ФИО/разрешённых контактов и lookup; ограниченный PATCH ФИО сотрудника; создание только как часть зачисления"
+    },
+    {
+      "name": "employee",
+      "label": "Сотрудники",
+      "group": "Люди и структура",
+      "key": [
+        "employee_id"
+      ],
+      "fields": [
+        {
+          "name": "employee_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "person_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "person",
+            "column": "person_id"
+          }
+        },
+        {
+          "name": "personnel_number",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "position_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "position",
+            "column": "position_id"
+          }
+        },
+        {
+          "name": "employment_rate",
+          "type": "NUMERIC(3,2)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "hire_date",
+          "type": "DATE",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "dismissal_date",
+          "type": "DATE",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "form",
+      "policy": "форма сотрудника: person при создании, должность, ставка, даты; person_id после создания неизменяем; ФИО через person PATCH"
+    },
+    {
+      "name": "institute",
+      "label": "Институты",
+      "group": "Люди и структура",
+      "key": [
+        "institute_id"
+      ],
+      "fields": [
+        {
+          "name": "institute_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(200)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "short_name",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "group_letter",
+          "type": "CHAR(1)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "director_id",
+          "type": "INT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "employee",
+            "column": "employee_id"
+          }
+        },
+        {
+          "name": "office_room",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "phone",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "email",
+          "type": "VARCHAR(120)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "department",
+      "label": "Кафедры",
+      "group": "Люди и структура",
+      "key": [
+        "department_id"
+      ],
+      "fields": [
+        {
+          "name": "department_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "institute_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "institute",
+            "column": "institute_id"
+          }
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(200)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "short_name",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "head_id",
+          "type": "INT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "employee",
+            "column": "employee_id"
+          }
+        },
+        {
+          "name": "office_room",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "phone",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "teacher",
+      "label": "Преподаватели",
+      "group": "Люди и структура",
+      "key": [
+        "employee_id"
+      ],
+      "fields": [
+        {
+          "name": "employee_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": true,
+          "reference": {
+            "table": "employee",
+            "column": "employee_id"
+          }
+        },
+        {
+          "name": "department_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "department",
+            "column": "department_id"
+          }
+        },
+        {
+          "name": "degree_id",
+          "type": "INT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "academic_degree",
+            "column": "degree_id"
+          }
+        },
+        {
+          "name": "title_id",
+          "type": "INT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "academic_title",
+            "column": "title_id"
+          }
+        },
+        {
+          "name": "teaching_since",
+          "type": "DATE",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "lookup и чтение; самостоятельной формы подтипов в текущем фронтенде нет"
+    },
+    {
+      "name": "dean_office_staff",
+      "label": "Сотрудники деканата",
+      "group": "Люди и структура",
+      "key": [
+        "employee_id"
+      ],
+      "fields": [
+        {
+          "name": "employee_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": true,
+          "reference": {
+            "table": "employee",
+            "column": "employee_id"
+          }
+        },
+        {
+          "name": "institute_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "institute",
+            "column": "institute_id"
+          }
+        },
+        {
+          "name": "office_room",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "duties",
+          "type": "TEXT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "lookup и определение исполнителя/области; самостоятельной формы нет"
+    },
+    {
+      "name": "classroom",
+      "label": "Аудитории",
+      "group": "Люди и структура",
+      "key": [
+        "classroom_id"
+      ],
+      "fields": [
+        {
+          "name": "classroom_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "building",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "room_number",
+          "type": "VARCHAR(10)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "capacity",
+          "type": "SMALLINT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "room_kind",
+          "type": "VARCHAR(30)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "has_projector",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "specialty",
+      "label": "Специальности",
+      "group": "Образовательные программы",
+      "key": [
+        "specialty_id"
+      ],
+      "fields": [
+        {
+          "name": "specialty_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "code",
+          "type": "VARCHAR(10)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(200)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "level_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "education_level",
+            "column": "level_id"
+          }
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "study_program",
+      "label": "Программы",
+      "group": "Образовательные программы",
+      "key": [
+        "program_id"
+      ],
+      "fields": [
+        {
+          "name": "program_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "specialty_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "specialty",
+            "column": "specialty_id"
+          }
+        },
+        {
+          "name": "profile",
+          "type": "VARCHAR(200)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "department_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "department",
+            "column": "department_id"
+          }
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "curriculum",
+      "label": "Учебные планы",
+      "group": "Образовательные программы",
+      "key": [
+        "curriculum_id"
+      ],
+      "fields": [
+        {
+          "name": "curriculum_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "program_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "study_program",
+            "column": "program_id"
+          }
+        },
+        {
+          "name": "study_form_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "study_form",
+            "column": "study_form_id"
+          }
+        },
+        {
+          "name": "start_year",
+          "type": "SMALLINT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "duration_years",
+          "type": "NUMERIC(2,1)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "approved_date",
+          "type": "DATE",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "discipline",
+      "label": "Дисциплины",
+      "group": "Образовательные программы",
+      "key": [
+        "discipline_id"
+      ],
+      "fields": [
+        {
+          "name": "discipline_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(200)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "department_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "department",
+            "column": "department_id"
+          }
+        },
+        {
+          "name": "kind",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "curriculum_item",
+      "label": "Позиции плана",
+      "group": "Образовательные программы",
+      "key": [
+        "item_id"
+      ],
+      "fields": [
+        {
+          "name": "item_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "curriculum_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "curriculum",
+            "column": "curriculum_id"
+          }
+        },
+        {
+          "name": "discipline_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "discipline",
+            "column": "discipline_id"
+          }
+        },
+        {
+          "name": "semester",
+          "type": "SMALLINT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "control_type_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "control_type",
+            "column": "control_type_id"
+          }
+        },
+        {
+          "name": "lecture_hours",
+          "type": "SMALLINT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "practice_hours",
+          "type": "SMALLINT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "lab_hours",
+          "type": "SMALLINT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "self_study_hours",
+          "type": "SMALLINT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "module_count",
+          "type": "SMALLINT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "study_group",
+      "label": "Группы",
+      "group": "Контингент",
+      "key": [
+        "group_id"
+      ],
+      "fields": [
+        {
+          "name": "group_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "curriculum_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "curriculum",
+            "column": "curriculum_id"
+          }
+        },
+        {
+          "name": "curator_id",
+          "type": "INT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "teacher",
+            "column": "employee_id"
+          }
+        },
+        {
+          "name": "headman_id",
+          "type": "INT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "student",
+            "column": "student_id"
+          }
+        },
+        {
+          "name": "is_archived",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "form",
+      "policy": "форма группы: создать/изменить; удалить только без зависимостей"
+    },
+    {
+      "name": "student",
+      "label": "Студенты",
+      "group": "Контингент",
+      "key": [
+        "student_id"
+      ],
+      "fields": [
+        {
+          "name": "student_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "person_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "person",
+            "column": "person_id"
+          }
+        },
+        {
+          "name": "record_book_number",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "group_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "study_group",
+            "column": "group_id"
+          }
+        },
+        {
+          "name": "funding_type_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "funding_type",
+            "column": "funding_type_id"
+          }
+        },
+        {
+          "name": "status_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "student_status",
+            "column": "status_id"
+          }
+        },
+        {
+          "name": "enrollment_date",
+          "type": "DATE",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "needs_dormitory",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "is_foreign",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "workflow",
+      "policy": "форма: funding_type_id, needs_dormitory, is_foreign; группа/статус — 6 workflows"
+    },
+    {
+      "name": "contact_person",
+      "label": "Контактные лица",
+      "group": "Контингент",
+      "key": [
+        "contact_person_id"
+      ],
+      "fields": [
+        {
+          "name": "contact_person_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "last_name",
+          "type": "VARCHAR(60)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "first_name",
+          "type": "VARCHAR(60)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "middle_name",
+          "type": "VARCHAR(60)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "phone",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "email",
+          "type": "VARCHAR(120)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "agent_proposal",
+      "policy": "INSERT/UPDATE через предложение агента; отдельной формы нет"
+    },
+    {
+      "name": "student_contact",
+      "label": "Контакты студентов",
+      "group": "Контингент",
+      "key": [
+        "student_id",
+        "contact_person_id"
+      ],
+      "fields": [
+        {
+          "name": "student_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "student",
+            "column": "student_id"
+          }
+        },
+        {
+          "name": "contact_person_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "contact_person",
+            "column": "contact_person_id"
+          }
+        },
+        {
+          "name": "relation_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "contact_relation",
+            "column": "relation_id"
+          }
+        },
+        {
+          "name": "is_emergency",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "teaching_assignment",
+      "label": "Учебные поручения",
+      "group": "Учебный процесс",
+      "key": [
+        "assignment_id"
+      ],
+      "fields": [
+        {
+          "name": "assignment_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "item_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "curriculum_item",
+            "column": "item_id"
+          }
+        },
+        {
+          "name": "group_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "study_group",
+            "column": "group_id"
+          }
+        },
+        {
+          "name": "teacher_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "teacher",
+            "column": "employee_id"
+          }
+        },
+        {
+          "name": "lesson_type_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "lesson_type",
+            "column": "lesson_type_id"
+          }
+        },
+        {
+          "name": "subgroup",
+          "type": "SMALLINT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "agent_proposal",
+      "policy": "INSERT/UPDATE через предложение агента; отдельной формы нет"
+    },
+    {
+      "name": "schedule_slot",
+      "label": "Расписание",
+      "group": "Учебный процесс",
+      "key": [
+        "slot_id"
+      ],
+      "fields": [
+        {
+          "name": "slot_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "assignment_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "teaching_assignment",
+            "column": "assignment_id"
+          }
+        },
+        {
+          "name": "classroom_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "classroom",
+            "column": "classroom_id"
+          }
+        },
+        {
+          "name": "weekday",
+          "type": "SMALLINT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "pair_number",
+          "type": "SMALLINT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "pair_time",
+            "column": "pair_number"
+          }
+        },
+        {
+          "name": "week_parity",
+          "type": "VARCHAR(5)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "term_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "academic_term",
+            "column": "term_id"
+          }
+        },
+        {
+          "name": "valid_from",
+          "type": "DATE",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "valid_to",
+          "type": "DATE",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "form",
+      "policy": "CRUD существующей формы и INSERT/UPDATE предложения агента"
+    },
+    {
+      "name": "attendance",
+      "label": "Посещаемость",
+      "group": "Учебный процесс",
+      "key": [
+        "attendance_id"
+      ],
+      "fields": [
+        {
+          "name": "attendance_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "slot_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "schedule_slot",
+            "column": "slot_id"
+          }
+        },
+        {
+          "name": "student_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "student",
+            "column": "student_id"
+          }
+        },
+        {
+          "name": "lesson_date",
+          "type": "DATE",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "is_present",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "absence_reason",
+          "type": "VARCHAR(200)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "agent_proposal",
+      "policy": "INSERT/UPDATE через предложение агента; отдельной формы нет"
+    },
+    {
+      "name": "grade_sheet",
+      "label": "Ведомости",
+      "group": "Учебный процесс",
+      "key": [
+        "sheet_id"
+      ],
+      "fields": [
+        {
+          "name": "sheet_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "sheet_number",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "item_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "curriculum_item",
+            "column": "item_id"
+          }
+        },
+        {
+          "name": "group_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "study_group",
+            "column": "group_id"
+          }
+        },
+        {
+          "name": "examiner_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "teacher",
+            "column": "employee_id"
+          }
+        },
+        {
+          "name": "stage",
+          "type": "VARCHAR(10)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "sheet_kind",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "issue_date",
+          "type": "DATE",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "exam_date",
+          "type": "DATE",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "closed_date",
+          "type": "DATE",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(10)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "agent_proposal",
+      "policy": "INSERT/UPDATE через предложение агента; отдельной формы нет"
+    },
+    {
+      "name": "grade",
+      "label": "Оценки",
+      "group": "Учебный процесс",
+      "key": [
+        "grade_id"
+      ],
+      "fields": [
+        {
+          "name": "grade_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "sheet_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "grade_sheet",
+            "column": "sheet_id"
+          }
+        },
+        {
+          "name": "student_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "student",
+            "column": "student_id"
+          }
+        },
+        {
+          "name": "points",
+          "type": "SMALLINT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "is_absent",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "agent_proposal",
+      "policy": "INSERT/UPDATE через предложение агента; отдельной формы нет"
+    },
+    {
+      "name": "academic_order",
+      "label": "Приказы",
+      "group": "Приказы и документы",
+      "key": [
+        "order_id"
+      ],
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "order_number",
+          "type": "VARCHAR(30)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "order_date",
+          "type": "DATE",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "order_type_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "order_type",
+            "column": "order_type_id"
+          }
+        },
+        {
+          "name": "institute_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "institute",
+            "column": "institute_id"
+          }
+        },
+        {
+          "name": "signed_by_id",
+          "type": "INT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "employee",
+            "column": "employee_id"
+          }
+        },
+        {
+          "name": "title",
+          "type": "VARCHAR(300)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "effective_date",
+          "type": "DATE",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "workflow",
+      "policy": "lookup и чтение агентом; создаётся/применяется через workflow"
+    },
+    {
+      "name": "order_student",
+      "label": "Студенты приказа",
+      "group": "Приказы и документы",
+      "key": [
+        "order_id",
+        "student_id"
+      ],
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "academic_order",
+            "column": "order_id"
+          }
+        },
+        {
+          "name": "student_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "student",
+            "column": "student_id"
+          }
+        },
+        {
+          "name": "new_group_id",
+          "type": "INT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "study_group",
+            "column": "group_id"
+          }
+        },
+        {
+          "name": "reason",
+          "type": "VARCHAR(300)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "applied_at",
+          "type": "TIMESTAMPTZ",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "workflow",
+      "policy": "состав/применение приказа через workflow; полный ключ order_id + student_id"
+    },
+    {
+      "name": "scholarship",
+      "label": "Стипендии",
+      "group": "Приказы и документы",
+      "key": [
+        "scholarship_id"
+      ],
+      "fields": [
+        {
+          "name": "scholarship_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "student_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "student",
+            "column": "student_id"
+          }
+        },
+        {
+          "name": "scholarship_type_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "scholarship_type",
+            "column": "scholarship_type_id"
+          }
+        },
+        {
+          "name": "order_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "academic_order",
+            "column": "order_id"
+          }
+        },
+        {
+          "name": "start_date",
+          "type": "DATE",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "end_date",
+          "type": "DATE",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение агентом; отдельный CRUD/UI не нужен текущему фронтенду"
+    },
+    {
+      "name": "academic_leave",
+      "label": "Академические отпуска",
+      "group": "Приказы и документы",
+      "key": [
+        "leave_id"
+      ],
+      "fields": [
+        {
+          "name": "leave_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "student_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "student",
+            "column": "student_id"
+          }
+        },
+        {
+          "name": "reason_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "leave_reason",
+            "column": "reason_id"
+          }
+        },
+        {
+          "name": "order_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "academic_order",
+            "column": "order_id"
+          }
+        },
+        {
+          "name": "start_date",
+          "type": "DATE",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "end_date",
+          "type": "DATE",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "return_order_id",
+          "type": "INT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "academic_order",
+            "column": "order_id"
+          }
+        }
+      ],
+      "mode": "workflow",
+      "policy": "grant_academic_leave / return_from_leave; чтение агентом"
+    },
+    {
+      "name": "organization",
+      "label": "Организации",
+      "group": "Практики и работы",
+      "key": [
+        "organization_id"
+      ],
+      "fields": [
+        {
+          "name": "organization_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(200)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "inn",
+          "type": "VARCHAR(12)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "address",
+          "type": "VARCHAR(255)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "phone",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "email",
+          "type": "VARCHAR(120)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение по правам; справочник/связи БД, без нового CRUD-экрана"
+    },
+    {
+      "name": "organization_contact",
+      "label": "Контакты организаций",
+      "group": "Практики и работы",
+      "key": [
+        "org_contact_id"
+      ],
+      "fields": [
+        {
+          "name": "org_contact_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "organization_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "organization",
+            "column": "organization_id"
+          }
+        },
+        {
+          "name": "last_name",
+          "type": "VARCHAR(60)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "first_name",
+          "type": "VARCHAR(60)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "middle_name",
+          "type": "VARCHAR(60)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "job_title",
+          "type": "VARCHAR(150)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "phone",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "email",
+          "type": "VARCHAR(120)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "agent_proposal",
+      "policy": "INSERT/UPDATE через предложение агента; отдельной формы нет"
+    },
+    {
+      "name": "practice_placement",
+      "label": "Места практики",
+      "group": "Практики и работы",
+      "key": [
+        "placement_id"
+      ],
+      "fields": [
+        {
+          "name": "placement_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "student_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "student",
+            "column": "student_id"
+          }
+        },
+        {
+          "name": "item_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "curriculum_item",
+            "column": "item_id"
+          }
+        },
+        {
+          "name": "supervisor_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "teacher",
+            "column": "employee_id"
+          }
+        },
+        {
+          "name": "org_contact_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "organization_contact",
+            "column": "org_contact_id"
+          }
+        },
+        {
+          "name": "start_date",
+          "type": "DATE",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "end_date",
+          "type": "DATE",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "order_id",
+          "type": "INT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "academic_order",
+            "column": "order_id"
+          }
+        }
+      ],
+      "mode": "form",
+      "policy": "CRUD существующей формы и INSERT/UPDATE предложения агента"
+    },
+    {
+      "name": "academic_work",
+      "label": "Учебные работы",
+      "group": "Практики и работы",
+      "key": [
+        "work_id"
+      ],
+      "fields": [
+        {
+          "name": "work_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "student_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "student",
+            "column": "student_id"
+          }
+        },
+        {
+          "name": "item_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "curriculum_item",
+            "column": "item_id"
+          }
+        },
+        {
+          "name": "topic",
+          "type": "VARCHAR(400)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "supervisor_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "teacher",
+            "column": "employee_id"
+          }
+        },
+        {
+          "name": "reviewer_id",
+          "type": "INT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "teacher",
+            "column": "employee_id"
+          }
+        },
+        {
+          "name": "order_id",
+          "type": "INT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "academic_order",
+            "column": "order_id"
+          }
+        }
+      ],
+      "mode": "form",
+      "policy": "CRUD существующей формы и INSERT/UPDATE предложения агента"
+    },
+    {
+      "name": "document_request",
+      "label": "Заявки на документы",
+      "group": "Приказы и документы",
+      "key": [
+        "request_id"
+      ],
+      "fields": [
+        {
+          "name": "request_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "student_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "student",
+            "column": "student_id"
+          }
+        },
+        {
+          "name": "document_type_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "document_type",
+            "column": "document_type_id"
+          }
+        },
+        {
+          "name": "request_status_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "request_status",
+            "column": "request_status_id"
+          }
+        },
+        {
+          "name": "copies",
+          "type": "SMALLINT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "purpose",
+          "type": "VARCHAR(200)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "processed_by_id",
+          "type": "INT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "dean_office_staff",
+            "column": "employee_id"
+          }
+        },
+        {
+          "name": "completed_at",
+          "type": "TIMESTAMPTZ",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "form",
+      "policy": "CRUD существующей формы и INSERT/UPDATE предложения агента"
+    },
+    {
+      "name": "app_user",
+      "label": "Учётные записи",
+      "group": "Пользователи и аудит",
+      "key": [
+        "user_id"
+      ],
+      "fields": [
+        {
+          "name": "user_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "person_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "person",
+            "column": "person_id"
+          }
+        },
+        {
+          "name": "role_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "app_role",
+            "column": "role_id"
+          }
+        },
+        {
+          "name": "login",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "password_hash",
+          "type": "VARCHAR(255)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "last_login_at",
+          "type": "TIMESTAMPTZ",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "system",
+      "policy": "используется аутентификацией; пароль/хэш не выдаются; нового админского CRUD нет"
+    },
+    {
+      "name": "agent_intent",
+      "label": "Намерения агента",
+      "group": "Пользователи и аудит",
+      "key": [
+        "intent_code"
+      ],
+      "fields": [
+        {
+          "name": "intent_code",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "identity": false,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "description",
+          "type": "VARCHAR(200)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "operation",
+          "type": "CHAR(1)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "target_table",
+          "type": "VARCHAR(63)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "system",
+      "policy": "реестр намерений связывается с кодовыми командами; модель не меняет права"
+    },
+    {
+      "name": "agent_request",
+      "label": "Запросы агента",
+      "group": "Пользователи и аудит",
+      "key": [
+        "agent_request_id"
+      ],
+      "fields": [
+        {
+          "name": "agent_request_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "user_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "app_user",
+            "column": "user_id"
+          }
+        },
+        {
+          "name": "request_text",
+          "type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "intent_code",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "agent_intent",
+            "column": "intent_code"
+          }
+        },
+        {
+          "name": "response_text",
+          "type": "TEXT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "execution_ms",
+          "type": "INT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "system",
+      "policy": "заполняет оркестратор; доступное чтение журнала"
+    },
+    {
+      "name": "grade_correction",
+      "label": "Коррекции оценок",
+      "group": "Учебный процесс",
+      "key": [
+        "correction_id"
+      ],
+      "fields": [
+        {
+          "name": "correction_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "grade_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "grade",
+            "column": "grade_id"
+          }
+        },
+        {
+          "name": "old_points",
+          "type": "SMALLINT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "old_is_absent",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "new_points",
+          "type": "SMALLINT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "new_is_absent",
+          "type": "BOOLEAN",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "reason",
+          "type": "VARCHAR(500)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "requested_by_id",
+          "type": "INT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "app_user",
+            "column": "user_id"
+          }
+        },
+        {
+          "name": "requested_at",
+          "type": "TIMESTAMPTZ",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(10)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "decided_by_id",
+          "type": "INT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "app_user",
+            "column": "user_id"
+          }
+        },
+        {
+          "name": "decided_at",
+          "type": "TIMESTAMPTZ",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "decision_comment",
+          "type": "VARCHAR(500)",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "read",
+      "policy": "чтение; прямой UPDATE закрытой оценки запрещён, workflow решения не подключается как новый экран"
+    },
+    {
+      "name": "audit_log",
+      "label": "Аудит",
+      "group": "Пользователи и аудит",
+      "key": [
+        "audit_id"
+      ],
+      "fields": [
+        {
+          "name": "audit_id",
+          "type": "BIGINT",
+          "nullable": false,
+          "identity": true,
+          "primary": true,
+          "reference": null
+        },
+        {
+          "name": "table_name",
+          "type": "VARCHAR(63)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "record_key",
+          "type": "VARCHAR(200)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "operation",
+          "type": "CHAR(1)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "db_user",
+          "type": "VARCHAR(63)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "app_user_id",
+          "type": "INT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "app_user",
+            "column": "user_id"
+          }
+        },
+        {
+          "name": "agent_request_id",
+          "type": "INT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "agent_request",
+            "column": "agent_request_id"
+          }
+        },
+        {
+          "name": "changed_at",
+          "type": "TIMESTAMPTZ",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "system",
+      "policy": "создаёт триггер; только доступное чтение"
+    },
+    {
+      "name": "audit_log_detail",
+      "label": "Поля аудита",
+      "group": "Пользователи и аудит",
+      "key": [
+        "audit_id",
+        "column_name"
+      ],
+      "fields": [
+        {
+          "name": "audit_id",
+          "type": "BIGINT",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": {
+            "table": "audit_log",
+            "column": "audit_id"
+          }
+        },
+        {
+          "name": "column_name",
+          "type": "VARCHAR(63)",
+          "nullable": false,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "old_value",
+          "type": "TEXT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        },
+        {
+          "name": "new_value",
+          "type": "TEXT",
+          "nullable": true,
+          "identity": false,
+          "primary": false,
+          "reference": null
+        }
+      ],
+      "mode": "system",
+      "policy": "создаёт триггер; только доступное чтение; ключ audit_id + column_name"
+    }
+  ],
+  "views": [
+    "v_students",
+    "v_curriculum",
+    "v_teachers",
+    "v_employees",
+    "v_groups",
+    "v_schedule",
+    "v_schedule_calendar",
+    "v_schedule_hours",
+    "v_grades",
+    "v_last_result",
+    "v_performance",
+    "v_debtors",
+    "v_expulsion_risk",
+    "v_student_summary",
+    "v_student_rating",
+    "v_active_scholarships",
+    "v_teacher_load",
+    "v_document_queue",
+    "v_attendance_stats",
+    "v_student_orders",
+    "v_academic_leaves",
+    "v_practice",
+    "v_academic_works",
+    "v_student_contacts",
+    "v_audit",
+    "v_pending_orders",
+    "v_grade_corrections"
+  ],
+  "notice": "Структура извлечена из SQL. Политика изменений — проектное решение; каталог не является готовой реализацией прав."
+}
