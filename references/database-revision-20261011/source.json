@@ -1,0 +1,12 @@
+{
+  "source": "deanery_db revised 2026-10-11, revisions 1 and 2",
+  "sql_checks": 225,
+  "sha256": {
+    "01_schema.sql": "66c445a3c30db72a2fa30f608f45b45f8114dabd24c5c293fe058ec626847247",
+    "02_views_functions.sql": "6b9e7c1dc5239f39afe121f5277dc9c3c5fa0c998b80dd23ceebf3b1f17d4d35",
+    "03_seed.sql": "fc079078a357cb71009e22fbec68e06ea029f508b7bcb71d4ffaf31c7ebb674b",
+    "05_roles_security.sql": "f6d4c3179028b540544a53b98646c866a05de90655905a877b2ef6c99119eed5",
+    "06_tests.sql": "1e96994912e321eded91226664a8c3f6b3682d1bd858e4bbacc71c2b1d420ea3",
+    "REVIEW_FIXES.md": "cd604f7bab6a8abd52063d67d081aac790692c4fd9af82b2c7b76243d48b7b77"
+  }
+}

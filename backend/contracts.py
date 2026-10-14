@@ -28,6 +28,7 @@ class Me(ApiModel):
     institute_ids: list[SafeId]
     student_id: SafeId | None
     teacher_id: SafeId | None
+    must_change_password: bool = False
 
 
 class LoginResponse(ApiModel):
@@ -158,6 +159,13 @@ class ProposalDecisionRequest(ApiModel):
     approve: Annotated[bool, Field(strict=True)]
     reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=10, max_length=2000)]
     expected_version: Annotated[int, Field(strict=True, ge=1, le=2**31 - 1)] | None = None
+    picked_item_ids: Annotated[list[Annotated[int,Field(strict=True,gt=0,le=2**31-1)]],Field(min_length=1,max_length=200)] | None = None
+
+    @model_validator(mode='after')
+    def unique_items(self):
+        if self.picked_item_ids is not None and len(set(self.picked_item_ids))!=len(self.picked_item_ids):
+            raise ValueError('Номера строк должны быть уникальными')
+        return self
 
 
 class ProposalAssignmentRequest(ApiModel):
@@ -171,10 +179,24 @@ class GradeCorrectionRequest(ApiModel):
     record_book: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20)]
     new_points: Annotated[int, Field(strict=True, gt=0, le=32767)] | None
     new_is_absent: Annotated[bool, Field(strict=True)]
-    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
 
     @model_validator(mode="after")
     def validate_absence(self):
         if self.new_points is not None and self.new_is_absent:
             raise ValueError("Баллы и неявка не могут быть указаны одновременно")
+        return self
+
+
+class ManualGradeCorrectionRequest(ApiModel):
+    sheet_id: Annotated[int, Field(strict=True, gt=0, le=2**31-1)]
+    student_id: Annotated[int, Field(strict=True, gt=0, le=2**31-1)]
+    new_points: Annotated[int, Field(strict=True, ge=25, le=54)] | None
+    new_is_absent: Annotated[bool, Field(strict=True)]
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=10, max_length=2000)]
+
+    @model_validator(mode='after')
+    def valid_absence(self):
+        if self.new_points is not None and self.new_is_absent:
+            raise ValueError('Баллы и неявка несовместимы')
         return self

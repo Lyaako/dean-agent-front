@@ -6,6 +6,7 @@ RUN pip install --no-cache-dir -r requirements.txt && pip check
 COPY backend/ /app/backend/
 COPY alembic.ini /app/alembic.ini
 COPY references/database/03_seed.sql /app/references/database/03_seed.sql
+COPY references/database-revision-20261011/03_seed.sql /app/references/database-revision-20261011/03_seed.sql
 COPY deploy/run_service.py deploy/setup_database.py /app/deploy/
 RUN useradd --uid 10001 --no-create-home app
 USER 10001:10001

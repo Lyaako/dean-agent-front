@@ -26,6 +26,9 @@ references/**
 !references/database/
 references/database/**
 !references/database/03_seed.sql
+!references/database-revision-20261011/
+references/database-revision-20261011/**
+!references/database-revision-20261011/03_seed.sql
 **/__pycache__/**
 **/*.pyc
 **/.local/**

@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import secrets
+import re
 
 
 def prepare(root):
@@ -24,10 +25,10 @@ def prepare(root):
         (root / 'deploy/deployment.env.example').read_text(encoding='utf-8').replace('KNOWLEDGE_BGE_URL=\n', 'KNOWLEDGE_BGE_URL=http://bge:8087\n'),
         json.dumps({'host': 'db', 'port': 5432, 'dbname': 'deanery_p13', 'user': 'postgres', 'password': password}, indent=2),
         password,
+        re.sub(r'(?m)^AGENT_PROMPT_FINGERPRINT=.*$', 'AGENT_PROMPT_FINGERPRINT=' + '0' * 64,
         (root / 'backend/agent.env.example').read_text(encoding='utf-8')
             .replace('AGENT_DATABASE_FILE=.local/p08-agent-connection.json', 'AGENT_DATABASE_FILE=/run/secrets/agent.json')
-            .replace('http://127.0.0.1:1234/v1', 'http://host.docker.internal:1234/v1')
-            .replace('a676c2d9d27aa3bea5a34f3b895828bb967b8aee82bb9a6c7eaac75ba3f75e34', '0' * 64)
+            .replace('http://127.0.0.1:1234/v1', 'http://host.docker.internal:1234/v1'))
     ]
     for path, text in zip(outputs, content, strict=True):
         with path.open('x', encoding='utf-8', newline='\n') as stream:

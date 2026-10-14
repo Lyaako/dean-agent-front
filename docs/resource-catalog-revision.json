@@ -1,0 +1,2684 @@
+{
+  "source": "database-revision-20261011",
+  "approved_exception": "grade_correction.reason VARCHAR(2000)",
+  "tables": [
+    {
+      "name": "academic_degree",
+      "fields": [
+        {
+          "name": "degree_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор степени"
+        },
+        {
+          "name": "name",
+          "type": "character varying(100)",
+          "nullable": false,
+          "identity": false,
+          "description": "Полное название степени"
+        },
+        {
+          "name": "short_name",
+          "type": "character varying(20)",
+          "nullable": false,
+          "identity": false,
+          "description": "Сокращение (к.т.н., д.ф.-м.н.)"
+        }
+      ],
+      "key": [
+        "degree_id"
+      ]
+    },
+    {
+      "name": "academic_leave",
+      "fields": [
+        {
+          "name": "leave_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор отпуска"
+        },
+        {
+          "name": "student_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Студент (должен быть включён в приказ)"
+        },
+        {
+          "name": "reason_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Причина отпуска"
+        },
+        {
+          "name": "order_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Приказ о предоставлении отпуска"
+        },
+        {
+          "name": "start_date",
+          "type": "date",
+          "nullable": false,
+          "identity": false,
+          "description": "Начало отпуска"
+        },
+        {
+          "name": "end_date",
+          "type": "date",
+          "nullable": false,
+          "identity": false,
+          "description": "Плановое окончание (не более 2 лет); фактическое — день перед выходом, если вышел раньше"
+        },
+        {
+          "name": "return_order_id",
+          "type": "integer",
+          "nullable": true,
+          "identity": false,
+          "description": "Приказ о выходе; дата выхода — дата вступления приказа в силу. Досрочный выход освобождает остаток периода"
+        }
+      ],
+      "key": [
+        "leave_id"
+      ]
+    },
+    {
+      "name": "academic_order",
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор приказа"
+        },
+        {
+          "name": "order_number",
+          "type": "character varying(30)",
+          "nullable": false,
+          "identity": false,
+          "description": "Номер приказа"
+        },
+        {
+          "name": "order_date",
+          "type": "date",
+          "nullable": false,
+          "identity": false,
+          "description": "Дата подписания"
+        },
+        {
+          "name": "order_type_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Тип приказа"
+        },
+        {
+          "name": "institute_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Институт, к которому относится приказ"
+        },
+        {
+          "name": "signed_by_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Кто подписал"
+        },
+        {
+          "name": "title",
+          "type": "character varying(300)",
+          "nullable": false,
+          "identity": false,
+          "description": "Заголовок приказа"
+        },
+        {
+          "name": "effective_date",
+          "type": "date",
+          "nullable": false,
+          "identity": false,
+          "description": "Дата вступления в силу: изменения по приказу вносятся в этот день, не раньше"
+        }
+      ],
+      "key": [
+        "order_id"
+      ]
+    },
+    {
+      "name": "academic_term",
+      "fields": [
+        {
+          "name": "term_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор семестра"
+        },
+        {
+          "name": "name",
+          "type": "character varying(40)",
+          "nullable": false,
+          "identity": false,
+          "description": "Название: учебный год и семестр"
+        },
+        {
+          "name": "start_date",
+          "type": "date",
+          "nullable": false,
+          "identity": false,
+          "description": "Первый день занятий (от него считаются недели, 1-я — нечётная)"
+        },
+        {
+          "name": "end_date",
+          "type": "date",
+          "nullable": false,
+          "identity": false,
+          "description": "Последний день занятий"
+        },
+        {
+          "name": "session_start",
+          "type": "date",
+          "nullable": false,
+          "identity": false,
+          "description": "Начало экзаменационной сессии"
+        },
+        {
+          "name": "session_end",
+          "type": "date",
+          "nullable": false,
+          "identity": false,
+          "description": "Окончание сессии"
+        }
+      ],
+      "key": [
+        "term_id"
+      ]
+    },
+    {
+      "name": "academic_title",
+      "fields": [
+        {
+          "name": "title_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор звания"
+        },
+        {
+          "name": "name",
+          "type": "character varying(50)",
+          "nullable": false,
+          "identity": false,
+          "description": "Название звания (доцент, профессор)"
+        }
+      ],
+      "key": [
+        "title_id"
+      ]
+    },
+    {
+      "name": "academic_work",
+      "fields": [
+        {
+          "name": "work_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор работы"
+        },
+        {
+          "name": "student_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Студент"
+        },
+        {
+          "name": "item_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Курсовая или ВКР из учебного плана студента"
+        },
+        {
+          "name": "topic",
+          "type": "character varying(400)",
+          "nullable": false,
+          "identity": false,
+          "description": "Тема работы"
+        },
+        {
+          "name": "supervisor_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Научный руководитель"
+        },
+        {
+          "name": "reviewer_id",
+          "type": "integer",
+          "nullable": true,
+          "identity": false,
+          "description": "Рецензент"
+        },
+        {
+          "name": "order_id",
+          "type": "integer",
+          "nullable": true,
+          "identity": false,
+          "description": "Приказ об утверждении темы"
+        }
+      ],
+      "key": [
+        "work_id"
+      ]
+    },
+    {
+      "name": "agent_intent",
+      "fields": [
+        {
+          "name": "intent_code",
+          "type": "character varying(50)",
+          "nullable": false,
+          "identity": false,
+          "description": "Код намерения (естественный ключ)"
+        },
+        {
+          "name": "description",
+          "type": "character varying(200)",
+          "nullable": false,
+          "identity": false,
+          "description": "Что делает агент по этому намерению"
+        },
+        {
+          "name": "operation",
+          "type": "character(1)",
+          "nullable": false,
+          "identity": false,
+          "description": "CRUD-операция: C, R, U или D"
+        },
+        {
+          "name": "target_table",
+          "type": "character varying(63)",
+          "nullable": false,
+          "identity": false,
+          "description": "Таблица или представление, с которым работает агент"
+        }
+      ],
+      "key": [
+        "intent_code"
+      ]
+    },
+    {
+      "name": "agent_request",
+      "fields": [
+        {
+          "name": "agent_request_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор запроса"
+        },
+        {
+          "name": "user_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Кто обратился к агенту"
+        },
+        {
+          "name": "request_text",
+          "type": "text",
+          "nullable": false,
+          "identity": false,
+          "description": "Запрос на естественном языке"
+        },
+        {
+          "name": "intent_code",
+          "type": "character varying(50)",
+          "nullable": true,
+          "identity": false,
+          "description": "Распознанное намерение; пусто, если агент не понял запрос"
+        },
+        {
+          "name": "response_text",
+          "type": "text",
+          "nullable": true,
+          "identity": false,
+          "description": "Ответ агента"
+        },
+        {
+          "name": "status",
+          "type": "character varying(20)",
+          "nullable": false,
+          "identity": false,
+          "description": "pending, success, error, rejected"
+        },
+        {
+          "name": "execution_ms",
+          "type": "integer",
+          "nullable": true,
+          "identity": false,
+          "description": "Время выполнения, мс"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "identity": false,
+          "description": "Время запроса"
+        }
+      ],
+      "key": [
+        "agent_request_id"
+      ]
+    },
+    {
+      "name": "app_role",
+      "fields": [
+        {
+          "name": "role_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор роли"
+        },
+        {
+          "name": "code",
+          "type": "character varying(30)",
+          "nullable": false,
+          "identity": false,
+          "description": "Программный код роли (director, dean_staff, teacher …)"
+        },
+        {
+          "name": "name",
+          "type": "character varying(100)",
+          "nullable": false,
+          "identity": false,
+          "description": "Название роли"
+        }
+      ],
+      "key": [
+        "role_id"
+      ]
+    },
+    {
+      "name": "app_user",
+      "fields": [
+        {
+          "name": "user_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор пользователя"
+        },
+        {
+          "name": "person_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Персона (1:1)"
+        },
+        {
+          "name": "role_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Роль в системе"
+        },
+        {
+          "name": "login",
+          "type": "character varying(50)",
+          "nullable": false,
+          "identity": false,
+          "description": "Логин"
+        },
+        {
+          "name": "password_hash",
+          "type": "character varying(255)",
+          "nullable": false,
+          "identity": false,
+          "description": "Хэш пароля (bcrypt/argon2), не сам пароль"
+        },
+        {
+          "name": "is_active",
+          "type": "boolean",
+          "nullable": false,
+          "identity": false,
+          "description": "Учётная запись активна"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "identity": false,
+          "description": "Дата создания учётной записи"
+        },
+        {
+          "name": "last_login_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "identity": false,
+          "description": "Последний вход"
+        },
+        {
+          "name": "db_login",
+          "type": "character varying(63)",
+          "nullable": true,
+          "identity": false,
+          "description": "Личная роль PostgreSQL, привязанная к учётной записи"
+        }
+      ],
+      "key": [
+        "user_id"
+      ]
+    },
+    {
+      "name": "attendance",
+      "fields": [
+        {
+          "name": "attendance_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор отметки"
+        },
+        {
+          "name": "slot_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Занятие по расписанию"
+        },
+        {
+          "name": "student_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Студент"
+        },
+        {
+          "name": "lesson_date",
+          "type": "date",
+          "nullable": false,
+          "identity": false,
+          "description": "Дата занятия"
+        },
+        {
+          "name": "is_present",
+          "type": "boolean",
+          "nullable": false,
+          "identity": false,
+          "description": "Присутствовал ли студент"
+        },
+        {
+          "name": "absence_reason",
+          "type": "character varying(200)",
+          "nullable": true,
+          "identity": false,
+          "description": "Причина пропуска"
+        }
+      ],
+      "key": [
+        "attendance_id"
+      ]
+    },
+    {
+      "name": "audit_log",
+      "fields": [
+        {
+          "name": "audit_id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор события"
+        },
+        {
+          "name": "table_name",
+          "type": "character varying(63)",
+          "nullable": false,
+          "identity": false,
+          "description": "Изменённая таблица"
+        },
+        {
+          "name": "record_key",
+          "type": "character varying(200)",
+          "nullable": false,
+          "identity": false,
+          "description": "Первичный ключ изменённой записи"
+        },
+        {
+          "name": "operation",
+          "type": "character(1)",
+          "nullable": false,
+          "identity": false,
+          "description": "I — вставка, U — изменение, D — удаление"
+        },
+        {
+          "name": "db_user",
+          "type": "character varying(63)",
+          "nullable": false,
+          "identity": false,
+          "description": "Роль PostgreSQL, выполнившая изменение"
+        },
+        {
+          "name": "app_user_id",
+          "type": "integer",
+          "nullable": true,
+          "identity": false,
+          "description": "Пользователь системы (из параметра сессии app.user_id)"
+        },
+        {
+          "name": "agent_request_id",
+          "type": "integer",
+          "nullable": true,
+          "identity": false,
+          "description": "Запрос к агенту, который привёл к изменению (app.agent_request_id)"
+        },
+        {
+          "name": "changed_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "identity": false,
+          "description": "Время изменения"
+        }
+      ],
+      "key": [
+        "audit_id"
+      ]
+    },
+    {
+      "name": "audit_log_detail",
+      "fields": [
+        {
+          "name": "audit_id",
+          "type": "bigint",
+          "nullable": false,
+          "identity": false,
+          "description": "Событие аудита"
+        },
+        {
+          "name": "column_name",
+          "type": "character varying(63)",
+          "nullable": false,
+          "identity": false,
+          "description": "Изменённый атрибут"
+        },
+        {
+          "name": "old_value",
+          "type": "text",
+          "nullable": true,
+          "identity": false,
+          "description": "Значение до изменения (персональные данные скрыты)"
+        },
+        {
+          "name": "new_value",
+          "type": "text",
+          "nullable": true,
+          "identity": false,
+          "description": "Значение после изменения (персональные данные скрыты)"
+        }
+      ],
+      "key": [
+        "audit_id",
+        "column_name"
+      ]
+    },
+    {
+      "name": "classroom",
+      "fields": [
+        {
+          "name": "classroom_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор аудитории"
+        },
+        {
+          "name": "building",
+          "type": "character varying(20)",
+          "nullable": false,
+          "identity": false,
+          "description": "Корпус"
+        },
+        {
+          "name": "room_number",
+          "type": "character varying(10)",
+          "nullable": false,
+          "identity": false,
+          "description": "Номер аудитории"
+        },
+        {
+          "name": "capacity",
+          "type": "smallint",
+          "nullable": false,
+          "identity": false,
+          "description": "Число мест"
+        },
+        {
+          "name": "room_kind",
+          "type": "character varying(30)",
+          "nullable": false,
+          "identity": false,
+          "description": "Тип: lecture, practice, computer, lab"
+        },
+        {
+          "name": "has_projector",
+          "type": "boolean",
+          "nullable": false,
+          "identity": false,
+          "description": "Есть ли проектор"
+        }
+      ],
+      "key": [
+        "classroom_id"
+      ]
+    },
+    {
+      "name": "contact_person",
+      "fields": [
+        {
+          "name": "contact_person_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор контактного лица"
+        },
+        {
+          "name": "last_name",
+          "type": "character varying(60)",
+          "nullable": false,
+          "identity": false,
+          "description": "Фамилия"
+        },
+        {
+          "name": "first_name",
+          "type": "character varying(60)",
+          "nullable": false,
+          "identity": false,
+          "description": "Имя"
+        },
+        {
+          "name": "middle_name",
+          "type": "character varying(60)",
+          "nullable": true,
+          "identity": false,
+          "description": "Отчество"
+        },
+        {
+          "name": "phone",
+          "type": "character varying(20)",
+          "nullable": true,
+          "identity": false,
+          "description": "Телефон может быть общим у нескольких контактных лиц"
+        },
+        {
+          "name": "email",
+          "type": "character varying(120)",
+          "nullable": true,
+          "identity": false,
+          "description": "Электронная почта (уникальна)"
+        }
+      ],
+      "key": [
+        "contact_person_id"
+      ]
+    },
+    {
+      "name": "contact_relation",
+      "fields": [
+        {
+          "name": "relation_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор степени родства"
+        },
+        {
+          "name": "name",
+          "type": "character varying(50)",
+          "nullable": false,
+          "identity": false,
+          "description": "Мать, отец, опекун …"
+        }
+      ],
+      "key": [
+        "relation_id"
+      ]
+    },
+    {
+      "name": "control_type",
+      "fields": [
+        {
+          "name": "control_type_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор формы контроля"
+        },
+        {
+          "name": "name",
+          "type": "character varying(50)",
+          "nullable": false,
+          "identity": false,
+          "description": "Экзамен, зачёт, дифференцированный зачёт, курсовая работа, защита ВКР"
+        },
+        {
+          "name": "is_graded",
+          "type": "boolean",
+          "nullable": false,
+          "identity": false,
+          "description": "Итог — оценка 3/4/5 (иначе зачтено / не зачтено)"
+        },
+        {
+          "name": "is_exam",
+          "type": "boolean",
+          "nullable": false,
+          "identity": false,
+          "description": "В отчёте об успеваемости показывается в столбце «Экзамен» (иначе «Зачёт»)"
+        }
+      ],
+      "key": [
+        "control_type_id"
+      ]
+    },
+    {
+      "name": "curriculum",
+      "fields": [
+        {
+          "name": "curriculum_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор учебного плана"
+        },
+        {
+          "name": "program_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Образовательная программа (направление + профиль)"
+        },
+        {
+          "name": "study_form_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Форма обучения"
+        },
+        {
+          "name": "start_year",
+          "type": "smallint",
+          "nullable": false,
+          "identity": false,
+          "description": "Год набора"
+        },
+        {
+          "name": "duration_years",
+          "type": "numeric(2,1)",
+          "nullable": false,
+          "identity": false,
+          "description": "Нормативный срок обучения, лет"
+        },
+        {
+          "name": "approved_date",
+          "type": "date",
+          "nullable": true,
+          "identity": false,
+          "description": "Дата утверждения плана"
+        }
+      ],
+      "key": [
+        "curriculum_id"
+      ]
+    },
+    {
+      "name": "curriculum_item",
+      "fields": [
+        {
+          "name": "item_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор строки плана"
+        },
+        {
+          "name": "curriculum_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Учебный план"
+        },
+        {
+          "name": "discipline_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Дисциплина"
+        },
+        {
+          "name": "semester",
+          "type": "smallint",
+          "nullable": false,
+          "identity": false,
+          "description": "Номер семестра"
+        },
+        {
+          "name": "control_type_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Форма контроля"
+        },
+        {
+          "name": "lecture_hours",
+          "type": "smallint",
+          "nullable": false,
+          "identity": false,
+          "description": "Часы лекций"
+        },
+        {
+          "name": "practice_hours",
+          "type": "smallint",
+          "nullable": false,
+          "identity": false,
+          "description": "Часы практик"
+        },
+        {
+          "name": "lab_hours",
+          "type": "smallint",
+          "nullable": false,
+          "identity": false,
+          "description": "Часы лабораторных"
+        },
+        {
+          "name": "self_study_hours",
+          "type": "smallint",
+          "nullable": false,
+          "identity": false,
+          "description": "Часы самостоятельной работы"
+        },
+        {
+          "name": "module_count",
+          "type": "smallint",
+          "nullable": false,
+          "identity": false,
+          "description": "Сколько промежуточных модулей (контрольных) по дисциплине: 0–2"
+        }
+      ],
+      "key": [
+        "item_id"
+      ]
+    },
+    {
+      "name": "dean_office_staff",
+      "fields": [
+        {
+          "name": "employee_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Сотрудник (одновременно первичный и внешний ключ)"
+        },
+        {
+          "name": "institute_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Институт, который курирует сотрудник"
+        },
+        {
+          "name": "office_room",
+          "type": "character varying(20)",
+          "nullable": true,
+          "identity": false,
+          "description": "Кабинет"
+        },
+        {
+          "name": "duties",
+          "type": "text",
+          "nullable": true,
+          "identity": false,
+          "description": "Зона ответственности"
+        }
+      ],
+      "key": [
+        "employee_id"
+      ]
+    },
+    {
+      "name": "department",
+      "fields": [
+        {
+          "name": "department_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор кафедры"
+        },
+        {
+          "name": "institute_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Институт, в который входит кафедра"
+        },
+        {
+          "name": "name",
+          "type": "character varying(200)",
+          "nullable": false,
+          "identity": false,
+          "description": "Полное название кафедры"
+        },
+        {
+          "name": "short_name",
+          "type": "character varying(20)",
+          "nullable": false,
+          "identity": false,
+          "description": "Аббревиатура кафедры"
+        },
+        {
+          "name": "head_id",
+          "type": "integer",
+          "nullable": true,
+          "identity": false,
+          "description": "Заведующий кафедрой"
+        },
+        {
+          "name": "office_room",
+          "type": "character varying(20)",
+          "nullable": true,
+          "identity": false,
+          "description": "Аудитория кафедры"
+        },
+        {
+          "name": "phone",
+          "type": "character varying(20)",
+          "nullable": true,
+          "identity": false,
+          "description": "Телефон кафедры"
+        }
+      ],
+      "key": [
+        "department_id"
+      ]
+    },
+    {
+      "name": "discipline",
+      "fields": [
+        {
+          "name": "discipline_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор дисциплины"
+        },
+        {
+          "name": "name",
+          "type": "character varying(200)",
+          "nullable": false,
+          "identity": false,
+          "description": "Название дисциплины"
+        },
+        {
+          "name": "department_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Кафедра, за которой закреплена дисциплина"
+        },
+        {
+          "name": "kind",
+          "type": "character varying(20)",
+          "nullable": false,
+          "identity": false,
+          "description": "Вид: discipline — дисциплина, coursework — курсовая, practice — практика, final_attestation — ГИА/ВКР"
+        }
+      ],
+      "key": [
+        "discipline_id"
+      ]
+    },
+    {
+      "name": "document_request",
+      "fields": [
+        {
+          "name": "request_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор заявки"
+        },
+        {
+          "name": "student_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Студент-заявитель"
+        },
+        {
+          "name": "document_type_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Вид документа"
+        },
+        {
+          "name": "request_status_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Статус заявки"
+        },
+        {
+          "name": "copies",
+          "type": "smallint",
+          "nullable": false,
+          "identity": false,
+          "description": "Количество экземпляров"
+        },
+        {
+          "name": "purpose",
+          "type": "character varying(200)",
+          "nullable": true,
+          "identity": false,
+          "description": "Куда требуется справка"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "identity": false,
+          "description": "Когда подана заявка"
+        },
+        {
+          "name": "processed_by_id",
+          "type": "integer",
+          "nullable": true,
+          "identity": false,
+          "description": "Сотрудник деканата, обработавший заявку"
+        },
+        {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "identity": false,
+          "description": "Когда заявка завершена (ставит триггер)"
+        }
+      ],
+      "key": [
+        "request_id"
+      ]
+    },
+    {
+      "name": "document_type",
+      "fields": [
+        {
+          "name": "document_type_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор вида документа"
+        },
+        {
+          "name": "name",
+          "type": "character varying(150)",
+          "nullable": false,
+          "identity": false,
+          "description": "Название документа"
+        },
+        {
+          "name": "processing_days",
+          "type": "smallint",
+          "nullable": false,
+          "identity": false,
+          "description": "Нормативный срок подготовки, дней"
+        }
+      ],
+      "key": [
+        "document_type_id"
+      ]
+    },
+    {
+      "name": "education_level",
+      "fields": [
+        {
+          "name": "level_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор уровня"
+        },
+        {
+          "name": "name",
+          "type": "character varying(50)",
+          "nullable": false,
+          "identity": false,
+          "description": "Бакалавриат, магистратура, специалитет, аспирантура"
+        },
+        {
+          "name": "group_letter",
+          "type": "character(1)",
+          "nullable": true,
+          "identity": false,
+          "description": "Третья буква шифра группы: Б — бакалавриат, М — магистратура, С — специалитет"
+        }
+      ],
+      "key": [
+        "level_id"
+      ]
+    },
+    {
+      "name": "employee",
+      "fields": [
+        {
+          "name": "employee_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор сотрудника"
+        },
+        {
+          "name": "person_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Персона (1:1)"
+        },
+        {
+          "name": "personnel_number",
+          "type": "character varying(20)",
+          "nullable": false,
+          "identity": false,
+          "description": "Табельный номер"
+        },
+        {
+          "name": "position_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Должность"
+        },
+        {
+          "name": "employment_rate",
+          "type": "numeric(3,2)",
+          "nullable": false,
+          "identity": false,
+          "description": "Доля ставки (0.25–1.50)"
+        },
+        {
+          "name": "hire_date",
+          "type": "date",
+          "nullable": false,
+          "identity": false,
+          "description": "Дата приёма на работу"
+        },
+        {
+          "name": "dismissal_date",
+          "type": "date",
+          "nullable": true,
+          "identity": false,
+          "description": "Дата увольнения; пусто — работает"
+        }
+      ],
+      "key": [
+        "employee_id"
+      ]
+    },
+    {
+      "name": "funding_type",
+      "fields": [
+        {
+          "name": "funding_type_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор основы обучения"
+        },
+        {
+          "name": "name",
+          "type": "character varying(50)",
+          "nullable": false,
+          "identity": false,
+          "description": "Бюджет или договор"
+        }
+      ],
+      "key": [
+        "funding_type_id"
+      ]
+    },
+    {
+      "name": "grade",
+      "fields": [
+        {
+          "name": "grade_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор оценки"
+        },
+        {
+          "name": "sheet_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Ведомость"
+        },
+        {
+          "name": "student_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Студент"
+        },
+        {
+          "name": "points",
+          "type": "smallint",
+          "nullable": true,
+          "identity": false,
+          "description": "Баллы (25–54 по текущей шкале); пусто — не аттестован или неявка"
+        },
+        {
+          "name": "is_absent",
+          "type": "boolean",
+          "nullable": false,
+          "identity": false,
+          "description": "Неявка"
+        }
+      ],
+      "key": [
+        "grade_id"
+      ]
+    },
+    {
+      "name": "grade_correction",
+      "fields": [
+        {
+          "name": "correction_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор заявки"
+        },
+        {
+          "name": "grade_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Исправляемая оценка"
+        },
+        {
+          "name": "old_points",
+          "type": "smallint",
+          "nullable": true,
+          "identity": false,
+          "description": "Баллы на момент подачи заявки"
+        },
+        {
+          "name": "old_is_absent",
+          "type": "boolean",
+          "nullable": false,
+          "identity": false,
+          "description": "Неявка на момент подачи заявки"
+        },
+        {
+          "name": "new_points",
+          "type": "smallint",
+          "nullable": true,
+          "identity": false,
+          "description": "Правильные баллы (пусто — не аттестован или неявка)"
+        },
+        {
+          "name": "new_is_absent",
+          "type": "boolean",
+          "nullable": false,
+          "identity": false,
+          "description": "Правильная отметка о неявке"
+        },
+        {
+          "name": "reason",
+          "type": "character varying(2000)",
+          "nullable": false,
+          "identity": false,
+          "description": "Основание исправления"
+        },
+        {
+          "name": "requested_by_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Кто подал заявку (пользователь системы)"
+        },
+        {
+          "name": "requested_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "identity": false,
+          "description": "Когда подана"
+        },
+        {
+          "name": "status",
+          "type": "character varying(10)",
+          "nullable": false,
+          "identity": false,
+          "description": "pending — ждёт решения, applied — одобрена и применена, rejected — отклонена"
+        },
+        {
+          "name": "decided_by_id",
+          "type": "integer",
+          "nullable": true,
+          "identity": false,
+          "description": "Кто принял решение: директор или заместитель директора института (не автор заявки)"
+        },
+        {
+          "name": "decided_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "identity": false,
+          "description": "Когда принято решение"
+        },
+        {
+          "name": "decision_comment",
+          "type": "character varying(500)",
+          "nullable": true,
+          "identity": false,
+          "description": "Комментарий к решению (при отказе обязателен)"
+        }
+      ],
+      "key": [
+        "correction_id"
+      ]
+    },
+    {
+      "name": "grade_sheet",
+      "fields": [
+        {
+          "name": "sheet_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор ведомости"
+        },
+        {
+          "name": "sheet_number",
+          "type": "character varying(20)",
+          "nullable": false,
+          "identity": false,
+          "description": "Номер ведомости"
+        },
+        {
+          "name": "item_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Строка учебного плана (дисциплина + семестр + форма контроля)"
+        },
+        {
+          "name": "group_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Группа"
+        },
+        {
+          "name": "examiner_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Экзаменатор"
+        },
+        {
+          "name": "stage",
+          "type": "character varying(10)",
+          "nullable": false,
+          "identity": false,
+          "description": "Этап контроля: module_1, module_2 — промежуточные модули; final — экзамен или зачёт"
+        },
+        {
+          "name": "sheet_kind",
+          "type": "character varying(20)",
+          "nullable": false,
+          "identity": false,
+          "description": "Вид: main — основная, retake — пересдача, commission — комиссия, individual — индивидуальная"
+        },
+        {
+          "name": "issue_date",
+          "type": "date",
+          "nullable": false,
+          "identity": false,
+          "description": "Дата выдачи ведомости"
+        },
+        {
+          "name": "exam_date",
+          "type": "date",
+          "nullable": true,
+          "identity": false,
+          "description": "Дата экзамена / зачёта — она же дата всех оценок ведомости"
+        },
+        {
+          "name": "closed_date",
+          "type": "date",
+          "nullable": true,
+          "identity": false,
+          "description": "Дата закрытия ведомости"
+        },
+        {
+          "name": "status",
+          "type": "character varying(10)",
+          "nullable": false,
+          "identity": false,
+          "description": "open — открыта, closed — закрыта, cancelled — аннулирована"
+        }
+      ],
+      "key": [
+        "sheet_id"
+      ]
+    },
+    {
+      "name": "holiday",
+      "fields": [
+        {
+          "name": "holiday_date",
+          "type": "date",
+          "nullable": false,
+          "identity": false,
+          "description": "Дата"
+        },
+        {
+          "name": "name",
+          "type": "character varying(100)",
+          "nullable": false,
+          "identity": false,
+          "description": "Название праздника"
+        }
+      ],
+      "key": [
+        "holiday_date"
+      ]
+    },
+    {
+      "name": "institute",
+      "fields": [
+        {
+          "name": "institute_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор института"
+        },
+        {
+          "name": "name",
+          "type": "character varying(200)",
+          "nullable": false,
+          "identity": false,
+          "description": "Полное название института"
+        },
+        {
+          "name": "short_name",
+          "type": "character varying(20)",
+          "nullable": false,
+          "identity": false,
+          "description": "Аббревиатура (ИИТ, ИСТМ …)"
+        },
+        {
+          "name": "group_letter",
+          "type": "character(1)",
+          "nullable": true,
+          "identity": false,
+          "description": "Первая буква шифра групп института: И — ИИТ; пусто — буква не задана, не проверяется"
+        },
+        {
+          "name": "director_id",
+          "type": "integer",
+          "nullable": true,
+          "identity": false,
+          "description": "Директор института"
+        },
+        {
+          "name": "office_room",
+          "type": "character varying(20)",
+          "nullable": true,
+          "identity": false,
+          "description": "Кабинет дирекции"
+        },
+        {
+          "name": "phone",
+          "type": "character varying(20)",
+          "nullable": true,
+          "identity": false,
+          "description": "Телефон дирекции"
+        },
+        {
+          "name": "email",
+          "type": "character varying(120)",
+          "nullable": true,
+          "identity": false,
+          "description": "Почта дирекции"
+        }
+      ],
+      "key": [
+        "institute_id"
+      ]
+    },
+    {
+      "name": "leave_reason",
+      "fields": [
+        {
+          "name": "reason_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор причины"
+        },
+        {
+          "name": "name",
+          "type": "character varying(100)",
+          "nullable": false,
+          "identity": false,
+          "description": "Медицинские показания, семейные обстоятельства, призыв на военную службу …"
+        }
+      ],
+      "key": [
+        "reason_id"
+      ]
+    },
+    {
+      "name": "lesson_type",
+      "fields": [
+        {
+          "name": "lesson_type_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор вида занятия"
+        },
+        {
+          "name": "name",
+          "type": "character varying(50)",
+          "nullable": false,
+          "identity": false,
+          "description": "Лекция, практика, лабораторная"
+        }
+      ],
+      "key": [
+        "lesson_type_id"
+      ]
+    },
+    {
+      "name": "order_student",
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Приказ"
+        },
+        {
+          "name": "student_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Студент"
+        },
+        {
+          "name": "new_group_id",
+          "type": "integer",
+          "nullable": true,
+          "identity": false,
+          "description": "Новая группа (перевод, восстановление, выход из академа в другую группу)"
+        },
+        {
+          "name": "reason",
+          "type": "character varying(300)",
+          "nullable": true,
+          "identity": false,
+          "description": "Основание"
+        },
+        {
+          "name": "applied_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "identity": false,
+          "description": "Когда приказ исполнен для студента; пусто — запланирован, ждёт даты вступления в силу"
+        }
+      ],
+      "key": [
+        "order_id",
+        "student_id"
+      ]
+    },
+    {
+      "name": "order_type",
+      "fields": [
+        {
+          "name": "order_type_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор типа приказа"
+        },
+        {
+          "name": "code",
+          "type": "character varying(30)",
+          "nullable": false,
+          "identity": false,
+          "description": "Стабильный код типа (enroll, expel, transfer, leave …) для процедур и агента"
+        },
+        {
+          "name": "name",
+          "type": "character varying(100)",
+          "nullable": false,
+          "identity": false,
+          "description": "Зачисление, отчисление, перевод, академический отпуск …"
+        },
+        {
+          "name": "number_suffix",
+          "type": "character varying(10)",
+          "nullable": false,
+          "identity": false,
+          "description": "Суффикс номера приказа (-с, -ст)"
+        }
+      ],
+      "key": [
+        "order_type_id"
+      ]
+    },
+    {
+      "name": "organization",
+      "fields": [
+        {
+          "name": "organization_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор организации"
+        },
+        {
+          "name": "name",
+          "type": "character varying(200)",
+          "nullable": false,
+          "identity": false,
+          "description": "Название организации"
+        },
+        {
+          "name": "inn",
+          "type": "character varying(12)",
+          "nullable": false,
+          "identity": false,
+          "description": "ИНН (10 цифр — юрлицо, 12 — ИП)"
+        },
+        {
+          "name": "address",
+          "type": "character varying(255)",
+          "nullable": true,
+          "identity": false,
+          "description": "Адрес"
+        },
+        {
+          "name": "phone",
+          "type": "character varying(20)",
+          "nullable": true,
+          "identity": false,
+          "description": "Телефон"
+        },
+        {
+          "name": "email",
+          "type": "character varying(120)",
+          "nullable": true,
+          "identity": false,
+          "description": "Электронная почта"
+        }
+      ],
+      "key": [
+        "organization_id"
+      ]
+    },
+    {
+      "name": "organization_contact",
+      "fields": [
+        {
+          "name": "org_contact_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор руководителя от организации"
+        },
+        {
+          "name": "organization_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Организация"
+        },
+        {
+          "name": "last_name",
+          "type": "character varying(60)",
+          "nullable": false,
+          "identity": false,
+          "description": "Фамилия"
+        },
+        {
+          "name": "first_name",
+          "type": "character varying(60)",
+          "nullable": false,
+          "identity": false,
+          "description": "Имя"
+        },
+        {
+          "name": "middle_name",
+          "type": "character varying(60)",
+          "nullable": true,
+          "identity": false,
+          "description": "Отчество"
+        },
+        {
+          "name": "job_title",
+          "type": "character varying(150)",
+          "nullable": false,
+          "identity": false,
+          "description": "Должность"
+        },
+        {
+          "name": "phone",
+          "type": "character varying(20)",
+          "nullable": true,
+          "identity": false,
+          "description": "Телефон"
+        },
+        {
+          "name": "email",
+          "type": "character varying(120)",
+          "nullable": true,
+          "identity": false,
+          "description": "Электронная почта"
+        }
+      ],
+      "key": [
+        "org_contact_id"
+      ]
+    },
+    {
+      "name": "pair_time",
+      "fields": [
+        {
+          "name": "pair_number",
+          "type": "smallint",
+          "nullable": false,
+          "identity": false,
+          "description": "Номер пары (естественный ключ)"
+        },
+        {
+          "name": "start_time",
+          "type": "time without time zone",
+          "nullable": false,
+          "identity": false,
+          "description": "Время начала пары"
+        },
+        {
+          "name": "end_time",
+          "type": "time without time zone",
+          "nullable": false,
+          "identity": false,
+          "description": "Время окончания пары"
+        }
+      ],
+      "key": [
+        "pair_number"
+      ]
+    },
+    {
+      "name": "person",
+      "fields": [
+        {
+          "name": "person_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор персоны"
+        },
+        {
+          "name": "last_name",
+          "type": "character varying(60)",
+          "nullable": false,
+          "identity": false,
+          "description": "Фамилия"
+        },
+        {
+          "name": "first_name",
+          "type": "character varying(60)",
+          "nullable": false,
+          "identity": false,
+          "description": "Имя"
+        },
+        {
+          "name": "middle_name",
+          "type": "character varying(60)",
+          "nullable": true,
+          "identity": false,
+          "description": "Отчество (может отсутствовать)"
+        },
+        {
+          "name": "gender",
+          "type": "character(1)",
+          "nullable": false,
+          "identity": false,
+          "description": "Пол: M — мужской, F — женский"
+        },
+        {
+          "name": "birth_date",
+          "type": "date",
+          "nullable": false,
+          "identity": false,
+          "description": "Дата рождения"
+        },
+        {
+          "name": "phone",
+          "type": "character varying(20)",
+          "nullable": true,
+          "identity": false,
+          "description": "Контактный телефон"
+        },
+        {
+          "name": "email",
+          "type": "character varying(120)",
+          "nullable": true,
+          "identity": false,
+          "description": "Электронная почта (уникальна)"
+        },
+        {
+          "name": "passport_series",
+          "type": "character(4)",
+          "nullable": true,
+          "identity": false,
+          "description": "Серия паспорта, 4 цифры"
+        },
+        {
+          "name": "passport_number",
+          "type": "character(6)",
+          "nullable": true,
+          "identity": false,
+          "description": "Номер паспорта, 6 цифр"
+        },
+        {
+          "name": "snils",
+          "type": "character(14)",
+          "nullable": true,
+          "identity": false,
+          "description": "СНИЛС в формате 000-000-000 00"
+        },
+        {
+          "name": "inn",
+          "type": "character(12)",
+          "nullable": true,
+          "identity": false,
+          "description": "ИНН физического лица, 12 цифр"
+        },
+        {
+          "name": "address",
+          "type": "character varying(255)",
+          "nullable": true,
+          "identity": false,
+          "description": "Адрес регистрации"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "identity": false,
+          "description": "Когда запись внесена в систему"
+        }
+      ],
+      "key": [
+        "person_id"
+      ]
+    },
+    {
+      "name": "position",
+      "fields": [
+        {
+          "name": "position_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор должности"
+        },
+        {
+          "name": "title",
+          "type": "character varying(100)",
+          "nullable": false,
+          "identity": false,
+          "description": "Название должности"
+        },
+        {
+          "name": "category",
+          "type": "character varying(20)",
+          "nullable": false,
+          "identity": false,
+          "description": "Категория: administration — руководство, teaching — ППС, support — учебно-вспомогательный персонал"
+        }
+      ],
+      "key": [
+        "position_id"
+      ]
+    },
+    {
+      "name": "practice_placement",
+      "fields": [
+        {
+          "name": "placement_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор направления"
+        },
+        {
+          "name": "student_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Студент"
+        },
+        {
+          "name": "item_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Практика из учебного плана студента"
+        },
+        {
+          "name": "supervisor_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Руководитель практики от вуза"
+        },
+        {
+          "name": "org_contact_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Руководитель от организации (через него — база практики)"
+        },
+        {
+          "name": "start_date",
+          "type": "date",
+          "nullable": false,
+          "identity": false,
+          "description": "Начало практики"
+        },
+        {
+          "name": "end_date",
+          "type": "date",
+          "nullable": false,
+          "identity": false,
+          "description": "Окончание практики"
+        },
+        {
+          "name": "order_id",
+          "type": "integer",
+          "nullable": true,
+          "identity": false,
+          "description": "Приказ о направлении на практику"
+        }
+      ],
+      "key": [
+        "placement_id"
+      ]
+    },
+    {
+      "name": "request_status",
+      "fields": [
+        {
+          "name": "request_status_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор статуса"
+        },
+        {
+          "name": "name",
+          "type": "character varying(50)",
+          "nullable": false,
+          "identity": false,
+          "description": "Новая, в работе, готова, выдана, отклонена"
+        },
+        {
+          "name": "is_final",
+          "type": "boolean",
+          "nullable": false,
+          "identity": false,
+          "description": "Завершает ли статус обработку заявки"
+        }
+      ],
+      "key": [
+        "request_status_id"
+      ]
+    },
+    {
+      "name": "schedule_slot",
+      "fields": [
+        {
+          "name": "slot_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор слота расписания"
+        },
+        {
+          "name": "assignment_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Учебное поручение"
+        },
+        {
+          "name": "classroom_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Аудитория"
+        },
+        {
+          "name": "weekday",
+          "type": "smallint",
+          "nullable": false,
+          "identity": false,
+          "description": "День недели: 1 — понедельник … 6 — суббота"
+        },
+        {
+          "name": "pair_number",
+          "type": "smallint",
+          "nullable": false,
+          "identity": false,
+          "description": "Номер пары"
+        },
+        {
+          "name": "week_parity",
+          "type": "character varying(5)",
+          "nullable": false,
+          "identity": false,
+          "description": "Неделя: every — каждая, odd — нечётная, even — чётная"
+        },
+        {
+          "name": "term_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Семестр"
+        },
+        {
+          "name": "valid_from",
+          "type": "date",
+          "nullable": true,
+          "identity": false,
+          "description": "Действует с (пусто — с начала семестра)"
+        },
+        {
+          "name": "valid_to",
+          "type": "date",
+          "nullable": true,
+          "identity": false,
+          "description": "Действует по (пусто — до конца занятий)"
+        }
+      ],
+      "key": [
+        "slot_id"
+      ]
+    },
+    {
+      "name": "scholarship",
+      "fields": [
+        {
+          "name": "scholarship_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор назначения"
+        },
+        {
+          "name": "student_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Студент"
+        },
+        {
+          "name": "scholarship_type_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Вид стипендии (из него берётся сумма)"
+        },
+        {
+          "name": "order_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Приказ о назначении"
+        },
+        {
+          "name": "start_date",
+          "type": "date",
+          "nullable": false,
+          "identity": false,
+          "description": "Начало выплат"
+        },
+        {
+          "name": "end_date",
+          "type": "date",
+          "nullable": false,
+          "identity": false,
+          "description": "Окончание выплат"
+        },
+        {
+          "name": "amount",
+          "type": "numeric(10,2)",
+          "nullable": false,
+          "identity": false,
+          "description": "Размер по приказу о назначении; изменение вида стипендии не меняет исторический размер"
+        }
+      ],
+      "key": [
+        "scholarship_id"
+      ]
+    },
+    {
+      "name": "scholarship_type",
+      "fields": [
+        {
+          "name": "scholarship_type_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор вида стипендии"
+        },
+        {
+          "name": "name",
+          "type": "character varying(100)",
+          "nullable": false,
+          "identity": false,
+          "description": "Название стипендии"
+        },
+        {
+          "name": "amount",
+          "type": "numeric(10,2)",
+          "nullable": false,
+          "identity": false,
+          "description": "Размер стипендии в месяц, руб."
+        },
+        {
+          "name": "budget_only",
+          "type": "boolean",
+          "nullable": false,
+          "identity": false,
+          "description": "Назначается только студентам на бюджете (все государственные стипендии)"
+        }
+      ],
+      "key": [
+        "scholarship_type_id"
+      ]
+    },
+    {
+      "name": "score_band",
+      "fields": [
+        {
+          "name": "band_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор диапазона"
+        },
+        {
+          "name": "min_points",
+          "type": "smallint",
+          "nullable": false,
+          "identity": false,
+          "description": "Нижняя граница, включительно"
+        },
+        {
+          "name": "max_points",
+          "type": "smallint",
+          "nullable": false,
+          "identity": false,
+          "description": "Верхняя граница, включительно"
+        },
+        {
+          "name": "mark",
+          "type": "smallint",
+          "nullable": false,
+          "identity": false,
+          "description": "Оценка: 3, 4 или 5"
+        },
+        {
+          "name": "mark_name",
+          "type": "character varying(30)",
+          "nullable": false,
+          "identity": false,
+          "description": "Удовлетворительно, хорошо, отлично"
+        }
+      ],
+      "key": [
+        "band_id"
+      ]
+    },
+    {
+      "name": "specialty",
+      "fields": [
+        {
+          "name": "specialty_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор направления"
+        },
+        {
+          "name": "code",
+          "type": "character varying(10)",
+          "nullable": false,
+          "identity": false,
+          "description": "Код по ФГОС (09.03.04), уникален"
+        },
+        {
+          "name": "name",
+          "type": "character varying(200)",
+          "nullable": false,
+          "identity": false,
+          "description": "Название направления"
+        },
+        {
+          "name": "level_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Уровень образования"
+        }
+      ],
+      "key": [
+        "specialty_id"
+      ]
+    },
+    {
+      "name": "student",
+      "fields": [
+        {
+          "name": "student_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор студента"
+        },
+        {
+          "name": "person_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Персона (1:1)"
+        },
+        {
+          "name": "record_book_number",
+          "type": "character varying(20)",
+          "nullable": false,
+          "identity": false,
+          "description": "Номер зачётной книжки"
+        },
+        {
+          "name": "group_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Текущая группа"
+        },
+        {
+          "name": "funding_type_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Основа обучения"
+        },
+        {
+          "name": "status_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Статус студента"
+        },
+        {
+          "name": "enrollment_date",
+          "type": "date",
+          "nullable": false,
+          "identity": false,
+          "description": "Дата зачисления"
+        },
+        {
+          "name": "needs_dormitory",
+          "type": "boolean",
+          "nullable": false,
+          "identity": false,
+          "description": "Нуждается в общежитии"
+        },
+        {
+          "name": "is_foreign",
+          "type": "boolean",
+          "nullable": false,
+          "identity": false,
+          "description": "Иностранный гражданин"
+        }
+      ],
+      "key": [
+        "student_id"
+      ]
+    },
+    {
+      "name": "student_contact",
+      "fields": [
+        {
+          "name": "student_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Студент"
+        },
+        {
+          "name": "contact_person_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Контактное лицо"
+        },
+        {
+          "name": "relation_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Кем приходится этому студенту"
+        },
+        {
+          "name": "is_emergency",
+          "type": "boolean",
+          "nullable": false,
+          "identity": false,
+          "description": "Звонить этому лицу в экстренном случае"
+        }
+      ],
+      "key": [
+        "student_id",
+        "contact_person_id"
+      ]
+    },
+    {
+      "name": "student_status",
+      "fields": [
+        {
+          "name": "status_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор статуса"
+        },
+        {
+          "name": "name",
+          "type": "character varying(50)",
+          "nullable": false,
+          "identity": false,
+          "description": "Обучается, академический отпуск, отчислен, выпускник"
+        },
+        {
+          "name": "is_active",
+          "type": "boolean",
+          "nullable": false,
+          "identity": false,
+          "description": "Учитывается ли студент в действующем контингенте"
+        }
+      ],
+      "key": [
+        "status_id"
+      ]
+    },
+    {
+      "name": "study_form",
+      "fields": [
+        {
+          "name": "study_form_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор формы обучения"
+        },
+        {
+          "name": "name",
+          "type": "character varying(30)",
+          "nullable": false,
+          "identity": false,
+          "description": "Очная, заочная, очно-заочная"
+        },
+        {
+          "name": "group_letter",
+          "type": "character(1)",
+          "nullable": true,
+          "identity": false,
+          "description": "Вторая буква шифра группы: Д — дневная (очная); пусто — буква не задана, не проверяется"
+        }
+      ],
+      "key": [
+        "study_form_id"
+      ]
+    },
+    {
+      "name": "study_group",
+      "fields": [
+        {
+          "name": "group_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор группы"
+        },
+        {
+          "name": "name",
+          "type": "character varying(20)",
+          "nullable": false,
+          "identity": false,
+          "description": "Шифр группы: ИДБ-24-11 — институт, форма, уровень, год набора, номер группы"
+        },
+        {
+          "name": "curriculum_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Учебный план (даёт программу, форму и год набора)"
+        },
+        {
+          "name": "curator_id",
+          "type": "integer",
+          "nullable": true,
+          "identity": false,
+          "description": "Куратор группы"
+        },
+        {
+          "name": "headman_id",
+          "type": "integer",
+          "nullable": true,
+          "identity": false,
+          "description": "Староста группы"
+        },
+        {
+          "name": "is_archived",
+          "type": "boolean",
+          "nullable": false,
+          "identity": false,
+          "description": "Группа выпущена / расформирована"
+        }
+      ],
+      "key": [
+        "group_id"
+      ]
+    },
+    {
+      "name": "study_program",
+      "fields": [
+        {
+          "name": "program_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор программы"
+        },
+        {
+          "name": "specialty_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Направление подготовки"
+        },
+        {
+          "name": "profile",
+          "type": "character varying(200)",
+          "nullable": false,
+          "identity": false,
+          "description": "Профиль (направленность)"
+        },
+        {
+          "name": "department_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Выпускающая кафедра"
+        }
+      ],
+      "key": [
+        "program_id"
+      ]
+    },
+    {
+      "name": "teacher",
+      "fields": [
+        {
+          "name": "employee_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Сотрудник (одновременно первичный и внешний ключ)"
+        },
+        {
+          "name": "department_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Кафедра преподавателя"
+        },
+        {
+          "name": "degree_id",
+          "type": "integer",
+          "nullable": true,
+          "identity": false,
+          "description": "Учёная степень"
+        },
+        {
+          "name": "title_id",
+          "type": "integer",
+          "nullable": true,
+          "identity": false,
+          "description": "Учёное звание"
+        },
+        {
+          "name": "teaching_since",
+          "type": "date",
+          "nullable": true,
+          "identity": false,
+          "description": "Начало педагогической деятельности (для расчёта стажа)"
+        }
+      ],
+      "key": [
+        "employee_id"
+      ]
+    },
+    {
+      "name": "teaching_assignment",
+      "fields": [
+        {
+          "name": "assignment_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": true,
+          "description": "Идентификатор поручения"
+        },
+        {
+          "name": "item_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Строка учебного плана (дисциплина + семестр)"
+        },
+        {
+          "name": "group_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Группа"
+        },
+        {
+          "name": "teacher_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Преподаватель"
+        },
+        {
+          "name": "lesson_type_id",
+          "type": "integer",
+          "nullable": false,
+          "identity": false,
+          "description": "Вид занятия"
+        },
+        {
+          "name": "subgroup",
+          "type": "smallint",
+          "nullable": true,
+          "identity": false,
+          "description": "Подгруппа 1 или 2; пусто — вся группа"
+        }
+      ],
+      "key": [
+        "assignment_id"
+      ]
+    }
+  ],
+  "views": [
+    "v_academic_leaves",
+    "v_academic_works",
+    "v_active_scholarships",
+    "v_attendance_stats",
+    "v_audit",
+    "v_curriculum",
+    "v_debtors",
+    "v_document_queue",
+    "v_employees",
+    "v_expulsion_risk",
+    "v_grade_corrections",
+    "v_grades",
+    "v_groups",
+    "v_last_result",
+    "v_pending_orders",
+    "v_performance",
+    "v_practice",
+    "v_schedule",
+    "v_schedule_calendar",
+    "v_schedule_hours",
+    "v_student_contacts",
+    "v_student_orders",
+    "v_student_rating",
+    "v_student_summary",
+    "v_students",
+    "v_teacher_load",
+    "v_teachers"
+  ]
+}

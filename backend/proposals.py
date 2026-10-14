@@ -13,13 +13,25 @@ def prepare(db, run_id: UUID, command: dict, explanation: str, reason: str,
 
 def prepare_for_run(db, run_id: UUID, worker: UUID, command: dict, explanation: str,
                     reason: str, key: UUID, supersedes: UUID | None = None):
-    return db.execute("SELECT backend_api.prepare_run_proposal(%s,%s,%s,%s,%s,%s,%s) AS result",
-        (run_id, worker, Jsonb(command), explanation, reason, key, supersedes)).fetchone()["result"]
+    from backend.database_actor import user_context
+    context=db.execute('SELECT backend_api.agent_run_context(%s,%s) AS context',(run_id,worker)).fetchone()['context']
+    with user_context(db,context['actor']['user_id'],prepare=True):
+        return db.execute("SELECT backend_api.prepare_run_proposal(%s,%s,%s,%s,%s,%s,%s) AS result",
+            (run_id, worker, Jsonb(command), explanation, reason, key, supersedes)).fetchone()["result"]
 
 
 def get(db, proposal_id: UUID, access_token: str):
-    return db.execute("SELECT backend_api.get_proposal(%s,%s) AS result",
+    result=db.execute("SELECT backend_api.get_proposal(%s,%s) AS result",
         (proposal_id, access_token)).fetchone()["result"]
+    if result['kind']=='batch' and result['status']=='pending':
+        from backend.database_actor import user_context
+        uid=db.execute('SELECT agent_backend.proposal_actor(%s) AS user_id',(access_token,)).fetchone()['user_id']
+        with user_context(db,uid,agent_read=True):
+            states=db.execute('SELECT backend_api.probe_batch(%s,%s) AS states',(proposal_id,access_token)).fetchone()['states']
+        for row in result['items']:
+            row.update(next((state for state in states if state['item_id']==row['item_id']),{}))
+        result['actions']['can_approve']=result['actions']['can_approve'] and any(row['state']=='ok' for row in result['items'])
+    return result
 
 
 def listing(db, access_token: str, box: str, status: str | None, execution_status: str | None,
@@ -41,9 +53,9 @@ def assign(db, proposal_id: UUID, payload, key: UUID, access_token: str):
 
 
 def decide(db, proposal_id: UUID, payload, key: UUID, access_token: str):
-    return db.execute("SELECT backend_api.decide_proposal(%s,%s,%s,%s,%s,%s) AS result",
+    return db.execute("SELECT backend_api.decide_proposal(%s,%s,%s,%s,%s,%s,%s) AS result",
         (proposal_id, payload.approve, payload.reason, payload.expected_version,
-         key, access_token)).fetchone()["result"]
+         key, access_token,Jsonb(payload.picked_item_ids) if payload.picked_item_ids is not None else None)).fetchone()["result"]
 
 
 def events(db, proposal_id: UUID, access_token: str, after: int, limit: int):

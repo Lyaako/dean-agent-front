@@ -92,18 +92,18 @@ class EntrypointTests(unittest.TestCase):
     def test_runtime_setup_dispatches_existing_narrow_provisioners_only(self):
         connection = MagicMock()
         db = connection.__enter__.return_value
-        db.execute.return_value.fetchone.side_effect = [('current-head',), (71,)]
+        db.execute.return_value.fetchone.side_effect = [('current-head',), (72,)]
         with patch.object(Path, 'read_text', return_value=json.dumps({'host': 'db', 'dbname': 'deanery_p13'})), patch.object(Path, 'is_dir', return_value=True), patch.object(Path, 'exists', return_value=False), patch('sys.argv', ['setup', 'runtime']), patch.object(setup_database.psycopg, 'connect', return_value=connection), patch.object(setup_database.ScriptDirectory, 'from_config') as source, patch.object(setup_database, 'provision') as provision:
             source.return_value.get_current_head.return_value = 'current-head'
             setup_database.main()
-        self.assertEqual(provision.call_count, 6)
-        self.assertEqual([call.args[0] for call in provision.call_args_list], ['backend.db.provision_local_api', 'backend.db.provision_local_agent', 'backend.db.provision_local_files', 'backend.db.provision_local_knowledge', 'backend.db.provision_local_knowledge', 'backend.db.provision_local_deployment'])
-        self.assertTrue(all(call.args[-2:] == ('--host', 'db') for call in provision.call_args_list))
+        self.assertEqual(provision.call_count, 7)
+        self.assertEqual([call.args[0] for call in provision.call_args_list], ['backend.db.provision_local_api', 'backend.db.provision_local_agent', 'backend.db.provision_local_files', 'backend.db.provision_local_knowledge', 'backend.db.provision_local_knowledge', 'backend.db.provision_local_deployment','backend.db.provision_personal_roles'])
+        self.assertTrue(all(call.args[-2:] == ('--host', 'db') for call in provision.call_args_list[:6]))
 
     def test_seed_refuses_existing_data_in_any_application_table(self):
         connection = MagicMock()
         db = connection.__enter__.return_value
-        db.execute.return_value.fetchone.side_effect = [('current-head',), (71,), (True,)]
+        db.execute.return_value.fetchone.side_effect = [('current-head',), (72,), (True,)]
         db.execute.return_value.fetchall.return_value = [('agent_backend', 'regulation_version')]
         with patch.object(Path, 'read_text', return_value=json.dumps({'host': 'db', 'dbname': 'deanery_p13'})), patch.object(Path, 'is_dir', return_value=True), patch.object(Path, 'exists', return_value=False), patch.object(Path, 'open') as write, patch('sys.argv', ['setup', 'synthetic-seed']), patch.object(setup_database.psycopg, 'connect', return_value=connection), patch.object(setup_database.ScriptDirectory, 'from_config') as source, patch.object(setup_database, 'hasher') as hasher:
             source.return_value.get_current_head.return_value = 'current-head'
@@ -136,7 +136,7 @@ class SourceTests(unittest.TestCase):
         includes = [line[1:] for line in lines if line.startswith('!')]
         allowed = {path.relative_to(ROOT).as_posix() for pattern in includes for path in ROOT.glob(pattern) if path.is_file()}
         self.assertIn('references/database/03_seed.sql', allowed)
-        self.assertEqual({name for name in allowed if name.startswith('references/')}, {'references/database/03_seed.sql'})
+        self.assertEqual({name for name in allowed if name.startswith('references/')}, {'references/database/03_seed.sql','references/database-revision-20261011/03_seed.sql'})
         self.assertEqual({name for name in allowed if name.startswith('deploy/')}, {'deploy/run_service.py', 'deploy/setup_database.py'})
         self.assertIn('backend/db/migrations/sql/030_discipline_lookup.sql', allowed)
         self.assertFalse(any(part in name for name in allowed for part in ('.local/', 'private.local/', 'node_modules/', '.venv/', '__pycache__/', '/tests/')))

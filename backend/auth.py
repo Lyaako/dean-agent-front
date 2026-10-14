@@ -43,6 +43,7 @@ def snapshot(db: Connection, user_id: int) -> tuple[Me, bool] | None:
         user_id=row["user_id"], login=row["login"], roles=[row["role_code"]],
         person_id=row["person_id"], institute_ids=row["institute_ids"],
         student_id=row["student_id"], teacher_id=row["teacher_id"],
+        must_change_password=db.execute("SELECT backend_api.password_required(%s) AS required", (user_id,)).fetchone()["required"],
     )
     return me, row["is_active"]
 
@@ -104,6 +105,8 @@ def refresh_session(db: Connection, raw: str, csrf: str) -> tuple[str, str]:
     actor = snapshot(db, row["user_id"])
     if actor is None or not actor[1]:
         raise HTTPException(status_code=401, detail="inactive_session")
+    if actor[0].must_change_password:
+        raise HTTPException(status_code=403, detail="password_change_required")
     access, new_refresh = token(), token()
     db.execute("UPDATE agent_backend.auth_token SET used_at=now() WHERE token_hash=%s", (digest(raw),))
     db.execute(

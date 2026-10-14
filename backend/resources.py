@@ -1,12 +1,14 @@
 """The fixed React resource registry and scoped read adapter."""
 
-from datetime import date
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from decimal import Decimal, InvalidOperation
 import json
 import re
 
 from fastapi import HTTPException
 from psycopg import Connection
+from psycopg import sql
 
 from backend.contracts import Me, ResourceField, ResourcePage, ResourceSpec, SchemaResponse
 
@@ -15,6 +17,8 @@ ALL = ("admin", "director", "dean_staff", "teacher", "student")
 STAFF = ALL[:3]
 NO_TEACHER = STAFF + ("student",)
 NO_STUDENT = STAFF + ("teacher",)
+REFERENCE_WRITES = {"scholarship_type", "document_type", "request_status", "order_type", "leave_reason",
+    "contact_relation", "specialty", "study_program", "classroom", "academic_term", "holiday"}
 RESOURCES = {
     "student": ALL, "v_students": ALL, "v_student_summary": ALL,
     "study_group": ALL, "v_groups": ALL,
@@ -32,6 +36,9 @@ RESOURCES = {
     "lesson_type": ALL, "position": ALL, "education_level": ALL, "scholarship_type": ALL,
     "academic_degree": ALL, "academic_title": ALL, "contact_relation": ALL,
     "order_type": ALL, "classroom": ALL, "discipline": ALL,
+    "grade": ALL, "grade_sheet": ALL, "attendance": ALL, "v_last_result": ALL, "v_debtors": ALL,
+    "v_current_modules": ALL, "v_active_scholarships": NO_TEACHER, "v_student_orders": NO_TEACHER,
+    "v_pending_orders": STAFF, "v_audit": STAFF, "app_user": ("admin",), "v_attendance": ALL,
 }
 # Additional facts belong to the agent's read schema, not the manual CRUD registry.
 AGENT_RESOURCES = {**RESOURCES,
@@ -42,7 +49,7 @@ AGENT_RESOURCES = {**RESOURCES,
     "contact_person": NO_TEACHER, "student_contact": NO_TEACHER,
     "v_student_orders": NO_TEACHER, "v_pending_orders": NO_TEACHER, "v_academic_leaves": NO_TEACHER,
 }
-API_VIEWS = {"v_curriculum", "v_schedule_hours", "v_practice", "v_academic_works"}
+API_VIEWS = {"v_curriculum", "v_schedule_hours", "v_practice", "v_academic_works", "v_current_modules", "v_active_scholarships", "v_attendance"}
 VIEW_KEYS = {
     "v_students": ["student_id"], "v_student_summary": ["student_id"],
     "v_groups": ["group_id"], "v_schedule_calendar": ["lesson_date", "slot_id"],
@@ -55,6 +62,8 @@ VIEW_KEYS = {
     "v_student_orders": ["student_id", "order_number"],
     "v_pending_orders": ["student_id", "order_number"],
     "v_academic_leaves": ["student_id", "order_number"],
+    "v_current_modules": ["grade_id"], "v_active_scholarships": ["scholarship_id"],
+    "v_audit": ["audit_id", "column_name"], "app_user": ["user_id"], "v_attendance": ["attendance_id"],
 }
 FORM_FIELDS = {
     "student": ["funding_type_id", "needs_dormitory", "is_foreign"],
@@ -63,8 +72,10 @@ FORM_FIELDS = {
     "academic_work": ["student_id", "item_id", "topic", "supervisor_id", "reviewer_id", "order_id"],
     "practice_placement": ["student_id", "item_id", "supervisor_id", "org_contact_id", "start_date", "end_date", "order_id"],
     "document_request": ["student_id", "document_type_id", "copies", "purpose", "request_status_id", "processed_by_id"],
-    "employee": ["person_id", "personnel_number", "position_id", "employment_rate", "hire_date", "dismissal_date"],
     "person": ["last_name", "first_name", "middle_name"],
+    "grade": ["sheet_id", "student_id", "points", "is_absent"],
+    "grade_sheet": ["sheet_number", "item_id", "group_id", "examiner_id", "stage", "sheet_kind", "issue_date", "exam_date", "closed_date", "status"],
+    "attendance": ["slot_id", "student_id", "lesson_date", "is_present", "absence_reason"],
 }
 WRITE = {
     "student": {"update": STAFF, "workflow": STAFF},
@@ -72,10 +83,13 @@ WRITE = {
     "schedule_slot": {"create": STAFF, "update": STAFF, "delete": STAFF},
     "academic_work": {"create": STAFF, "update": STAFF, "delete": STAFF},
     "practice_placement": {"create": STAFF, "update": STAFF, "delete": STAFF},
-    "document_request": {"create": NO_TEACHER, "update": NO_TEACHER, "delete": NO_TEACHER},
-    "employee": {"create": ("admin",), "update": STAFF, "delete": STAFF},
+    "document_request": {"create": NO_TEACHER, "update": NO_TEACHER, "delete": STAFF},
     "person": {"update": STAFF},
+    "grade": {"create": NO_STUDENT, "update": NO_STUDENT},
+    "grade_sheet": {"create": STAFF, "update": STAFF},
+    "attendance": {"create": NO_STUDENT, "update": NO_STUDENT},
 }
+WRITE.update({name: {"create": STAFF, "update": STAFF} for name in REFERENCE_WRITES})
 HIDDEN = {"person": {"gender", "birth_date", "phone", "passport_series", "passport_number", "snils", "inn", "address", "created_at"}}
 TEACHER_STUDENT_HIDDEN = {"funding_type_id", "needs_dormitory", "is_foreign"}
 TEACHER_SUMMARY_HIDDEN = {"funding", "scholarships", "needs_dormitory", "is_foreign"}
@@ -85,6 +99,8 @@ DELETE_ACTION = {"a": "NO ACTION", "r": "RESTRICT", "c": "CASCADE", "n": "SET NU
 
 
 def _source(name: str) -> tuple[str, str]:
+    if name == "app_user":
+        return "backend_api", "v_accounts"
     return ("backend_api" if name in API_VIEWS else "deanery", name)
 
 
@@ -154,6 +170,12 @@ def spec(db: Connection, name: str, role: str, *, agent: bool = False) -> Resour
         ) for row in columns if row["name"] not in hidden
     }
     form = FORM_FIELDS.get(name, [])
+    if name in REFERENCE_WRITES:
+        form = [row["name"] for row in columns if row["default"] != "identity"]
+    if name == "document_request" and role == "student":
+        form = ["document_type_id", "copies", "purpose"]
+    if name == "grade" and role == "teacher":
+        form = ["sheet_id", "student_id", "points", "is_absent"]
     if role == "teacher" and name == "student":
         form = ["record_book_number", "group_id", "status_id"]
     if not set(form) <= fields.keys():
@@ -192,6 +214,9 @@ def _value(raw: str | int | float | Decimal | bool, sql_type: str):
         return str(raw).lower() == "true"
     if sql_type == "date":
         return date.fromisoformat(str(raw))
+    if sql_type.startswith("timestamp"):
+        value = datetime.fromisoformat(str(raw))
+        return value if value.tzinfo else value.replace(tzinfo=ZoneInfo("Europe/Moscow"))
     return str(raw)
 
 
@@ -218,44 +243,35 @@ def list_rows(db: Connection, name: str, role: str, token: str, params: dict[str
     for key,value in params.items():
         if key in ("limit","offset","sort"):
             continue
-        if key.endswith(("__gte","__lte")) and name == "v_schedule_calendar" and key.startswith("lesson_date"):
+        if key.endswith(("__gte","__lte")) and name in ("v_schedule_calendar", "v_audit"):
             field, comparator = key.rsplit("__",1)
         else:
             field, comparator = key, "eq"
         if field not in info.read_fields or comparator not in ("eq","gte","lte"):
             raise HTTPException(status_code=422, detail="invalid_filter")
         try:
-            filters[key] = (field, comparator, _value(value,info.fields[field].type))
+            parsed = _value(value,info.fields[field].type)
+            if isinstance(parsed, datetime) and comparator == "lte" and len(value) == 10:
+                parsed += timedelta(days=1)-timedelta(microseconds=1)
+            filters[key] = (field, comparator, parsed)
         except (ValueError,InvalidOperation):
             raise HTTPException(status_code=422, detail="invalid_value") from None
     ordering = params.get("sort", "")
     sort = ordering.split(",") if ordering else info.key
     if not sort or any(field not in info.read_fields for field in sort):
         raise HTTPException(status_code=422, detail="invalid_filter")
-    # shortcut: filtering and paging materialize up to 20,000 scoped rows; move them into SQL for larger installations.
-    rows = []
-    for raw in db.execute("SELECT visible_rows FROM backend_api.visible_rows(%s,%s)", (name,token)):
-        row = json.loads(raw["visible_rows"],parse_float=Decimal)
-        for field,comparator,requested in filters.values():
-            current = row.get(field)
-            if current is None:
-                break
-            try:
-                actual = _value(current,info.fields[field].type)
-            except (ValueError,InvalidOperation):
-                break
-            if (comparator == "eq" and actual != requested) or (comparator == "gte" and actual < requested) or (comparator == "lte" and actual > requested):
-                break
-        else:
-            rows.append(row)
-            if len(rows) > 20_000:
-                raise HTTPException(status_code=413, detail="body_too_large")
-    def sort_value(row):
-        values = []
-        for field in dict.fromkeys(sort + info.key):
-            raw = row.get(field)
-            values.append((raw is None, _value(raw,info.fields[field].type) if raw is not None else ""))
-        return tuple(values)
-    rows.sort(key=sort_value)
-    page = rows[offset:offset+limit]
-    return ResourcePage(items=[_json_safe(row) for row in page],limit=limit,offset=offset,has_more=offset+limit<len(rows))
+    def expression(field):
+        # Names are validated against the registry; types come only from pg_catalog.
+        return sql.SQL('(row->>{})::{}').format(sql.Literal(field),sql.SQL(info.fields[field].type))
+    conditions=[]
+    arguments=[name,token]
+    for field,comparator,requested in filters.values():
+        operator={'eq':'=','gte':'>=','lte':'<='}[comparator]
+        conditions.append(sql.SQL('{} {} %s').format(expression(field),sql.SQL(operator)))
+        arguments.append(requested)
+    statement=sql.SQL('SELECT row::TEXT AS visible_rows FROM (SELECT visible_rows::JSONB AS row FROM backend_api.visible_rows(%s,%s)) scoped {} ORDER BY {} LIMIT %s OFFSET %s').format(
+        sql.SQL('WHERE ')+sql.SQL(' AND ').join(conditions) if conditions else sql.SQL(''),
+        sql.SQL(',').join(expression(field)+sql.SQL(' NULLS LAST') for field in dict.fromkeys(sort+info.key)))
+    arguments.extend((limit+1,offset))
+    rows=[json.loads(raw['visible_rows'],parse_float=Decimal) for raw in db.execute(statement,arguments)]
+    return ResourcePage(items=[_json_safe(row) for row in rows[:limit]],limit=limit,offset=offset,has_more=len(rows)>limit)

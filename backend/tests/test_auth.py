@@ -88,7 +88,8 @@ class AuthHttpTests(DatabaseHttpCase):
         self.assertGreater(len(rows("organization_contact", staff)), 0)
         self.assertGreater(len(rows("organization_contact", director)), 0)
         self.assertEqual(rows("organization_contact", teacher), [])
-        self.assertEqual(rows("student", "forged-access-token"), [])
+        with self.assertRaises(psycopg.errors.InsufficientPrivilege),self.db.transaction():
+            rows('student','forged-access-token')
         self.assertLess(len(rows("student", teacher)), len(rows("student", admin)))
         self.assertLessEqual(len(rows("student", staff)), len(rows("student", admin)))
         self.assertTrue(all("funding_type_id" not in row for row in rows("student", teacher)))
@@ -116,7 +117,7 @@ class AuthHttpTests(DatabaseHttpCase):
         self.assertEqual(len(page.json()["items"]),2)
         self.assertTrue(page.json()["has_more"])
         self.assertEqual(self.client.get("/api/v1/resources/v_student_summary?bad_column=x",headers=headers).status_code,422)
-        self.assertEqual(self.client.get("/api/v1/resources/app_user",headers=headers).status_code,404)
+        self.assertEqual(self.client.get("/api/v1/resources/app_user",headers=headers).status_code,200)
         student_login = self.client.post("/api/v1/auth/login", json={"login":"ivanov.ks","password":"only-for-isolated-test"}, headers=self.origin)
         student_headers = {"Authorization":"Bearer " + student_login.json()["access_token"]}
         self.assertEqual(len(self.client.get("/api/v1/resources/v_student_summary",headers=student_headers).json()["items"]),1)
@@ -170,7 +171,8 @@ class AuthHttpTests(DatabaseHttpCase):
         self.assertEqual(self.client.patch(f"/api/v1/resources/document_request?{key}",json={"request_status_id":2},headers=student).status_code,422)
         self.assertEqual(self.client.post("/api/v1/resources/document_request",json={**body,"student_id":own_id+1},headers=student).status_code,403)
         self.assertEqual(self.client.post("/api/v1/resources/document_request",json=body,headers=teacher).status_code,404)
-        self.assertEqual(self.client.delete(f"/api/v1/resources/document_request?{key}",headers=student).status_code,200)
+        self.assertEqual(self.client.delete(f"/api/v1/resources/document_request?{key}",headers=student).status_code,403)
+        self.assertEqual(self.client.delete(f"/api/v1/resources/document_request?{key}",headers=admin).status_code,200)
         self.assertEqual(self.client.get(f"/api/v1/resources/document_request?{key}",headers=student).json()["items"],[])
         person_id = self.client.get("/api/v1/auth/me",headers=admin).json()["person_id"]
         updated = self.client.patch(f"/api/v1/resources/person?person_id={person_id}",json={"middle_name":"Проверка"},headers=admin)
@@ -179,7 +181,7 @@ class AuthHttpTests(DatabaseHttpCase):
         self.assertEqual(set(updated.json()),{"person_id","last_name","first_name","middle_name"})
         self.assertEqual(self.client.patch(f"/api/v1/resources/person?person_id={person_id}",json={"passport_number":"123456"},headers=admin).status_code,422)
         employee_id = self.client.get("/api/v1/resources/employee?person_id=" + str(person_id),headers=admin).json()["items"][0]["employee_id"]
-        self.assertEqual(self.client.delete(f"/api/v1/resources/employee?employee_id={employee_id}",headers=admin).status_code,409)
+        self.assertEqual(self.client.delete(f"/api/v1/resources/employee?employee_id={employee_id}",headers=admin).status_code,403)
         student_person = self.client.get("/api/v1/resources/student?student_id=" + str(own_id),headers=admin).json()["items"][0]["person_id"]
         self.assertEqual(self.client.patch(f"/api/v1/resources/person?person_id={student_person}",json={"middle_name":"Нельзя"},headers=admin).status_code,403)
 
@@ -240,8 +242,11 @@ class AuthHttpTests(DatabaseHttpCase):
         done = self.client.patch(path,headers=headers,json={"request_status_id":statuses["Выдана"]})
         self.assertEqual(done.status_code,200,done.text)
         self.assertIsNotNone(done.json()["completed_at"])
-        self.assertEqual(self.client.patch(path,headers=headers,json={"copies":2}).status_code,409)
-        self.assertEqual(self.client.delete(path,headers=headers).status_code,409)
+        self.assertEqual(self.client.patch(path,headers=headers,json={"copies":2}).status_code,200)
+        final=self.client.patch(path,headers=headers,json={'request_status_id':statuses['Новая']})
+        self.assertEqual(final.status_code,409,final.text)
+        self.assertEqual(final.json()['error']['code'],'request_final')
+        self.assertEqual(self.client.delete(path,headers=headers).status_code,200)
 
     def test_olap_eight_modes_and_original_metric_definitions(self):
         def login(name):
@@ -353,13 +358,9 @@ class AuthHttpTests(DatabaseHttpCase):
         created_employee = self.client.post("/api/v1/resources/employee",headers=headers,json={
             "person_id":person["person_id"],"personnel_number":f"TEST-{person['person_id']}",
             "position_id":position["position_id"],"employment_rate":"1.00","hire_date":"2026-10-10"})
-        self.assertEqual(created_employee.status_code,200,created_employee.text)
-        employee_id = created_employee.json()["employee_id"]
-        self.assertEqual(self.client.patch(f"/api/v1/resources/employee?employee_id={employee_id}",
-                                           headers=headers,json={"person_id":person["person_id"]}).status_code,422)
-        self.assertEqual(self.client.patch(f"/api/v1/resources/employee?employee_id={employee_id}",
-                                           headers=headers,json={"employment_rate":"0.75"}).status_code,200)
-        self.assertEqual(self.client.delete(f"/api/v1/resources/employee?employee_id={employee_id}",headers=headers).status_code,200)
+        self.assertEqual(created_employee.status_code,403,created_employee.text)
+        self.assertEqual(self.client.patch('/api/v1/resources/employee?employee_id=1',headers=headers,json={'employment_rate':'0.75'}).status_code,403)
+        self.assertEqual(self.client.delete('/api/v1/resources/employee?employee_id=1',headers=headers).status_code,403)
 
     def test_manual_mutation_sets_real_audit_author_without_direct_table_grants(self):
         login = self.client.post("/api/v1/auth/login",json={"login":"vasilyeva","password":"only-for-isolated-test"},headers=self.origin)

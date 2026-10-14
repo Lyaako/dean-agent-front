@@ -513,7 +513,8 @@ def test_calibrate_exact_final_tools_and_system():
                            temperature=0, use_responses_api=False, max_retries=0, max_tokens=1, http_client=client, http_socket_options=())
         graph = create_agent_graph(model, build_tools(None, uuid4(), uuid4(), None, None))
         graph.invoke({"messages": [{"role": "user", "content": "Калибровка."}]})
-    assert len(captured) == 1 and len(captured[0]["tools"]) == 13
+    from backend.agent_tools import TOOL_NAMES
+    assert len(captured) == 1 and len(captured[0]["tools"]) == len(TOOL_NAMES)
     with httpx.Client(timeout=180, trust_env=False) as client:
         response = client.post(settings.base_url.rstrip("/")+"/chat/completions", json=captured[0],
             headers={"Authorization": "Bearer "+settings.api_key.get_secret_value()})

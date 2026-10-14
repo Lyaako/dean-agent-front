@@ -135,7 +135,7 @@ def test_tool_call_commentary_does_not_exhaust_context_or_remove_calls_results_a
     assert records[-2:] == [("submitted", [chunk["chunk_id"]]), ("acknowledged", [chunk["chunk_id"]])]
 
 
-def test_invalid_attachment_cursor_returns_safe_tool_error_without_aborting_run(monkeypatch):
+def test_invalid_attachment_cursor_returns_safe_tool_error_without_aborting_run(monkeypatch,fake_tool_context):
     from backend.file_parser import AttachmentError
     descriptor = {"file_id": str(uuid4()), "version_id": str(uuid4())}
     events, writes = [], []

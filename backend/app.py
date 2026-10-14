@@ -19,13 +19,15 @@ from backend import auth
 from backend import resources
 from backend import olap
 from backend import proposals
+from backend.database_errors import domain_error
+from backend.database_actor import user_context
 from backend import chats, streaming, files
 from backend.service_status import database_status, dependency_status, log_event
 from backend.knowledge_config import KnowledgeSettings
 from backend.file_parser import AttachmentError
 from backend.agent_config import AgentSettings
 from backend.contracts import (ChatRequest, ChatTitle, EmptyRequest, Job, Me,
-                               ProposalAssignmentRequest, ProposalDecisionRequest, ProposalSubmitRequest)
+                               ManualGradeCorrectionRequest, ProposalAssignmentRequest, ProposalDecisionRequest, ProposalSubmitRequest)
 
 
 app = FastAPI(title="Деканат: агент и данные")
@@ -40,10 +42,16 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=1024)
 
 
-def error(request: Request, status: int, code: str, message: str | None = None) -> JSONResponse:
+class PasswordChangeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    current_password: str = Field(min_length=1, max_length=1024)
+    new_password: str = Field(min_length=8, max_length=1024)
+
+
+def error(request: Request, status: int, code: str, message: str | None = None, details: Any = None) -> JSONResponse:
     return JSONResponse(
         status_code=status,
-        content={"error": {"code": code, "message": message or code, "details": None},
+        content={"error": {"code": code, "message": message or code, "details": details},
                  "request_id": request.state.request_id},
     )
 
@@ -79,6 +87,8 @@ def readiness():
 
 @app.exception_handler(HTTPException)
 async def http_error(request: Request, exc: HTTPException):
+    if isinstance(exc.detail, dict):
+        return error(request, exc.status_code, exc.detail["code"], exc.detail.get("message"), exc.detail.get("details"))
     code = str(exc.detail)
     return error(request, exc.status_code, code)
 
@@ -90,6 +100,9 @@ async def validation_error(request: Request, exc: RequestValidationError):
 
 @app.exception_handler(psycopg.Error)
 async def database_error(request: Request, exc: psycopg.Error):
+    domain = domain_error(exc)
+    if domain is not None:
+        return error(request, *domain)
     proposal_errors = {
         "P6001": (409, "idempotency_conflict"), "P6002": (409, "proposal_expired"),
         "P6003": (409, "stale_proposal"), "P6004": (409, "proposal_decided"),
@@ -107,7 +120,7 @@ async def database_error(request: Request, exc: psycopg.Error):
         return error(request, 403, "forbidden", "Недостаточно прав")
     if exc.sqlstate == "P0002":
         return error(request, 404, "not_found", "Запись не найдена")
-    if exc.sqlstate in ("23505", "23503", "P0001", "40001", "40P01"):
+    if exc.sqlstate in ("23505", "23503", "23P01", "P0001", "40001", "40P01"):
         return error(request, 409, "conflict", "Действие конфликтует с текущими данными")
     if exc.sqlstate in ("23502", "23514", "22023", "22P02", "22007", "22008", "22003", "22001"):
         return error(request, 422, "invalid_record", "Некорректные данные записи")
@@ -125,8 +138,12 @@ def bearer(authorization: str | None) -> str:
     return authorization[7:]
 
 
-def actor(authorization: str | None = Header(default=None), db=Depends(db_connection, scope="function")) -> tuple[Me, str]:
-    return auth.access_actor(db, bearer(authorization))
+def actor(request: Request, authorization: str | None = Header(default=None), db=Depends(db_connection, scope="function")) -> tuple[Me, str]:
+    authorized = auth.access_actor(db, bearer(authorization))
+    if authorized[0].must_change_password and request.url.path not in (
+            "/api/v1/auth/me", "/api/v1/auth/password", "/api/v1/auth/logout"):
+        raise HTTPException(status_code=403, detail="password_change_required")
+    return authorized
 
 
 def _set_cookie(response: Response, value: str) -> None:
@@ -201,13 +218,60 @@ def logout(response: Response, authorized=Depends(actor), db=Depends(db_connecti
 
 @app.get("/api/v1/schema")
 def get_schema(authorized=Depends(actor), db=Depends(db_connection, scope="function")):
-    return resources.schema(db, authorized[0])
+    with user_context(db,authorized[0].user_id,read_only=True):
+        return resources.schema(db, authorized[0])
+
+
+@app.post("/api/v1/auth/password", status_code=204)
+def change_password(payload: PasswordChangeRequest, request: Request,
+                    authorized=Depends(actor), db=Depends(db_connection, scope="function")):
+    token = request.headers["authorization"][7:]
+    stored = db.execute("SELECT backend_api.own_password_hash(%s) AS hash", (token,)).fetchone()["hash"]
+    if not auth.verify_password(payload.current_password, stored):
+        raise HTTPException(status_code=403, detail="invalid_current_password")
+    if payload.new_password == payload.current_password:
+        raise HTTPException(status_code=422, detail="password_unchanged")
+    with user_context(db,authorized[0].user_id,password_change=True):
+        db.execute("SELECT backend_api.change_password(%s,%s)", (token, auth.hasher.hash(payload.new_password)))
+
+
+@app.post("/api/v1/auth/logout-all", status_code=204)
+def logout_all(request: Request, response: Response, authorized=Depends(actor), db=Depends(db_connection, scope="function")):
+    db.execute("SELECT backend_api.logout_all(%s)", (request.headers["authorization"][7:],))
+    response.delete_cookie(COOKIE, path="/api/v1/auth", secure=os.environ.get("DEANERY_DEV_INSECURE_COOKIE") != "1", httponly=True, samesite="strict")
+
+
+@app.get("/api/v1/me/profile")
+def own_profile(request: Request, authorized=Depends(actor), db=Depends(db_connection, scope="function")):
+    return db.execute("SELECT backend_api.own_profile(%s) AS profile", (request.headers["authorization"][7:],)).fetchone()["profile"]
+
+
+@app.post("/api/v1/admin/users/{user_id}/reset-password")
+def reset_password(user_id: int, request: Request, idempotency_key: UUID = Header(),
+                   authorized=Depends(actor), db=Depends(db_connection, scope="function")):
+    if authorized[0].roles[0] != "admin":
+        raise HTTPException(status_code=403, detail="forbidden")
+    password = auth.token()
+    with user_context(db,authorized[0].user_id):
+        issued = db.execute("SELECT backend_api.reset_password(%s,%s,%s,%s) AS issued",
+            (request.headers["authorization"][7:],user_id,idempotency_key,auth.hasher.hash(password))).fetchone()["issued"]
+    if not issued:
+        raise HTTPException(status_code=409, detail="password_already_issued")
+    return {"user_id": user_id, "temporary_password": password, "must_change_password": True}
 
 
 @app.get("/api/v1/resources/{name}")
 def get_resource(name: str, request: Request, authorized=Depends(actor), db=Depends(db_connection, scope="function")):
-    return resources.list_rows(db, name, authorized[0].roles[0],
-                               request.headers["authorization"][7:], dict(request.query_params))
+    with user_context(db,authorized[0].user_id,read_only=True):
+        return resources.list_rows(db, name, authorized[0].roles[0],
+                                   request.headers["authorization"][7:], dict(request.query_params))
+
+
+@app.get("/api/v1/resources/grade_sheet/{sheet_id}/missing")
+def sheet_missing(sheet_id: int, request: Request, authorized=Depends(actor), db=Depends(db_connection, scope="function")):
+    with user_context(db,authorized[0].user_id,read_only=True):
+        return {"items": db.execute("SELECT backend_api.sheet_missing(%s,%s) AS items",
+            (sheet_id,request.headers["authorization"][7:])).fetchone()["items"]}
 
 
 def _record_action(name: str, action: str, request: Request, key: dict[str, str],
@@ -215,10 +279,11 @@ def _record_action(name: str, action: str, request: Request, key: dict[str, str]
     info = resources.spec(db, name, authorized[0].roles[0])
     if authorized[0].roles[0] not in info.operation_roles.get(action, []):
         raise HTTPException(status_code=403, detail="forbidden")
-    row = db.execute(
-        "SELECT backend_api.mutate_record(%s,%s,%s,%s,%s) AS record",
-        (name, action, Jsonb(key), Jsonb(data), request.headers["authorization"][7:]),
-    ).fetchone()
+    with user_context(db, authorized[0].user_id):
+        row = db.execute(
+            "SELECT backend_api.mutate_record(%s,%s,%s,%s,%s) AS record",
+            (name, action, Jsonb(key), Jsonb(data), request.headers["authorization"][7:]),
+        ).fetchone()
     return row["record"]
 
 
@@ -242,7 +307,18 @@ def delete_resource(name: str, request: Request, authorized=Depends(actor), db=D
 @app.get("/api/v1/olap")
 def get_olap(request: Request, mode: str = "rollup-group", group_id: int | None = None,
              discipline_id: int | None = None, semester: int | None = None,
-             status_id: int | None = None, authorized=Depends(actor), db=Depends(db_connection, scope="function")):
+             status_id: int | None = None, course: int | None = None, level: str | None = None,
+             mod_min: int = 30, att_min: float = 75, period: str = 'month', pick: str | None = None,
+             authorized=Depends(actor), db=Depends(db_connection, scope="function")):
+    with user_context(db,authorized[0].user_id,read_only=True):
+        return _olap_report(request,mode,group_id,discipline_id,semester,status_id,course,level,mod_min,att_min,period,pick,db)
+
+
+def _olap_report(request,mode,group_id,discipline_id,semester,status_id,course,level,mod_min,att_min,period,pick,db):
+    if mode in olap.ANALYSES:
+        return olap.analyze(db,request.headers['authorization'][7:],mode,group_id=group_id,
+            discipline_id=discipline_id,semester=semester,status_id=status_id,course=course,level=level,
+            mod_min=mod_min,att_min=att_min,period=period,pick=pick)
     return olap.report(db, request.headers["authorization"][7:], mode,
                        group_id, discipline_id, semester, status_id)
 
@@ -250,8 +326,9 @@ def get_olap(request: Request, mode: str = "rollup-group", group_id: int | None 
 @app.post("/api/v1/workflows/{name}")
 def run_workflow(name: str, data: dict[str, Any], request: Request,
                  idempotency_key: UUID = Header(), authorized=Depends(actor), db=Depends(db_connection, scope="function")):
-    return db.execute("SELECT backend_api.run_workflow(%s,%s,%s,%s) AS result",
-                      (name, Jsonb(data), idempotency_key, request.headers["authorization"][7:])).fetchone()["result"]
+    with user_context(db, authorized[0].user_id):
+        return db.execute("SELECT backend_api.run_workflow(%s,%s,%s,%s) AS result",
+                          (name, Jsonb(data), idempotency_key, request.headers["authorization"][7:])).fetchone()["result"]
 
 
 @app.get("/api/v1/jobs/{job_id}", response_model=Job)
@@ -259,6 +336,23 @@ def get_job(job_id: UUID, request: Request, page_offset: Annotated[int, Query(ge
             page_limit: Annotated[int, Query(ge=1, le=100)] = 100,
             authorized=Depends(actor), db=Depends(db_connection, scope="function")):
     return files.get_job(db, job_id, request.headers["authorization"][7:], page_offset, page_limit)
+
+
+@app.get("/api/v1/orders/signers")
+def order_signers(request: Request, institute_id: Annotated[int, Query(gt=0)],
+                  authorized=Depends(actor), db=Depends(db_connection, scope="function")):
+    return {"items": db.execute("SELECT backend_api.order_signers(%s,%s) AS items",
+        (institute_id,request.headers["authorization"][7:])).fetchone()["items"]}
+
+
+@app.post("/api/v1/orders/{order_number}/students/{student_id}/cancel")
+def cancel_order(order_number: str, student_id: int, request: Request, idempotency_key: UUID = Header(),
+                 authorized=Depends(actor), db=Depends(db_connection, scope="function")):
+    if authorized[0].roles[0] not in resources.STAFF:
+        raise HTTPException(403, "forbidden")
+    with user_context(db,authorized[0].user_id):
+        return db.execute("SELECT backend_api.cancel_order(%s,%s,%s,%s) AS result",
+            (order_number,student_id,idempotency_key,request.headers["authorization"][7:])).fetchone()["result"]
 
 
 @app.exception_handler(AttachmentError)
@@ -307,9 +401,28 @@ def list_proposals(request: Request, box: Literal["incoming", "mine", "completed
                              limit, offset, author, created_from, created_to)
 
 
+@app.post('/api/v1/grade-corrections')
+def create_correction(payload: ManualGradeCorrectionRequest, request: Request, idempotency_key: UUID = Header(),
+                      authorized=Depends(actor), db=Depends(db_connection, scope='function')):
+    if authorized[0].roles[0] not in resources.NO_STUDENT:
+        raise HTTPException(403,'forbidden')
+    with user_context(db,authorized[0].user_id):
+        return db.execute('SELECT backend_api.create_correction(%s,%s,%s,%s,%s,%s,%s) AS result',
+            (payload.sheet_id,payload.student_id,payload.new_points,payload.new_is_absent,payload.reason,
+             idempotency_key,request.headers['authorization'][7:])).fetchone()['result']
+
+
 @app.get("/api/v1/agent/proposals/{proposal_id}")
 def get_proposal(proposal_id: UUID, request: Request, authorized=Depends(actor), db=Depends(db_connection, scope="function")):
     return proposals.get(db, proposal_id, request.headers["authorization"][7:])
+
+
+@app.post('/api/v1/agent/proposals/{proposal_id}/undo')
+def undo_proposal(proposal_id: UUID, request: Request, idempotency_key: UUID = Header(),
+                  authorized=Depends(actor), db=Depends(db_connection, scope='function')):
+    with user_context(db,authorized[0].user_id):
+        return db.execute('SELECT backend_api.undo_proposal(%s,%s,%s) AS result',
+            (proposal_id,idempotency_key,request.headers['authorization'][7:])).fetchone()['result']
 
 
 @app.get("/api/v1/agent/proposals/{proposal_id}/assignees")
@@ -333,13 +446,15 @@ def assign_proposal(proposal_id: UUID, payload: ProposalAssignmentRequest, reque
 @app.post("/api/v1/agent/proposals/{proposal_id}/submit")
 def submit_proposal(proposal_id: UUID, payload: ProposalSubmitRequest, request: Request,
                     idempotency_key: UUID = Header(alias="Idempotency-Key"), authorized=Depends(actor), db=Depends(db_connection, scope="function")):
-    return proposals.submit(db, proposal_id, payload, idempotency_key, request.headers["authorization"][7:])
+    with user_context(db, authorized[0].user_id):
+        return proposals.submit(db, proposal_id, payload, idempotency_key, request.headers["authorization"][7:])
 
 
 @app.post("/api/v1/agent/proposals/{proposal_id}/decision")
 def decide_proposal(proposal_id: UUID, payload: ProposalDecisionRequest, request: Request,
                     idempotency_key: UUID = Header(), authorized=Depends(actor), db=Depends(db_connection, scope="function")):
-    return proposals.decide(db, proposal_id, payload, idempotency_key, request.headers["authorization"][7:])
+    with user_context(db, authorized[0].user_id):
+        return proposals.decide(db, proposal_id, payload, idempotency_key, request.headers["authorization"][7:])
 
 
 @app.get("/api/v1/agent/sessions")
@@ -385,8 +500,11 @@ def start_chat_stream(payload: ChatRequest, request: Request, idempotency_key: U
     token = bearer(authorization)
     # End the transaction before opening SSE so the independent worker can see the queued run.
     with chats.connection() as db:
-        auth.access_actor(db, token)
-        started = chats.start(db, payload, idempotency_key, token)
+        me=auth.access_actor(db, token)[0]
+        if me.must_change_password:
+            raise HTTPException(403,'password_change_required')
+        with user_context(db,me.user_id):
+            started = chats.start(db, payload, idempotency_key, token)
     request.state.operation_ids = {"run_id": started["run_id"]}
     return event_response(UUID(started["run_id"]), token, 0)
 
@@ -396,7 +514,8 @@ def replay_chat_stream(run_id: UUID, after: Annotated[int, Query(ge=0, le=2**63 
                        authorization: str | None = Header(default=None)):
     token = bearer(authorization)
     with chats.connection() as db:
-        auth.access_actor(db, token)
+        if auth.access_actor(db, token)[0].must_change_password:
+            raise HTTPException(403,'password_change_required')
         chats.events(db, run_id, token, after)
     return event_response(run_id, token, after)
 
@@ -416,6 +535,9 @@ async def agent_capabilities(authorized=Depends(actor)):
     except (ValueError, OSError):
         services = {"model": "unavailable", "calibration": "uncalibrated"}
     ready = all(services.get(name) == "ready" for name in ("model", "calibration", "agent_worker"))
-    return {"attachment_context": {"protocol": "deanery.attachments.v1", "backend_supported": True,
+    result = {"attachment_context": {"protocol": "deanery.attachments.v1", "backend_supported": True,
         "agent_supported": True, "agent_status": "ready" if ready else "unavailable",
-        "max_attachments": 5, "max_total_bytes": 20000000, "max_text_chunks": 20}, "services": services}
+        "max_attachments": 5, "max_total_bytes": 20000000, "max_text_chunks": 20}}
+    if authorized[0].roles[0] == "admin":
+        result["services"] = services
+    return result

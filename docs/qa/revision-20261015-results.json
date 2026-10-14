@@ -1,0 +1,148 @@
+{
+  "date_moscow": "2026-10-15",
+  "scope": "Backend B1-B11 only; colleague frontend pending",
+  "migration_head": "0056_read_boundaries",
+  "tables": {
+    "deanery": 56,
+    "agent_backend": 16
+  },
+  "native_checks": {
+    "upgraded_database": 225,
+    "fresh_database": 225,
+    "public_error_codes_from_real_database": 12
+  },
+  "full_suite": {
+    "passed": 480,
+    "skipped": 7,
+    "subtests_passed": 372,
+    "seconds": 176.38
+  },
+  "offline_suite": {
+    "passed": 337,
+    "skipped": 150,
+    "subtests_passed": 157,
+    "seconds": 10.47
+  },
+  "post_hardening_batch_risk_suite": {
+    "passed": 10,
+    "subtests_passed": 5,
+    "seconds": 26.18
+  },
+  "skips": [
+    "explicit provider/attachment/calibration smokes",
+    "explicit database/operator race harness",
+    "Linux-only parser/OCR"
+  ],
+  "http_acceptance": {
+    "http": {
+      "admin": "login/me/schema/profile/read/employee-denied PASS",
+      "dean_staff": "login/me/schema/profile/read/employee-denied PASS",
+      "director": "login/me/schema/profile/read/employee-denied PASS",
+      "student": "login/me/schema/profile/read/employee-denied PASS",
+      "teacher": "login/me/schema/profile/read/employee-denied PASS"
+    },
+    "database": {
+      "restricted_api": "LOGIN NOINHERIT NOSUPERUSER; personal role and restoration PASS",
+      "native_audit": "actual API actor PASS",
+      "head": "0056_read_boundaries",
+      "tables": 72
+    }
+  },
+  "upgrade": {
+    "from": "0039_scope_check_latency",
+    "to": "0056_read_boundaries",
+    "preflight_rejected": [
+      "passport_incomplete",
+      "order_unsigned",
+      "director_duplicate",
+      "assignment_duplicate",
+      "sheet_dates_invalid",
+      "leave_reason.name",
+      "agent_request_text_blank"
+    ],
+    "student_order_scholarship_counts_before": [
+      508,
+      30,
+      208
+    ],
+    "student_order_scholarship_counts_after": [
+      508,
+      30,
+      208
+    ],
+    "amount_backfill": true,
+    "repeat_upgrade_unchanged": true
+  },
+  "model": {
+    "model": "qwen_qwen3.5-9b",
+    "run_id": "7c3fde29-3084-4a02-9cc5-216dd8cbf382",
+    "status": "succeeded",
+    "proposal_id": "93dab74d-0849-4c43-adfb-5f0dad953b2d",
+    "kind": "batch",
+    "items": 2,
+    "proposal_status": "pending",
+    "domain_rows_unchanged": true
+  },
+  "model_calls": [
+    "describe_resources",
+    "describe_resources",
+    "prepare_batch_changes"
+  ],
+  "model_note": "First resource description returned not_found; the model retried student successfully, then prepared one pending batch. Its preparation did not write domain rows. A subsequent explicit synthetic HTTP approval was used solely for the undo/form race.",
+  "calibrations": [
+    {
+      "model": "qwen_qwen3.5-9b",
+      "base_url": "http://127.0.0.1:1234/v1",
+      "context_window": 20480,
+      "max_tokens": 1536,
+      "temperature": 0.6,
+      "reasoning_effort": "none",
+      "prompt_tokens": 4483,
+      "prompt_fingerprint": "98f51c179a951cd3f71df5ed12d3a29124f6eb015356e7fd1e71337bf5c8dd9f",
+      "native_provider_requests": 1,
+      "tool_count": 14
+    },
+    {
+      "model": "qwen_qwen3.5-9b",
+      "base_url": "http://host.docker.internal:1234/v1",
+      "context_window": 20480,
+      "max_tokens": 1536,
+      "temperature": 0.6,
+      "reasoning_effort": "none",
+      "prompt_tokens": 4483,
+      "prompt_fingerprint": "acd66da859ecb492a433a92d7d0c73f142a6665985287b06d553e30d8c2d4d1a",
+      "native_provider_requests": 1,
+      "tool_count": 14
+    }
+  ],
+  "password_race": {
+    "simultaneous_changes": 2,
+    "statuses": [
+      204,
+      403
+    ],
+    "exactly_one_password_applied": true
+  },
+  "undo_form_race": {
+    "http_status": 409,
+    "code": "undo_changed",
+    "later_form_change_preserved": true,
+    "applied_batch_preserved": true,
+    "real_database_lock_wait_observed": true
+  },
+  "final_image_full_chain_fresh_database": "PASS",
+  "limits": [
+    "new frontend browser/click acceptance not performed",
+    "existing working database unchanged",
+    "production load and all provider behaviours not tested",
+    "OLAP retains 100000 fact limit",
+    "ordinary resource PATCH has no optimistic version and ordinary resource POST has no idempotency key"
+  ],
+  "published_checkout_offline_suite": {
+    "passed": 338,
+    "skipped": 150,
+    "subtests_passed": 157,
+    "seconds": 11.03,
+    "private_source_env_absent": true
+  }
+}

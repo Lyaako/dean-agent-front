@@ -5,10 +5,11 @@ from uuid import UUID, uuid4
 
 import psycopg
 from backend import proposals
+from backend.database_actor import user_context
 from backend.tests.test_auth import DatabaseHttpCase
 
 
-class ProposalTests(DatabaseHttpCase):
+class ProposalHelpers:
     def setUp(self):
         super().setUp()
         self.db.execute("SET LOCAL search_path TO pg_catalog,deanery")
@@ -41,13 +42,18 @@ class ProposalTests(DatabaseHttpCase):
     def prepare(self, command, headers, run_id=None, key=None, supersedes=None):
         if run_id is None:
             run_id = self.create_run(headers)[0]
+        author=self.user_from_headers(headers)
         self.db.execute('SET LOCAL ROLE backend_executor')
         try:
             with self.db.transaction():
-                return proposals.prepare(self.db, run_id, command, 'Проверяемое изменение', 'Основание пользователя',
-                    key or uuid4(), headers['Authorization'][7:], supersedes)
+                with user_context(self.db,author,prepare=True):
+                    return proposals.prepare(self.db, run_id, command, 'Проверяемое изменение', 'Основание пользователя',
+                        key or uuid4(), headers['Authorization'][7:], supersedes)
         finally:
             self.db.execute('SET LOCAL ROLE backend_api')
+
+    def user_from_headers(self,headers):
+        return self.client.get('/api/v1/auth/me',headers=headers).json()['user_id']
 
     def record(self, resource, operation, key, fields):
         return {'version': 1, 'kind': 'record_change', 'resource': resource, 'operation': operation, 'key': key, 'fields': fields}
@@ -78,6 +84,8 @@ class ProposalTests(DatabaseHttpCase):
         self.assertEqual(response.status_code, status, response.text)
         return response.json()
 
+
+class ProposalTests(ProposalHelpers,DatabaseHttpCase):
     def test_prepare_is_internal_immutable_and_approve_is_once_with_audit(self):
         headers = self.login('vasilyeva')
         command = self.group_command()

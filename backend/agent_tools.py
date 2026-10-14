@@ -14,11 +14,13 @@ from psycopg.types.json import Jsonb
 from backend import resources, olap
 from backend.agent_query import QueryRejected, rewrite_query
 from backend.agent_sql_changes import ALLOWED, parse_change
+from backend.database_actor import user_context
+from backend.database_errors import domain_error
 
 
 TOOL_NAMES = frozenset({"describe_resources", "query_deanery", "prepare_record_change", "prepare_workflow", "get_olap_report",
     "propose_sql_change", "prepare_scholarship_assignment", "prepare_scholarship_termination",
-    "prepare_scholarship_cancellation", "prepare_scheduled_order_cancellation", "prepare_grade_correction", "read_attachment_text", "search_regulations"})
+    "prepare_scholarship_cancellation", "prepare_scheduled_order_cancellation", "prepare_grade_correction", "prepare_batch_changes", "read_attachment_text", "search_regulations"})
 GUARD_ERRORS = {"P8007", "P8008", "P8009", "42501"}
 
 
@@ -54,7 +56,8 @@ def build_tools(connect, run_id, worker_id, emit, check, attachments=None):
             prepared = remote() if remote is not None else None
             with connect(read_only=read_only) as db:
                 context = run_context(db, run_id, worker_id, read_only)
-                result = operation(db, context["actor"]["role_code"], prepared) if remote is not None else operation(db, context["actor"]["role_code"])
+                with user_context(db, context["actor"]["user_id"], agent_read=read_only, prepare=not read_only):
+                    result = operation(db, context["actor"]["role_code"], prepared) if remote is not None else operation(db, context["actor"]["role_code"])
                 if name in {"read_attachment_text", "search_regulations"} and attachments is not None:
                     rendered = encode(result)
                     if len(rendered) > 20000:
@@ -77,6 +80,9 @@ def build_tools(connect, run_id, worker_id, emit, check, attachments=None):
                 raise AgentAbort("agent_error") from None
             result = {"error": "query_timeout" if exc.sqlstate == "57014" else "invalid_or_conflicting_request",
                       "message": "Запрос отклонён; проверьте поля, область доступа и актуальность данных"}
+            domain=domain_error(exc)
+            if domain is not None:
+                result={'error':domain[1],'message':domain[2],'details':domain[3]}
         check()
         rendered = encode(result)
         if len(rendered) > 20000:
@@ -136,6 +142,9 @@ def build_tools(connect, run_id, worker_id, emit, check, attachments=None):
     def prepare(db, command, explanation, reason, attachment_chunk_ids=None):
         result = db.execute("SELECT backend_api.prepare_run_proposal(%s,%s,%s,%s,%s,%s,NULL,%s) AS result",
                             (run_id, worker_id, Jsonb(command), explanation, reason, uuid4(), Jsonb(attachment_chunk_ids or []))).fetchone()["result"]
+        if result.get('kind')=='batch':
+            return {'id':result['id'],'kind':'batch','status':result['status'],'affected_rows':len(result.get('items',[])),
+                'message':'Пакет подготовлен. Пользователь выбирает строки в карточке и подтверждает их одной транзакцией.'}
         # The complete card stays in PostgreSQL/API; the model needs its ID, state and unabridged effects.
         return {key: result[key] for key in ("id", "kind", "status", "submission_status", "preview") if key in result}
 
@@ -194,6 +203,22 @@ def build_tools(connect, run_id, worker_id, emit, check, attachments=None):
         return invoke("prepare_record_change", {}, lambda db, role: prepare(db, command, explanation, reason, attachment_chunk_ids), False)
 
     @tool
+    def prepare_batch_changes(items: list[dict], explanation: str, reason: str, attachment_chunk_ids: list[str] | None = None) -> str:
+        """Prepare 1..200 explicitly requested INSERT/UPDATE rows as one immutable batch. Each item contains item_id:positive integer, resource:described agent table, operation:create|update, key:exact primary key ({} for create), fields:literal values. No deletes, orders or grade corrections. Teacher grades/attendance require their own open sheet/lesson and are confirmed by that teacher. User selects rows; preparation never applies them. Never invent values or a reason."""
+        def execute(db,role):
+            if len(items)>200:
+                raise HTTPException(422,'batch_too_large')
+            commands=[]
+            for item in items:
+                if set(item)!= {'item_id','resource','operation','key','fields'}:
+                    raise HTTPException(422,'invalid_batch_item')
+                command={'version':1,'kind':'record_change' if item['resource']=='student' else 'sql_change',
+                    **{key:item[key] for key in ('resource','operation','key','fields')}}
+                commands.append({'item_id':item['item_id'],'command':command})
+            return prepare(db,{'version':1,'kind':'batch','items':commands},explanation,reason,attachment_chunk_ids)
+        return invoke('prepare_batch_changes',{},execute,False)
+
+    @tool
     def prepare_workflow(name: Literal["enroll_student", "transfer_student", "expel_student", "grant_academic_leave", "return_from_leave", "reinstate_student"],
                          fields: dict, explanation: str, reason: str, attachment_chunk_ids: list[str] | None = None) -> str:
         """Prepare a student workflow proposal, never execute/approve it. All fields need order_number:string,signed_by:employee ID. enroll_student also last_name,first_name,gender M/F,birth_date YYYY-MM-DD,group_name,funding,record_book; optional middle_name,email,phone,effective_date. transfer/reinstate: student_id,group_name, optional effective_date. expel: student_id,reason,optional effective_date. grant_academic_leave: student_id,reason,start,end YYYY-MM-DD. return_from_leave:student_id,optional effective_date,group_name. Ask missing fields and user reason; no invented reason/signatory."""
@@ -245,6 +270,6 @@ def build_tools(connect, run_id, worker_id, emit, check, attachments=None):
             return search_candidates(query, scope, settings=KnowledgeSettings(), check=check)
         return invoke("search_regulations", {}, lambda db, role, candidates: attachments.regulation_results(db, candidates), False, retrieve)
 
-    return [describe_resources, query_deanery, prepare_record_change, prepare_workflow, get_olap_report,
+    return [describe_resources, query_deanery, prepare_record_change, prepare_batch_changes, prepare_workflow, get_olap_report,
             propose_sql_change, prepare_scholarship_assignment, prepare_scholarship_termination,
             prepare_scholarship_cancellation, prepare_scheduled_order_cancellation, prepare_grade_correction, read_attachment_text, search_regulations]

@@ -34,7 +34,7 @@ class AgentSettings(BaseSettings):
                 db.execute("SET TRANSACTION READ ONLY")
             db.execute("SET LOCAL ROLE backend_executor")
             db.execute("SET LOCAL search_path=pg_catalog")
-            db.execute("SET LOCAL statement_timeout='5s'")
+            db.execute("SET LOCAL statement_timeout='5s'" if read_only else "SET LOCAL statement_timeout='30s'")
             db.execute("SET LOCAL lock_timeout='5s'")
             db.execute("SET LOCAL TIME ZONE 'Europe/Moscow'")
             yield db

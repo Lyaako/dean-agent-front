@@ -198,7 +198,7 @@ class ContractTests(unittest.TestCase):
         GradeCorrectionRequest.model_validate(self.correction(new_points=None, new_is_absent=False))
         for change in [
             {"new_is_absent": True}, {"new_points": 0}, {"new_points": 32768},
-            {"new_is_absent": "false"}, {"reason": " "}, {"reason": "я" * 501},
+            {"new_is_absent": "false"}, {"reason": " "}, {"reason": "я" * 2001},
             {"sheet_number": "я" * 21},
         ]:
             with self.subTest(change=change), self.assertRaises(ValidationError):

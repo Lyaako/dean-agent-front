@@ -1,5 +1,6 @@
 """Narrow file HTTP and durable job checks against the isolated database."""
 from pathlib import Path
+from types import SimpleNamespace
 import tempfile
 from unittest.mock import patch
 from uuid import uuid4
@@ -16,6 +17,8 @@ def test_attachment_capability_support_survives_provider_unavailability():
     from backend.app import agent_capabilities
     from backend.agent_config import AgentSettings
     settings = AgentSettings(_env_file=None, base_url='http://127.0.0.1:1234/v1', OPENAI_API_KEY='fixture-key')
+    from backend.service_status import calibration_fingerprint
+    settings.prompt_fingerprint=calibration_fingerprint(settings.model,settings.base_url,settings.context_window)
     expected = {'protocol': 'deanery.attachments.v1', 'backend_supported': True, 'agent_supported': True,
                 'agent_status': 'ready', 'max_attachments': 5, 'max_total_bytes': 20000000, 'max_text_chunks': 20}
     for outcome in ('ready', 'unreachable', 'wrong_context'):
@@ -32,7 +35,9 @@ def test_attachment_capability_support_survives_provider_unavailability():
             return httpx.Response(200, stream=httpx.ByteStream(json.dumps(data).encode()))
         client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
         with patch('backend.app.AgentSettings', return_value=settings), patch('backend.service_status.httpx.AsyncClient', return_value=client) as factory, patch('backend.service_status.worker_status', return_value='ready'):
-            actual = asyncio.run(agent_capabilities(None))['attachment_context']
+            response = asyncio.run(agent_capabilities((SimpleNamespace(roles=['student']), None)))
+            assert 'services' not in response
+            actual = response['attachment_context']
         factory.assert_called_once_with(timeout=1.5, trust_env=False, follow_redirects=False)
         assert actual == expected | {'agent_status': 'ready' if outcome == 'ready' else 'unavailable'}
 

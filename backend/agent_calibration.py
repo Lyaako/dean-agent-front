@@ -70,7 +70,7 @@ def apply_result(path, result):
         if result.get(key) != getattr(settings, key):
             raise ValueError('Calibration does not match the current model configuration')
     if result.get('native_provider_requests') != 1 or result.get('tool_count') != len(TOOL_NAMES):
-        raise ValueError('Expected one native request with exactly thirteen tools')
+        raise ValueError('Expected one native request with the current complete tool set')
     tokens, fingerprint = result.get('prompt_tokens'), result.get('prompt_fingerprint')
     if type(tokens) is not int or tokens <= 256 or settings.context_window <= tokens + settings.max_tokens + 512:
         raise ValueError('Invalid calibrated token budget')

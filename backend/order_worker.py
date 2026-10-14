@@ -19,7 +19,8 @@ def run_once(dsn: str, worker_id) -> dict | None:
         return None
     log_event("order", "job_started", job_id=job_id)
     with psycopg.connect(dsn, connect_timeout=5, options="-c statement_timeout=30000 -c lock_timeout=5000") as db:
-        db.execute("SET LOCAL ROLE backend_worker")
+        db.execute("SET LOCAL ROLE deanery_agent")
+        db.execute("SELECT set_config('app.user_id','',TRUE)")
         return db.execute("SELECT backend_api.perform_order_job(%s,%s)",(job_id,worker_id)).fetchone()[0]
 
 

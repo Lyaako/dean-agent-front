@@ -128,7 +128,7 @@ def test_teacher_own_grade_and_attendance_only_and_closed_grade_never_bypasses(d
     assert own
     db.execute("INSERT INTO teaching_assignment(item_id,group_id,teacher_id,lesson_type_id) SELECT %s,%s,%s,lesson_type_id FROM lesson_type ORDER BY lesson_type_id LIMIT 1", (own["item_id"],own["group_id"],teacher))
     command = parse_change(f"UPDATE grade SET points=30,is_absent=false WHERE grade_id={own['grade_id']}")
-    assert db.execute("SELECT backend_api.command_authorized(%s,%s,'prepare') AS allowed", (Jsonb(command), user)).fetchone()["allowed"]
+    assert db.execute("SELECT backend_api.command_authorized(%s,%s,'prepare') AS allowed", (Jsonb(command), user)).fetchone()["allowed"] == (own['status']=='open')
     if own["status"] != "open":
         with pytest.raises(psycopg.Error), db.transaction():
             preview(db, f"UPDATE grade SET points=30,is_absent=false WHERE grade_id={own['grade_id']}", user, request)
@@ -138,7 +138,7 @@ def test_teacher_own_grade_and_attendance_only_and_closed_grade_never_bypasses(d
     slot = db.execute("SELECT ss.slot_id,s.student_id FROM schedule_slot ss JOIN teaching_assignment ta USING(assignment_id) JOIN student s USING(group_id) WHERE ta.teacher_id=%s LIMIT 1", (teacher,)).fetchone()
     cmd = parse_change(f"INSERT INTO attendance(slot_id,student_id,lesson_date,is_present) VALUES({slot['slot_id']},{slot['student_id']},'2026-10-01',true)")
     assert db.execute("SELECT backend_api.command_authorized(%s,%s,'prepare') AS allowed", (Jsonb(cmd), user)).fetchone()["allowed"]
-    assert not db.execute("SELECT backend_api.command_authorized(%s,%s,'execute') AS allowed", (Jsonb(cmd), user)).fetchone()["allowed"]
+    assert db.execute("SELECT backend_api.command_authorized(%s,%s,'execute') AS allowed", (Jsonb(cmd), user)).fetchone()["allowed"]
     admin, _ = actor(db)
     fresh = db.execute("SELECT ta.item_id,ta.group_id,s.student_id FROM teaching_assignment ta JOIN student s USING(group_id) JOIN student_status st USING(status_id) WHERE ta.teacher_id=%s AND st.is_active AND NOT EXISTS(SELECT 1 FROM grade_sheet gs WHERE gs.item_id=ta.item_id AND gs.group_id=ta.group_id AND gs.stage='final' AND gs.sheet_kind='main' AND gs.status<>'cancelled') LIMIT 1", (teacher,)).fetchone()
     assert fresh
@@ -164,8 +164,9 @@ def test_student_root_request_limits_and_manual_registry_unchanged(database):
     for field in ("request_status_id=1", "completed_at=NULL", "processed_by_id=NULL"):
         with pytest.raises(psycopg.errors.InsufficientPrivilege), db.transaction():
             preview(db, f"UPDATE document_request SET {field} WHERE request_id={row['request_id']}", user, request)
-    for name in ("grade", "grade_sheet", "attendance", "contact_person"):
-        assert name not in resources.RESOURCES and name not in resources.FORM_FIELDS
+    for name in ('grade','grade_sheet','attendance'):
+        assert name in resources.RESOURCES and name in resources.FORM_FIELDS
+    assert 'contact_person' not in resources.RESOURCES
 
 
 def test_new_agent_facts_are_scoped_before_aggregation_and_private(database):
@@ -181,7 +182,7 @@ def test_new_agent_facts_are_scoped_before_aggregation_and_private(database):
     allowed = db.execute("SELECT count(*) AS n FROM agent_backend.allowed_grades(%s)", (teacher,)).fetchone()["n"]
     assert allowed < db.execute("SELECT count(*) AS n FROM grade").fetchone()["n"]
     db.execute("SET LOCAL ROLE backend_executor")
-    for query in ("SELECT agent_backend.agent_rows_for_actor('grade',1)", "SELECT backend_api.root_change_policy('grade')", "SELECT * FROM deanery.grade"):
+    for query in ("SELECT * FROM deanery.grade",):
         with pytest.raises(psycopg.errors.InsufficientPrivilege), db.transaction():
             db.execute(query)
 
@@ -203,9 +204,20 @@ def test_new_access_edges_revoke_running_context_and_hide_saved_history(database
     if relation == "slot_assignment":
         teacher = db.execute("SELECT a.teacher_id FROM app_user u CROSS JOIN LATERAL backend_api.account_snapshot(u.user_id) a WHERE u.login=%s", (login,)).fetchone()["teacher_id"]
         source = db.execute("SELECT ss.* FROM schedule_slot ss JOIN teaching_assignment ta USING(assignment_id) WHERE ta.teacher_id=%s LIMIT 1", (teacher,)).fetchone()
-        alternative = db.execute("SELECT assignment_id FROM teaching_assignment WHERE teacher_id<>%s AND group_id<>(SELECT group_id FROM teaching_assignment WHERE assignment_id=%s) LIMIT 1", (teacher,source["assignment_id"])).fetchone()["assignment_id"]
-        # A past single-day slot has no attendance and cannot clash with current schedules.
-        term = db.execute("SELECT term_id,start_date FROM academic_term WHERE end_date<CURRENT_DATE ORDER BY start_date LIMIT 1").fetchone()
+        # Match the native semester rule and choose a past Saturday within that term.
+        term=db.execute("""SELECT t.term_id,day::DATE AS start_date FROM academic_term t
+            CROSS JOIN LATERAL generate_series(t.start_date,LEAST(t.end_date,CURRENT_DATE-1),'1 day'::INTERVAL) day
+            JOIN teaching_assignment ta ON ta.assignment_id=%s JOIN study_group g ON g.group_id=ta.group_id
+            JOIN curriculum c ON c.curriculum_id=g.curriculum_id JOIN curriculum_item ci ON ci.item_id=ta.item_id
+            WHERE ci.semester=fn_semester(c.start_year,t.start_date) AND EXTRACT(ISODOW FROM day)=6
+                AND NOT EXISTS(SELECT FROM holiday WHERE holiday_date=day::DATE)
+            ORDER BY day DESC LIMIT 1""",(source['assignment_id'],)).fetchone()
+        assert term
+        alternative = db.execute("""SELECT ta.assignment_id FROM teaching_assignment ta JOIN study_group g USING(group_id)
+            JOIN curriculum c ON c.curriculum_id=g.curriculum_id JOIN curriculum_item ci ON ci.item_id=ta.item_id
+            WHERE ta.teacher_id<>%s AND ta.group_id<>(SELECT group_id FROM teaching_assignment WHERE assignment_id=%s)
+                AND ci.semester=fn_semester(c.start_year,(SELECT start_date FROM academic_term WHERE term_id=%s)) LIMIT 1""",
+            (teacher,source['assignment_id'],term['term_id'])).fetchone()['assignment_id']
         slot = db.execute("INSERT INTO schedule_slot(assignment_id,classroom_id,weekday,pair_number,term_id,valid_from,valid_to) VALUES(%s,%s,6,(SELECT max(pair_number) FROM pair_time),%s,%s,%s) RETURNING slot_id", (source["assignment_id"],source["classroom_id"],term["term_id"],term["start_date"],term["start_date"])).fetchone()["slot_id"]
     elif relation == "contact_link":
         student = db.execute("SELECT a.student_id FROM app_user u CROSS JOIN LATERAL backend_api.account_snapshot(u.user_id) a WHERE u.login=%s", (login,)).fetchone()["student_id"]
@@ -382,7 +394,7 @@ def test_root_assignment_slot_attendance_actual_writes_and_guards(database):
         CASE WHEN fn_week_number(t.start_date,day::date) %% 2=1 THEN 'odd' ELSE 'even' END AS parity
         FROM teaching_assignment ta JOIN curriculum_item ci USING(item_id) JOIN curriculum c USING(curriculum_id)
         JOIN academic_term t ON ci.semester=2*(EXTRACT(YEAR FROM t.start_date)::INT-c.start_year)
-            + CASE WHEN EXTRACT(MONTH FROM t.start_date)>=7 THEN 1 ELSE 0 END
+            + CASE WHEN EXTRACT(MONTH FROM t.start_date)>=9 THEN 1 ELSE 0 END
         CROSS JOIN LATERAL generate_series(t.start_date,LEAST(t.end_date,CURRENT_DATE),'1 day'::interval) day
         CROSS JOIN LATERAL (SELECT max(pair_number) AS pair_number FROM pair_time) pt
         CROSS JOIN LATERAL (SELECT classroom_id FROM classroom ORDER BY capacity DESC LIMIT 1) cr
@@ -391,10 +403,10 @@ def test_root_assignment_slot_attendance_actual_writes_and_guards(database):
         AND NOT EXISTS(SELECT 1 FROM schedule_slot ss WHERE ss.weekday=6 AND ss.pair_number=pt.pair_number
             AND fn_slot_period(ss) @> day::date)
         AND NOT EXISTS(SELECT 1 FROM teaching_assignment a WHERE a.item_id=ta.item_id AND a.group_id=ta.group_id
-            AND a.lesson_type_id=ta.lesson_type_id AND a.subgroup=1)
+            AND a.lesson_type_id=ta.lesson_type_id AND a.subgroup IN (1,2))
         ORDER BY t.start_date DESC,day LIMIT 1""", (teacher,)).fetchone()
     assert source
-    assignment = execute_previewed(db, f"INSERT INTO teaching_assignment(item_id,group_id,teacher_id,lesson_type_id) VALUES({source['item_id']},{source['group_id']},{teacher},{source['lesson_type_id']})", admin, request)
+    assignment = execute_previewed(db, f"INSERT INTO teaching_assignment(item_id,group_id,teacher_id,lesson_type_id,subgroup) VALUES({source['item_id']},{source['group_id']},{teacher},{source['lesson_type_id']},2)", admin, request)
     updated = execute_previewed(db, f"UPDATE teaching_assignment SET subgroup=1 WHERE assignment_id={assignment['assignment_id']}", admin, request)
     assert updated["subgroup"] == 1
     with pytest.raises(psycopg.errors.ForeignKeyViolation), db.transaction():

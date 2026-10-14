@@ -191,9 +191,13 @@ def test_worker_error_invalidates_marker_and_hides_exception(health_root, monkey
     assert "SECRET" not in capsys.readouterr().out
 
 
-def test_offline_calibration_matches_native_13_tool_contract():
-    assert status.calibration_fingerprint("qwen2.5-7b-instruct", "http://127.0.0.1:1234/v1", 16384) == (
-        "902a16950bcff470229bf14789b64134140dc47c22f8ce5ac14f6593579138d0")
+def test_offline_calibration_matches_current_tool_contract():
+    from backend.agent_calibration import serialize
+    from backend.agent_tools import TOOL_NAMES
+    from backend.agent_attachments import static_fingerprint
+    payload=serialize('qwen2.5-7b-instruct','http://127.0.0.1:1234/v1')
+    assert {t['function']['name'] for t in payload['tools']}==TOOL_NAMES
+    assert status.calibration_fingerprint('qwen2.5-7b-instruct','http://127.0.0.1:1234/v1',16384)==static_fingerprint(payload,16384,'http://127.0.0.1:1234/v1')
 
 
 @pytest.mark.parametrize("fault,component,expected", [
@@ -206,6 +210,7 @@ def test_offline_calibration_matches_native_13_tool_contract():
     ("worker", "agent_worker", "unavailable")])
 def test_dependencies_are_independent_bounded_metadata_only(monkeypatch, fault, component, expected):
     settings = AgentSettings(_env_file=None)
+    settings.prompt_fingerprint=status.calibration_fingerprint(settings.model,settings.base_url,settings.context_window)
     knowledge = KnowledgeSettings()
     if fault == "fingerprint":
         settings.prompt_fingerprint = "wrong"

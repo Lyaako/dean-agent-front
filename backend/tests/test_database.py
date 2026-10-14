@@ -2,6 +2,8 @@
 
 import json
 import os
+import re
+from types import SimpleNamespace
 from pathlib import Path
 import unittest
 from uuid import uuid4
@@ -13,6 +15,7 @@ from psycopg.types.json import Jsonb
 
 ROOT = Path(__file__).resolve().parents[2]
 SERVICE_TABLES = {
+    "account_security",
     "auth_session", "auth_token", "chat_session", "chat_message", "agent_run",
     "proposal", "proposal_event", "idempotency_record", "file", "file_version",
     "run_attachment", "job", "regulation", "regulation_version", "regulation_chunk",
@@ -29,6 +32,49 @@ class DatabaseTests(unittest.TestCase):
 
     def value(self, query, parameters=None):
         return self.connection.execute(query, parameters).fetchone()[0]
+
+    def test_revised_native_225_checks(self):
+        notices=[]
+        self.connection.add_notice_handler(lambda notice:notices.append(notice.message_primary))
+        script=(ROOT/'references/database-revision-20261011/06_tests.sql').read_text(encoding='utf-8-sig')
+        self.assertIsNone(re.search(r'(?m)^\\(?!echo )',script))
+        script=re.sub(r'(?m)^\\echo .*?$','',script)
+        # The source assumes no extra view schemas; keep its privacy check schema-qualified.
+        script=script.replace("format('deanery.%I', u.view_name)","format('%I.%I', u.view_schema, u.view_name)")
+        script=script.replace('DECLARE q TEXT;','DECLARE q TEXT; v_constraint TEXT; v_table TEXT; v_column TEXT;')
+        notice="RAISE NOTICE '✓ %  →  %', p_what, SQLERRM;"
+        capture="""GET STACKED DIAGNOSTICS v_constraint=CONSTRAINT_NAME,v_table=TABLE_NAME,v_column=COLUMN_NAME;
+        RAISE NOTICE 'QA_ERROR %',jsonb_build_object('sqlstate',SQLSTATE,'message_primary',SQLERRM,
+            'constraint_name',v_constraint,'table_name',v_table,'column_name',v_column);"""
+        self.assertEqual(script.count(notice),2)
+        script=script.replace(notice,capture+'\n        '+notice)
+        cursor=self.connection.execute(script,prepare=False)
+        while cursor.nextset():
+            pass
+        self.assertEqual(sum(line.startswith('✓') for line in notices),225)
+        from backend.database_errors import domain_error
+        codes=set()
+        for line in notices:
+            if not line.startswith('QA_ERROR '): continue
+            diagnostic=json.loads(line[len('QA_ERROR '):])
+            native=SimpleNamespace(sqlstate=diagnostic.pop('sqlstate'),diag=SimpleNamespace(**diagnostic))
+            mapped=domain_error(native)
+            if mapped is not None:
+                codes.add(mapped[1])
+                self.assertNotRegex(mapped[2],r'\bCALL\b|fn_\w+')
+        with self.assertRaises(psycopg.Error) as stale:
+            with self.connection.transaction():
+                self.connection.execute("""INSERT INTO deanery.grade_correction(grade_id,old_points,old_is_absent,
+                    new_points,new_is_absent,reason,requested_by_id)
+                    SELECT gr.grade_id,CASE WHEN gr.points=25 THEN 26 ELSE 25 END,gr.is_absent,30,FALSE,
+                        'Проверка устаревшего снимка',%s FROM deanery.grade gr JOIN deanery.grade_sheet gs USING(sheet_id)
+                    WHERE gs.status='closed' ORDER BY gr.grade_id LIMIT 1""",(self.user_id,))
+        mapped=domain_error(stale.exception)
+        self.assertIsNotNone(mapped)
+        codes.add(mapped[1])
+        self.assertTrue({'order_past_date','order_signer_invalid','order_pending_exists','slot_semester_mismatch',
+            'sheet_dates_invalid','points_out_of_scale','sheet_incomplete','sheet_closed','correction_later_attempt',
+            'correction_stale','request_final','blank_text'}<=codes,str(codes))
 
     def test_frontend_display_form_lookup_and_support_fields_have_a_database_source(self):
         fixture = json.loads((ROOT / "backend/tests/fixtures/frontend_contract.json").read_text(encoding="utf-8"))
@@ -98,8 +144,8 @@ class DatabaseTests(unittest.TestCase):
         )
         return session_id, run_id, request_id
 
-    def test_live_original_columns_primary_keys_and_references_match_the_catalog(self):
-        catalog = json.loads((ROOT / "docs/resource-catalog.json").read_text(encoding="utf-8"))
+    def test_live_revised_columns_primary_keys_and_references_match_the_catalog(self):
+        catalog = json.loads((ROOT / "docs/resource-catalog-revision.json").read_text(encoding="utf-8"))
         for table in catalog["tables"]:
             with self.subTest(table=table["name"]):
                 columns = self.connection.execute(
@@ -135,7 +181,7 @@ class DatabaseTests(unittest.TestCase):
             "SELECT table_name FROM information_schema.tables WHERE table_schema='agent_backend' AND table_type='BASE TABLE'"
         ).fetchall()
         self.assertEqual({row[0] for row in tables}, SERVICE_TABLES)
-        self.assertEqual(self.value("SELECT count(*) FROM pg_class WHERE relnamespace IN ('deanery'::regnamespace,'agent_backend'::regnamespace) AND relkind='r'"), 71)
+        self.assertEqual(self.value("SELECT count(*) FROM pg_class WHERE relnamespace IN ('deanery'::regnamespace,'agent_backend'::regnamespace) AND relkind='r'"), 72)
         owners = self.connection.execute(
             "SELECT DISTINCT pg_get_userbyid(relowner) FROM pg_class WHERE relnamespace IN ('deanery'::regnamespace,'agent_backend'::regnamespace) AND relkind IN ('r','v','S')"
         ).fetchall()

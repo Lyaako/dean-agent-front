@@ -95,7 +95,7 @@ class RegulationTests(DatabaseHttpCase):
         self.db.execute('RESET ROLE')
         for role in ('backend_api', 'backend_worker', 'backend_executor', 'backend_read'):
             self.assertFalse(self.db.execute("SELECT has_function_privilege(%s,'backend_api.publish_knowledge_job(uuid,uuid,jsonb)','EXECUTE') AS allowed", (role,)).fetchone()['allowed'])
-        self.assertEqual(self.db.execute("SELECT count(*) AS n FROM information_schema.tables WHERE table_schema IN ('deanery','agent_backend') AND table_type='BASE TABLE'").fetchone()['n'], 71)
+        self.assertEqual(self.db.execute("SELECT count(*) AS n FROM information_schema.tables WHERE table_schema IN ('deanery','agent_backend') AND table_type='BASE TABLE'").fetchone()['n'], 72)
 
     def test_complete_digital_publish_failed_reindex_preserves_generation_and_withdraws(self):
         uploaded = self.importing()

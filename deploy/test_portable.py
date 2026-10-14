@@ -40,7 +40,7 @@ class PortableTests(unittest.TestCase):
             path.write_text(original)
             report = dict(model='qwen_qwen3.5-9b', base_url='http://127.0.0.1:1234/v1', context_window=20480,
                           max_tokens=1536, temperature=0.6, reasoning_effort='none', prompt_tokens=4200,
-                          prompt_fingerprint='a' * 64, native_provider_requests=1, tool_count=13)
+                          prompt_fingerprint='a' * 64, native_provider_requests=1, tool_count=14)
             with self.assertRaises(ValueError):
                 apply_result(path, {**report, 'base_url': 'http://other-host:1234/v1'})
             self.assertEqual(path.read_text(), original)
@@ -51,11 +51,11 @@ class PortableTests(unittest.TestCase):
             self.assertIn('OPENAI_API_KEY=local', changed)
             self.assertEqual(len(list(path.parent.glob('agent.env.before-calibration-*'))), 1)
 
-    def test_shared_serializer_preserves_accepted_thirteen_tool_fingerprint(self):
-        payload = serialize('qwen_qwen3.5-9b', 'http://host.docker.internal:1234/v1', 0.6, 'none')
-        self.assertEqual(len(payload['tools']), 13)
-        self.assertEqual(static_fingerprint(payload, 20480, 'http://host.docker.internal:1234/v1'),
-                         'e87f435ee2f6ff7f4ca1df7c5ca68a8bb82bd11687d88b018ffc8b486b16fa9e')
+    def test_shared_serializer_preserves_accepted_fourteen_tool_fingerprint(self):
+        payload = serialize('qwen_qwen3.5-9b', 'http://127.0.0.1:1234/v1', 0.6, 'none')
+        self.assertEqual(len(payload['tools']), 14)
+        self.assertEqual(static_fingerprint(payload, 20480, 'http://127.0.0.1:1234/v1'),
+                         '98f51c179a951cd3f71df5ed12d3a29124f6eb015356e7fd1e71337bf5c8dd9f')
 
 
 if __name__ == '__main__':

@@ -1,5 +1,7 @@
 # Проверка проектного пакета
 
+Актуализация 15.10.2026: backend Б1–Б11 переведён на `0056_read_boundaries` (56+16 таблиц, 225 нативных проверок, 14 инструментов). [Изменения, проверка и безопасное обновление](NEW_DATABASE_IMPLEMENTATION.md), [добавленный API](API.md). Нижние записи 11–12 октября сохраняют историю прежней версии; они не подтверждают браузерную приёмку нового фронтенда.
+
 P00–P13 реализованы и приняты11.10.2026. Актуальная доказательная матрица: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md), React — [FRONTEND_INTEGRATION.md](FRONTEND_INTEGRATION.md). Нижние разделы сохраняют историю первоначального прототипа; его screenshots/canned answers не использованы как доказательство настоящего backend/LLM.
 
 Итог:184 исходных SQL checks; backend baseline396PASS+7skips/403nodes и последующие адресные checks;5 native races;5-role/8-mode OLAP,6 UI workflows;6 настоящих form/agent parity cases с отдельным решением/audit; TXT/PDF25OCR/DOCXpartial; actual HTTPS model/materials/citation/reload; source/restore72 tables/ACL/owners/sequences/11files и native reindex/retrieval. Forward0038 policy8checks,0039 live chat/scope7checks, packaging13tests/11subtests PASS. Перезапуск4 workers сохраняет orders/jobs/audit; формы доступны при unavailable workers. Финальные8 статусов ready, активных тестовых runs/jobs/sessions/tokens0. Образы112/34 разрешённых файлов точно совпадают с source; private credentials исключены.

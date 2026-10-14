@@ -6,6 +6,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from backend import chats, proposals
+from backend.database_actor import user_context
 from backend.contracts import ChatRequest
 from backend.tests.test_auth import DatabaseHttpCase
 
@@ -35,6 +36,10 @@ class ChatTests(DatabaseHttpCase):
         try:
             with self.db.transaction():
                 placeholders = ','.join(['%s'] * len(params))
+                if name=='prepare_run_proposal':
+                    context=self.db.execute('SELECT backend_api.agent_run_context(%s,%s) AS context',params[:2]).fetchone()['context']
+                    with user_context(self.db,context['actor']['user_id'],prepare=True):
+                        return self.db.execute(f'SELECT backend_api.{name}({placeholders}) AS value',params).fetchone()['value']
                 return self.db.execute(f'SELECT backend_api.{name}({placeholders}) AS value', params).fetchone()['value']
         finally:
             self.db.execute('SET LOCAL ROLE backend_api')

@@ -125,8 +125,8 @@ class CommandTests(unittest.TestCase):
         with self.assertRaises(psycopg.errors.CheckViolation), self.db.transaction():
             self.preview(command,self.staff,req)
         self.db.execute("DROP TRIGGER test_preview_constraint ON deanery.study_group")
-        self.db.execute("SET LOCAL ROLE backend_api")
         with self.assertRaises(psycopg.errors.InsufficientPrivilege), self.db.transaction():
+            self.db.execute('SET LOCAL SESSION AUTHORIZATION backend_api')
             self.preview(command,self.staff,req)
 
     def test_future_transfer_preview_intended_group_and_current_state_unchanged(self):

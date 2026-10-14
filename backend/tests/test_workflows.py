@@ -61,8 +61,20 @@ class WorkflowTests(DatabaseHttpCase):
         self.call("transfer_student",{**self.order_fields(),"student_id":student,"group_name":self.other["name"]})
         self.assertEqual(self.state(student)["group_id"],self.other["group_id"])
         self.call("grant_academic_leave",{**self.order_fields(),"student_id":student,"reason":self.reason,
-            "start":(self.today-timedelta(days=1)).isoformat(),"end":(self.today+timedelta(days=90)).isoformat()})
+            "start":self.today.isoformat(),"end":(self.today+timedelta(days=90)).isoformat()})
         self.assertEqual(self.state(student)["status"],"Академический отпуск")
+        # A leave started today cannot end today; return from an existing historical leave.
+        self.call('return_from_leave',{**self.order_fields(),'student_id':student},status=409)
+        self.db.execute('RESET ROLE')
+        returning=self.db.execute("""SELECT s.student_id FROM deanery.student s JOIN deanery.student_status st USING(status_id)
+            JOIN deanery.academic_leave l USING(student_id) WHERE st.name='Академический отпуск'
+                AND l.return_order_id IS NULL AND l.start_date<CURRENT_DATE
+                AND deanery.fn_group_institute(s.group_id)=%s
+                AND NOT EXISTS(SELECT FROM deanery.order_student os WHERE os.student_id=s.student_id AND applied_at IS NULL)
+            ORDER BY s.student_id LIMIT 1""",(self.group['institute_id'],)).fetchone()
+        self.db.execute('SET LOCAL ROLE backend_api')
+        self.assertIsNotNone(returning)
+        student=returning['student_id']
         self.call("return_from_leave",{**self.order_fields(),"student_id":student})
         self.assertEqual(self.state(student)["status"],"Обучается")
         self.call("expel_student",{**self.order_fields(),"student_id":student,"reason":"Личное заявление тестового студента"})
@@ -89,6 +101,24 @@ class WorkflowTests(DatabaseHttpCase):
         self.assertEqual(job["status"],"queued")
         self.assertEqual(job["owner_user_id"],self.user_id)
         self.assertEqual(job["payload"],{"student_id":result["student_id"],"order_id":result["order_id"]})
+
+    def test_empty_date_defaults_today_and_cancel_future_order_through_http(self):
+        enrolled=self.call('enroll_student',self.enroll_body()|{'effective_date':''})
+        self.assertEqual(enrolled['status'],'applied')
+        fields=self.order_fields()
+        future=self.call('transfer_student',fields|{'student_id':enrolled['student_id'],'group_name':self.other['name'],
+            'effective_date':(self.today+timedelta(days=10)).isoformat()})
+        key=str(uuid4())
+        path=f"/api/v1/orders/{fields['order_number']}/students/{enrolled['student_id']}/cancel"
+        pending=self.client.get('/api/v1/resources/v_pending_orders?student_id='+str(enrolled['student_id']),headers=self.headers)
+        self.assertEqual(len(pending.json()['items']),1)
+        cancelled=self.client.post(path,headers=self.headers|{'Idempotency-Key':key})
+        self.assertEqual(cancelled.status_code,200,cancelled.text)
+        self.assertEqual(self.client.post(path,headers=self.headers|{'Idempotency-Key':key}).json(),cancelled.json())
+        self.assertEqual(self.client.get('/api/v1/resources/v_pending_orders?student_id='+str(enrolled['student_id']),headers=self.headers).json()['items'],[])
+        self.db.execute('RESET ROLE')
+        self.assertEqual(self.db.execute('SELECT status FROM agent_backend.job WHERE id=%s',(future['job_id'],)).fetchone()['status'],'cancelled')
+        self.db.execute('SET LOCAL ROLE backend_api')
 
     def test_role_scope_and_strict_fields(self):
         body = self.enroll_body()
@@ -153,7 +183,7 @@ class WorkflowTests(DatabaseHttpCase):
                 student = self.call("enroll_student",self.enroll_body())["student_id"]
                 if name=="return_from_leave":
                     self.call("grant_academic_leave",{**self.order_fields(),"student_id":student,"reason":self.reason,
-                        "start":(self.today-timedelta(days=1)).isoformat(),"end":(self.today+timedelta(days=90)).isoformat()})
+                        "start":self.today.isoformat(),"end":(self.today+timedelta(days=90)).isoformat()})
                 if name=="reinstate_student":
                     self.call("expel_student",{**self.order_fields(),"student_id":student,"reason":"Заявление"})
                 before = self.state(student)
@@ -186,6 +216,7 @@ class WorkflowTests(DatabaseHttpCase):
         self.db.execute("UPDATE agent_backend.job SET lease_until=now()-INTERVAL '1 second' WHERE id=%s",(job,))
         self.db.execute("SET LOCAL ROLE backend_worker")
         self.assertEqual(self.db.execute("SELECT backend_api.claim_order_job(%s) AS id",(replacement,)).fetchone()["id"],job)
+        self.db.execute('SET LOCAL ROLE deanery_agent')
         with self.assertRaises(psycopg.errors.SerializationFailure):
             with self.db.transaction():
                 self.db.execute("SELECT backend_api.perform_order_job(%s,%s)",(job,worker))
@@ -200,7 +231,7 @@ class WorkflowTests(DatabaseHttpCase):
         self.assertTrue(all(row["app_user_id"] is None for row in self.db.execute(
             "SELECT app_user_id FROM deanery.audit_log WHERE audit_id=ANY(%s)",(audit_ids,))))
         audit_count = self.db.execute("SELECT count(*) AS n FROM deanery.audit_log").fetchone()["n"]
-        self.db.execute("SET LOCAL ROLE backend_worker")
+        self.db.execute("SET LOCAL ROLE deanery_agent")
         self.db.execute("SELECT backend_api.perform_order_job(%s,%s)",(job,replacement))
         self.db.execute("RESET ROLE")
         self.assertEqual(self.db.execute("SELECT count(*) AS n FROM deanery.audit_log").fetchone()["n"],audit_count)
@@ -232,7 +263,7 @@ class WorkflowTests(DatabaseHttpCase):
             BEGIN RAISE EXCEPTION 'test constraint' USING ERRCODE='23514'; END $$""")
         self.db.execute("""CREATE TRIGGER test_order_failure BEFORE UPDATE ON deanery.student
                            FOR EACH ROW EXECUTE FUNCTION backend_api.test_order_failure()""")
-        self.db.execute("SET LOCAL ROLE backend_worker")
+        self.db.execute("SET LOCAL ROLE deanery_agent")
         result = self.db.execute("SELECT backend_api.perform_order_job(%s,%s) AS r",(job,worker)).fetchone()["r"]
         self.assertEqual(result["status"],"failed")
         self.assertEqual(result["error_code"],"23514")

@@ -1,5 +1,7 @@
 # P12: подключение закреплённого React
 
+Актуализация 15.10.2026: backend Б1–Б11 переведён на `0056_read_boundaries` (56+16 таблиц, 225 нативных проверок, 14 инструментов). [Изменения, проверка и безопасное обновление](NEW_DATABASE_IMPLEMENTATION.md), [добавленный API](API.md). Нижние записи 11–12 октября сохраняют историю прежней версии; они не подтверждают браузерную приёмку нового фронтенда.
+
 11.10.2026: P12/P13 приняты. `frontend/` основан на полном дереве SHA9c68ae0c5f062b87811058599151bc135576b33d; исходные55 файлов начальной копии были побайтно сверены, reference/prototype сохранены.
 
 Все5ролей/8OLAP modes проверены браузером и SQL controls; common forms/partial-save/retry и все6 workflows дали реальные DB/audit результаты. Серверные чаты/SSE/reload/две вкладки/Stop/physical-delete, queue/claim/transfer/decision и special correction прошли. Genuine file worker TXT/PDF25OCR/DOCXpartial дал31responses/0pageerrors; unavailable model сохраняет draft. ProposalDialog скрывает cached data/actions после потери доступа.

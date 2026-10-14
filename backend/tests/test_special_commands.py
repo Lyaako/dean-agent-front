@@ -4,18 +4,11 @@ from uuid import uuid4
 import psycopg
 from psycopg.types.json import Jsonb
 from backend.tests.test_auth import DatabaseHttpCase
-from backend.tests.test_proposals import ProposalTests
+from backend.tests.test_proposals import ProposalHelpers
+from backend.tests import test_proposals as proposal_cases
 
 
-class SpecialCommandTests(DatabaseHttpCase):
-    login = ProposalTests.login
-    query = ProposalTests.query
-    user = ProposalTests.user
-    create_run = ProposalTests.create_run
-    prepare = ProposalTests.prepare
-    post = ProposalTests.post
-    decision = ProposalTests.decision
-    get = ProposalTests.get
+class SpecialCommandTests(ProposalHelpers,DatabaseHttpCase):
 
     def setUp(self):
         super().setUp()
@@ -242,7 +235,7 @@ class SpecialCommandTests(DatabaseHttpCase):
         self.assertTrue(any(e['table']=='academic_leave' and e['operation']=='DELETE' for e in p['preview']['effects']))
         self.decision(p,self.admin)
         self.assertEqual(self.query('SELECT 1 FROM deanery.academic_leave WHERE order_id=%s',(parent['execution']['order_id'],)),[])
-        enrollment=ProposalTests.enrollment(self)
+        enrollment=proposal_cases.ProposalTests.enrollment(self)
         enrolled=self.decision(self.prepare(enrollment,self.admin),self.admin)
         with self.assertRaises(psycopg.errors.InvalidParameterValue):
             self.prepare(self.special('scheduled_order_cancel',student_id=enrolled['execution']['student_id'],

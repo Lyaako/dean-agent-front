@@ -61,7 +61,7 @@ def test_actual_deepagent_executable_tool_allowlist():
         create_agent_graph(model, tools[:-1])
 
 
-def test_new_special_tools_forward_exact_typed_commands_without_decision_tools():
+def test_new_special_tools_forward_exact_typed_commands_without_decision_tools(fake_tool_context):
     commands = []
     class DB:
         def execute(self, query, args=()):
@@ -91,7 +91,7 @@ def test_new_special_tools_forward_exact_typed_commands_without_decision_tools()
     assert not any(any(word in name for word in ("decide", "approve", "submit", "assign_proposal")) for name in TOOL_NAMES)
 
 
-def test_workflow_missing_requisites_are_actionable_without_preparing_or_inventing_fields():
+def test_workflow_missing_requisites_are_actionable_without_preparing_or_inventing_fields(fake_tool_context):
     commands = []
     class DB:
         def execute(self, query, args=()):
@@ -118,7 +118,7 @@ def test_workflow_missing_requisites_are_actionable_without_preparing_or_inventi
                                "fields": {"document_type_id": 1, "copies": 2, "purpose": "Указанная цель"}}),
     ("prepare_grade_correction", {"sheet_number": "S-1", "record_book": "B-1", "new_points": 70, "new_is_absent": False}),
 ])
-def test_prepare_model_result_preserves_full_preview_and_submission_state(name, arguments):
+def test_prepare_model_result_preserves_full_preview_and_submission_state(name, arguments,fake_tool_context):
     preview = {"before": {"points": 20}, "after": {"points": 70}, "note": "Полное предупреждение",
                "effects": [{"table": "grade", "changes": {"points": {"before": "20", "after": "70"}}}]}
     full = {"id": str(uuid4()), "kind": "grade_correction" if name == "prepare_grade_correction" else "record_change",
@@ -153,7 +153,7 @@ def test_model_steps_are_bounded_and_stop_errors_propagate():
     assert handler.raise_error
 
 
-def test_sql_validation_error_is_safe_json_and_never_executes_model_sql():
+def test_sql_validation_error_is_safe_json_and_never_executes_model_sql(fake_tool_context):
     calls, events = [], []
     class DB:
         def execute(self, query, args=()):
@@ -174,7 +174,7 @@ def test_sql_validation_error_is_safe_json_and_never_executes_model_sql():
 
 
 @pytest.mark.parametrize("name", ["", "practice_orders"])
-def test_unknown_resource_metadata_guides_to_existing_resource_without_schema_access(name):
+def test_unknown_resource_metadata_guides_to_existing_resource_without_schema_access(name,fake_tool_context):
     class DB:
         def execute(self, query, args=()):
             assert "agent_run_read_context" in query
@@ -191,7 +191,7 @@ def test_unknown_resource_metadata_guides_to_existing_resource_without_schema_ac
 
 
 @pytest.mark.parametrize("role", ["student", "admin"])
-def test_resource_metadata_explains_authenticated_student_defaults(monkeypatch, role):
+def test_resource_metadata_explains_authenticated_student_defaults(monkeypatch, role,fake_tool_context):
     class DB:
         def execute(self, query, args=()):
             assert "agent_run_read_context" in query
@@ -207,7 +207,8 @@ def test_resource_metadata_explains_authenticated_student_defaults(monkeypatch, 
     available = json.loads(tool.invoke({}))
     detail = json.loads(tool.invoke({"resource": "document_request"}))
     assert available["actor_role"] == detail["actor_role"] == role
-    assert "document_request" in available["resources"] and "app_user" not in available["resources"]
+    assert "document_request" in available["resources"]
+    assert ('app_user' in available['resources']) == (role=='admin')
     assert detail["fields"] == original["fields"] and detail["write_fields"] == original["write_fields"]
     if role == "student":
         assert detail["root_sql"]["insert"] == ["student_id", "document_type_id", "copies", "purpose"]
@@ -281,12 +282,16 @@ def test_tool_guard_abort_prevents_next_real_graph_model_step(monkeypatch, code)
 
 
 @pytest.fixture
-def live_runs():
+def live_runs(tmp_path):
     """Committed synthetic auth/runs let tools prove fresh independent connections."""
     if not os.environ.get("TEST_DATABASE_DSN"):
         pytest.skip("TEST_DATABASE_DSN required for isolated agent integration")
     dsn = os.environ["TEST_DATABASE_DSN"]
-    settings, runs = AgentSettings(), []
+    from psycopg.conninfo import conninfo_to_dict
+    parameters=conninfo_to_dict(dsn)
+    private=tmp_path/'agent-database.json'
+    private.write_text(json.dumps(parameters),encoding='utf-8')
+    settings, runs = AgentSettings(database_file=private), []
     def start(login="ivanov.ks", message="Синтетическая проверка агента", attachments=()):
         token, worker = str(uuid4()), uuid4()
         with psycopg.connect(dsn, row_factory=dict_row) as db:

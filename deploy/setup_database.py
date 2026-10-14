@@ -42,7 +42,7 @@ def main():
             head = ScriptDirectory.from_config(Config('alembic.ini')).get_current_head()
             if db.execute('SELECT version_num FROM public.alembic_version').fetchone() != (head,):
                 raise SystemExit('Run the migration job to the current source head first')
-            if db.execute("SELECT count(*) FROM pg_tables WHERE schemaname IN ('deanery','agent_backend')").fetchone()[0] != 71:
+            if db.execute("SELECT count(*) FROM pg_tables WHERE schemaname IN ('deanery','agent_backend')").fetchone()[0] != 72:
                 raise SystemExit('Unexpected application table count')
             if args.step == 'runtime':
                 targets = ('api', 'agent', 'files', 'operator', 'knowledge', 'order')
@@ -60,7 +60,7 @@ def main():
                 for schema, table in tables:
                     if db.execute(sql.SQL('SELECT EXISTS(SELECT FROM {}.{})').format(sql.Identifier(schema), sql.Identifier(table))).fetchone()[0]:
                         raise SystemExit('Synthetic seed refuses existing application data')
-                cursor = db.execute(Path('references/database/03_seed.sql').read_text(encoding='utf-8'), prepare=False)
+                cursor = db.execute(Path('references/database-revision-20261011/03_seed.sql').read_text(encoding='utf-8'), prepare=False)
                 while cursor.nextset():
                     pass
                 with db.transaction():
@@ -74,6 +74,8 @@ def main():
                         logins.append({'login': login, 'password': password, 'role': role})
                     with target.open('x', encoding='utf-8') as stream:
                         json.dump(logins, stream, indent=2)
+    if args.step != 'bootstrap':
+        provision('backend.db.provision_personal_roles', admin_file)
     print('Private ' + args.step + ' setup completed; no credentials printed')
 
 
