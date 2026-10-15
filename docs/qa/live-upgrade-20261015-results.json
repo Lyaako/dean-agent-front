@@ -1,0 +1,40 @@
+{
+  "date_moscow": "2026-10-15T17:03:15.849929+03:00",
+  "endpoint": "http://localhost:8443",
+  "head": "0056_read_boundaries",
+  "migration_from": "0039_scope_check_latency",
+  "original_domain_rows_preserved": true,
+  "exact_copy_restore_and_upgrade_verified": true,
+  "backup_tables_with_alembic": {
+    "before": 72,
+    "after": 73
+  },
+  "current_schema_backup_verified": true,
+  "automatic_proxy_recovery_after_backup_verified": true,
+  "running_application_services": 8,
+  "worker_services": 4,
+  "capability_checks": "all_ready",
+  "model": "Qwen3.5-9B Q4_K_M",
+  "model_tools": 14,
+  "native_host_and_docker_calibration_verified": true,
+  "static_prompt_budget": 4483,
+  "context_window": 20480,
+  "parallel": 1,
+  "browser_existing_sections_checked_by_clicks": 8,
+  "native_model_read_and_chat_reload_verified": true,
+  "http_roles_verified_with_existing_credentials": [
+    "admin",
+    "dean_staff",
+    "student"
+  ],
+  "offline_tests": {
+    "passed": 342,
+    "skipped": 150,
+    "subtests_passed": 157
+  },
+  "limits": [
+    "Colleague frontend remains a separate integration",
+    "The native225 suite is verified on clean synthetic databases; existing historical working-data fixtures do not satisfy that suite setup",
+    "Working screenshots, detailed results, backups and credentials are retained locally and excluded from this publication"
+  ]
+}

@@ -7,6 +7,8 @@ import secrets
 import shutil
 import subprocess
 import sys
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 
 from backend.tests.integration.p13_https import COMPOSE, LOCAL, ROOT, command, container
 
@@ -32,18 +34,22 @@ def identifier(value):
     return '"' + value.replace('"', '""') + '"'
 
 
-def inventory(db_id, expected_head="0039_scope_check_latency"):
+def inventory(db_id, expected_head=None):
+    if expected_head is None:
+        expected_head = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini"))).get_current_head()
     tables = json.loads(sql(db_id, """SELECT json_agg(json_build_array(n.nspname,c.relname) ORDER BY 1)
         FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind='r'
         AND (n.nspname IN ('deanery','agent_backend') OR (n.nspname='public' AND c.relname='alembic_version'))"""))
-    assert len(tables) == 72
+    # Revision0041 adds account_security; both historical and current backups stay strict.
+    assert len(tables) == 72 + (int(expected_head[:4]) >= 41)
+    assert ["public", "alembic_version"] in tables and len(tables) == len({tuple(t) for t in tables})
     statements = []
     for schema, table in sorted(tables):
         name = identifier(schema) + "." + identifier(table)
         statements.append(f"SELECT json_build_array(count(*),md5(coalesce(string_agg(to_jsonb(t)::text,E'\\n' "
                           f"ORDER BY to_jsonb(t)::text),''))) FROM {name} t;")
     hashes = [json.loads(line) for line in sql(db_id, "\n".join(statements)).splitlines()]
-    assert len(hashes) == 72
+    assert len(hashes) == len(tables)
     metadata = json.loads(sql(db_id, """SELECT json_build_object(
         'head',(SELECT version_num FROM public.alembic_version),
         'bootstrap_role',(SELECT rolname FROM pg_roles WHERE oid=10),
@@ -92,12 +98,14 @@ def backup():
     destination = LOCAL / ("p13-backup-" + secrets.token_hex(4))
     destination.mkdir()
     db_id = container("db")
-    running = set(command([*COMPOSE, "ps", "--services", "--status", "running"]).splitlines()) & WRITERS
+    source_running = set(command([*COMPOSE, "ps", "--services", "--status", "running"]).splitlines())
+    running = source_running & WRITERS
     assert "api" in running
     save(destination / "services.json", sorted(running))
     owned = command([*COMPOSE, "ps", "-aq"]).splitlines()
     images = {}
     writer_ids = []
+    proxy_id = None
     for cid in owned:
         image, labels = json.loads(command(["docker", "inspect", "--format",
             "[{{json .Image}},{{json .Config.Labels}}]", cid]))
@@ -106,6 +114,8 @@ def backup():
         service = labels["com.docker.compose.service"]
         assert service not in images
         images[service] = image
+        if service == "proxy" and service in source_running:
+            proxy_id = cid
         if service in running:
             writer_ids.append(cid)
     assert "db" in images and "api" in images
@@ -144,6 +154,9 @@ def backup():
         save(destination / "complete.json", {"complete": True, "project": "deanery-p13", "database": db_id})
     finally:
         command(["docker", "start", *writer_ids])
+        if proxy_id and "api" in running:
+            # Nginx resolves upstream names at reload; restarted containers can get another IP.
+            command(["docker", "exec", proxy_id, "nginx", "-s", "reload"])
     print(json.dumps({"backup": destination.name, "complete": True}), flush=True)
 
 
@@ -243,7 +256,7 @@ def restore(backup_name):
     assert not any(e.startswith("POSTGRES_PASSWORD") or e.startswith("POSTGRES_USER") for e in inspected["Config"]["Env"])
     assert inventory(db_id, expected["head"]) == expected
     save(destination / "database-restore-proof.json", {"project": PROJECT, "backup": source.name,
-         "tables": 72, "exact_content_owners_grants_sequences": True, "bootstrap_secret_detached": True,
+         "tables": len(actual["tables"]), "exact_content_owners_grants_sequences": True, "bootstrap_secret_detached": True,
          "files_verified": True, "qdrant_reindex": "not_started", "application_smoke": "not_started"})
     print(json.dumps({"restore": destination.name, "database_and_files": "passed",
                       "qdrant_and_application": "pending"}), flush=True)
