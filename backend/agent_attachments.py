@@ -165,12 +165,13 @@ class AttachmentContext:
         from backend.files import read_chunks, file_metadata
         self.record("configure", [])
         remaining, blocks = INITIAL_CHARS, []
-        for descriptor in descriptors:
-            # Leave one slot for a page explicitly requested beyond the initial excerpt.
-            if remaining <= 0 or len(self.chunks) >= MAX_CHUNKS - 1:
+        for index,descriptor in enumerate(descriptors):
+            # Reserve a chunk for every later file and one explicitly requested page.
+            slots=MAX_CHUNKS-len(self.chunks)-len(self.regulations)-1-(len(descriptors)-index-1)
+            if remaining <= 0 or slots <= 0:
                 self.warnings.add("context_budget_exhausted")
                 break
-            result = read_chunks(descriptor, max_chars=remaining, max_chunks=MAX_CHUNKS-len(self.chunks)-1)
+            result = read_chunks(descriptor, max_chars=remaining, max_chunks=slots)
             chunks = self.register(descriptor, result["chunks"])
             self.record("selected", chunks)
             for chunk in chunks:
@@ -196,8 +197,17 @@ class AttachmentContext:
                                (self.run_id, self.worker_id, version)).fetchone()["result"]
         remaining = self.remaining()
         if remaining <= 0 or len(self.chunks) + len(self.regulations) >= MAX_CHUNKS:
-            return {"file_id": descriptor["file_id"], "version_id": version_id, "chunks": [],
-                    "next_cursor": cursor, "has_more": True, "warnings": ["context_budget_exhausted"]}
+            # Re-reading acknowledged bytes spends no additional unique-chunk budget.
+            try:
+                result=read_chunks(descriptor,page=page,cursor=cursor,max_chars=READ_CHARS,max_chunks=MAX_CHUNKS)
+            except AttachmentError as exc:
+                raise HTTPException(422,str(exc)) from None
+            known=[c for c in result['chunks'] if c['chunk_id'] in self.chunks]
+            if len(known)!=len(result['chunks']):
+                result.update(next_cursor=cursor,has_more=True,
+                    warnings=sorted(set(result.get('warnings',[])+['context_budget_exhausted'])))
+            result['chunks']=self.register(descriptor,known)
+            return result
         try:
             for _ in range(MAX_CHUNKS + 1):
                 result = read_chunks(descriptor, page=page, cursor=cursor, max_chars=min(READ_CHARS, remaining),

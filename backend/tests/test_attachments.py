@@ -189,7 +189,7 @@ def test_link_cleanup_preserves_prose_and_verified_citation_placeholders():
     assert sanitize_answer_links(answer) == answer
 
 
-def test_initial_chunk_exhaustion_keeps_second_file_metadata_without_zero_budget_call(monkeypatch):
+def test_initial_chunk_budget_reserves_space_for_later_files(monkeypatch):
     descriptors = [{"file_id": str(uuid4()), "version_id": str(uuid4()), "filename": f"file{i}.txt", "title": f"file{i}.txt",
                     "mime": "text/plain", "byte_size": 100} for i in range(2)]
     calls = []
@@ -201,9 +201,25 @@ def test_initial_chunk_exhaustion_keeps_second_file_metadata_without_zero_budget
     context = AttachmentContext(None, uuid4(), uuid4())
     context.record = lambda *args, **kwargs: None
     content = context.initial(descriptors)
-    assert len(calls) == 1 and len(context.chunks) == 19
+    assert len(calls) == 2 and len(context.chunks) == 19
     assert descriptors[1]["version_id"] in content
-    assert not any(c["version_id"] == descriptors[1]["version_id"] for c in context.chunks.values())
+    assert any(c["version_id"] == descriptors[1]["version_id"] for c in context.chunks.values())
+
+
+def test_full_unique_budget_allows_existing_text_but_never_new_chunks(monkeypatch):
+    context=AttachmentContext(None,uuid4(),uuid4())
+    descriptor={'file_id':str(uuid4()),'version_id':str(uuid4())}
+    chunks=[make_chunk(descriptor['version_id'],str(i),page=i) for i in range(20)]
+    context.register(descriptor,chunks)
+    db=SimpleNamespace(execute=lambda *args:SimpleNamespace(fetchone=lambda:{'result':descriptor}))
+    selected=[chunks[0]]
+    monkeypatch.setattr('backend.files.read_chunks',lambda *args,**kwargs:{'chunks':selected.copy(),'next_cursor':None,'has_more':False,'warnings':[]})
+    result=context.read(db,descriptor['version_id'],page=1)
+    assert len(result['chunks'])==1 and not result['warnings'] and len(context.chunks)==20
+    selected.append(make_chunk(descriptor['version_id'],'new bytes',page=25))
+    result=context.read(db,descriptor['version_id'])
+    assert len(result['chunks'])==1 and result['has_more'] and result['next_cursor'] is None
+    assert result['warnings']==['context_budget_exhausted'] and len(context.chunks)==20
 
 
 def test_many_short_initial_pages_leave_room_for_explicit_last_page(monkeypatch):
