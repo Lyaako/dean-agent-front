@@ -6,6 +6,7 @@
 
 const BATCH_PREVIEW = 50;          // столько строк показываем сразу, остальные — по кнопке
 const UNDO_MINUTES = 15;           // столько времени после применения пакет можно отменить
+const BATCH_MAX = 200;             // больше строк в одном пакете агент не готовит (AG-02)
 let batchN = 0;
 // Сбои сервера в макете не случаются сами. Чтобы посмотреть их вид, в консоли браузера: BATCH_SIM = "AP-04"
 // (AP-01, AP-02, AP-03, AP-04, AP-05, AP-05ok, AP-06, CH-04, CH-05); пусто — без сбоя
@@ -46,6 +47,7 @@ const ERRORS = {
   "AP-06": { title: "Пакет уже был применён", data: DATA_DONE },
   "UN-01": { title: "Запись изменили после применения — не отменяется" },
   "UN-02": { title: "Срок отмены истёк" },
+  "UN-03": { title: "Изменение необратимо" },
   "XX-00": { title: "Неизвестная ошибка", data: DATA_UNKNOWN },
 };
 // Соответствие кодов бекенда (error.code в ответе {error: {code, message, details: {field?, items?}}}, задача Б11) кодам макета.
@@ -74,7 +76,8 @@ const asErr = (e) => (e?.code && ERRORS[e.code] ? e : bErr("XX-00", { text: Stri
 const stamp = () => `${fmtDate(TODAY)} ${new Date().toTimeString().slice(0, 8)}`;
 
 /* ── Строка пакета: { id, record, sub, field, before, after, rule: [код RW, текст] | null, warn: [текст, вид] | null,
-   now() — значение в данных сейчас (GONE — запись удалена), alter() — запись меняет другой человек, apply(), undo() } ── */
+   now() — значение в данных сейчас (GONE — запись удалена), alter() — запись меняет другой человек, apply(), undo(),
+   reversible() — можно ли отменить: баллы — пока ведомость открыта, статус заявки — если прежний и новый не завершающие } ── */
 const GONE = Symbol("удалена");
 function rowState(it) {
   if (it.rule) return { code: it.rule[0], text: it.rule[1], kind: "bad", blocked: true };
@@ -90,7 +93,10 @@ function rowState(it) {
   return it.warn ? { code: null, text: it.warn[0], kind: it.warn[1], blocked: false } : null;
 }
 const blocked = (it) => !!rowState(it)?.blocked;
+const reversible = (it) => (it.reversible ? it.reversible() : true);
 function makeBatch({ explanation, table, summary, items, reason, prompt }) {
+  // Пакет — одно предложение, всё или ничего; больше BATCH_MAX строк не готовим (ответ агента — в reply ниже)
+  if (items.length > BATCH_MAX) throw bErr("AG-02", { n: items.length });
   const no = `П-${String(++batchN).padStart(3, "0")}`;
   items.forEach((it, i) => { it.id = i; });
   return { batch: true, no, explanation, table, summary, items, reason, prompt, operation: "UPDATE", rows: [], appliedIds: [],
@@ -106,10 +112,12 @@ function batchCard(pid) {
   const st = { approved: badge(`Применено ${p.appliedIds.length} из ${p.items.length}`, "ok"), rejected: badge("Отклонено", "muted"), undone: badge("Отменено", "muted"),
     failed: badge(`Не применено · ${p.lastCode}`, "bad"), unknown: badge("Итог неизвестен · AP-05", "warn") }[p.status] ?? "";
   const undoLeft = p.status === "approved" ? UNDO_MINUTES * 6e4 - (Date.now() - p.appliedAt) : 0;
+  const canUndo = p.status === "approved" && p.items.some((it) => p.appliedIds.includes(it.id) && reversible(it));
   return `<div class="proposal-card batch-card">${icon("sparkle")}<div><b>${esc(p.explanation)}</b>
       <small>${esc(p.table)} · ${nRec(p.items.length)}${w && p.status === "pending" ? ` · <span class="warn-t">${icon("alert")}${w} ${plural(w, "требует", "требуют", "требуют")} внимания</span>` : ""}
-      ${p.status === "approved" && undoLeft <= 0 ? ` · <span title="Отменить можно было в течение ${UNDO_MINUTES} минут. Вернуть прежнее можно новой просьбой агенту">отмена недоступна ${codeTag("UN-02")}</span>` : ""}</small></div>
-    ${st}${undoLeft > 0 ? `<button class="btn sm ghost" data-a="batch-undo" data-id="${pid}">${icon("refresh")}Отменить</button>` : ""}
+      ${p.status === "approved" && undoLeft <= 0 ? ` · <span title="Отменить можно было в течение ${UNDO_MINUTES} минут. Вернуть прежнее можно новой просьбой агенту">отмена недоступна ${codeTag("UN-02")}</span>`
+        : p.status === "approved" && !canUndo ? ` · <span title="Ведомость закрыта или статус заявки завершающий. Вернуть прежнее можно только новым изменением">отмена недоступна ${codeTag("UN-03")}</span>` : ""}</small></div>
+    ${st}${undoLeft > 0 && canUndo ? `<button class="btn sm ghost" data-a="batch-undo" data-id="${pid}">${icon("refresh")}Отменить</button>` : ""}
     <button class="btn sm soft go" data-a="proposal" data-id="${pid}">${p.status === "approved" ? "Открыть" : "Проверить изменения"}${icon("arrow")}</button></div>`;
 }
 
@@ -131,8 +139,9 @@ function batchDialog(pid) {
   const p = PROPOSALS[pid];
   const m = { label: "Пакетное изменение от агента", outsideClose: false, reason: "", busy: null, error: p.lastError ?? null, filter: "all", q: "", all: false, last: null, seen: new Set() };
   if (window.BATCH_SIM === "CH-04" && p.status === "pending") p.expired = /Ведомость/.test(p.table) ? "Ведомость закрыл деканат — баллы в неё больше не вносятся." : "С момента подготовки прошло больше суток — данные могли измениться.";
-  // Отклонённый, отменённый или неприменившийся пакет можно открыть и применить; устаревший — только подготовить заново
-  const can = () => ["pending", "rejected", "undone", "failed"].includes(p.status) && !p.expired;
+  if (p.status === "pending" && !p.expired && apprExpired(p)) p.expired = "С момента подготовки прошло больше суток — данные могли измениться.";
+  // Отменённый или неприменившийся пакет можно открыть и применить; отклонённый и устаревший — только подготовить заново
+  const can = () => ["pending", "undone", "failed"].includes(p.status) && !p.expired && canDecide(p);
   const shown = () => p.items.filter((it) => (m.filter === "picked" ? p.picked.has(it.id) : m.filter === "warn" ? rowState(it) : true)
     && (!m.q || norm(`${it.record} ${it.sub ?? ""}`).includes(norm(m.q))));
   m.html = () => {
@@ -167,6 +176,7 @@ function batchDialog(pid) {
         ${can() ? `<label class="field"><span>Комментарий к решению (не короче ${REASON_MIN} символов)</span>
           <textarea class="text-input textarea" rows="2" data-reason maxlength="2000" placeholder="Например: баллы по ведомости модуля 2">${esc(m.reason)}</textarea></label>` : ""}
         ${p.decision_reason ? `<small class="hint">Комментарий к решению: ${esc(p.decision_reason)}</small>` : ""}
+        ${apprWorkHtml(p)}${apprHistHtml(p)}
       </div>
       ${p.expired ? errorBlock(bErr("CH-04", { text: p.expired, todo: "Попросите агента подготовить пакет заново по свежим данным." }), p, `<button type="button" class="btn sm" data-a="b-redo">${icon("refresh")}Подготовить заново</button>`) : ""}
       ${!p.expired && m.error ? errorBlock(m.error, p, m.error.actions ?? "") : ""}
@@ -174,10 +184,11 @@ function batchDialog(pid) {
         (${[...new Set(changed.map((it) => rowState(it)?.code).filter(Boolean))].join(", ")}).</span><button type="button" class="btn sm ghost" data-a="b-filter" data-v="warn">Показать</button>
         ${changed.some((it) => rowState(it)?.code === "CH-02") ? `<button type="button" class="btn sm ghost" data-a="b-redo">Обновить пакет</button>` : ""}</div>` : ""}
       ${none && can() && !m.error ? `<div class="batch-note">${icon("alert")}<span>Ни одну строку применить нельзя — причины указаны в строках.</span></div>` : ""}
-      <div class="actions">${can() ? `${p.status !== "pending" && !m.error ? `<span class="b-was">${{ rejected: "Отклонено ранее", undone: "Отменено ранее", failed: "Не применилось ранее" }[p.status]} — можно применить заново</span>` : ""}
+      <div class="actions">${can() ? `${p.status !== "pending" && !m.error ? `<span class="b-was">${{ undone: "Отменено ранее", failed: "Не применилось ранее" }[p.status]} — можно применить заново</span>` : ""}
         <button class="btn ghost danger-text${p.status !== "pending" ? " hidden" : ""}" data-a="reject" ${!ok || m.busy ? "disabled" : ""}>${m.busy === "reject" ? "Отклоняем…" : "Отклонить"}</button>
         <span class="spacer"></span><button class="btn" data-a="close">Позже</button>
-        <button class="btn primary" data-a="approve" ${!ok || !n || m.busy || m.error?.code === "AP-03" ? "disabled" : ""}>${m.busy === "approve" ? "Применяем…" : `Применить ${n} из ${p.items.length}`}</button>` : ""}</div></div>`;
+        <button class="btn primary" data-a="approve" ${!ok || !n || m.busy || m.error?.code === "AP-03" ? "disabled" : ""}>${m.busy === "approve" ? "Применяем…" : `Применить ${n} из ${p.items.length}`}</button>`
+        : p.status === "rejected" && canRedo(p) ? `<span class="b-was">Отклонено</span><span class="spacer"></span><button class="btn primary" data-a="b-redo">${icon("refresh")}Подготовить заново</button>` : ""}</div></div>`;
   };
   m.close = () => closeModal(m);
   m.input = (el) => {
@@ -191,6 +202,7 @@ function batchDialog(pid) {
     if (a === "close") return closeModal(m);
     if (a === "b-copy") { try { await navigator.clipboard.writeText(el.dataset.v); toast("Скопировано — передайте в IT-отдел"); } catch { toast("Не удалось скопировать — выделите текст вручную", true); } return; }
     if (a === "b-redo") return redo();
+    if (apprClick(a, p, m)) return;
     if (a === "b-filter") { m.filter = el.dataset.v; m.all = false; return render(); }
     if (a === "b-more") { m.all = true; return render(); }
     if (a === "b-all") { const on = el.checked; shown().filter((it) => !blocked(it)).forEach((it) => (on ? p.picked.add(it.id) : p.picked.delete(it.id))); return render(); }
@@ -208,7 +220,7 @@ function batchDialog(pid) {
     if (a === "approve") return approve();
     if (a === "reject") {
       m.busy = "reject"; render(); await wait(500);
-      Object.assign(p, { status: "rejected", decision_reason: clip(m.reason) }); closeModal(m); toast("Пакет отклонён");
+      Object.assign(p, { status: "rejected", decision_reason: clip(m.reason) }); proposalEvent(p, `Отклонил: «${clip(m.reason)}»`); closeModal(m); toast("Пакет отклонён");
     }
   };
   const fail = (err) => {
@@ -222,10 +234,11 @@ function batchDialog(pid) {
       "XX-00": `<button type="button" class="btn sm" data-a="approve">${icon("refresh")}Повторить</button>` }[e.code] ?? "";
     m.error = e;
     if (e.rowId != null) { m.filter = "all"; m.q = ""; requestAnimationFrame(() => $(`[data-k="${m.key}"] .b-row.culprit`)?.scrollIntoView({ block: "center", behavior: "smooth" })); }
-    if (["AP-01", "AP-02", "AP-03", "AP-04", "XX-00"].includes(e.code)) Object.assign(p, { status: "failed", lastCode: e.code });
+    if (["AP-01", "AP-02", "AP-03", "AP-04", "XX-00"].includes(e.code)) { Object.assign(p, { status: "failed", lastCode: e.code }); proposalEvent(p, `Не применилось · ${e.code}`); }
   };
   const succeed = (note = "") => {
     Object.assign(p, { status: "approved", decision_reason: clip(m.reason), lastError: null });
+    proposalEvent(p, `Применил ${p.appliedIds.length} из ${p.items.length}: «${clip(m.reason)}»`);
     closeModal(m);
     toast(`Применено ${nRec(p.appliedIds.length)} · пакет ${p.no}${note}`);
   };
@@ -235,7 +248,7 @@ function batchDialog(pid) {
     m.busy = "approve"; render(); await wait(1500); m.busy = null;
     if (window.BATCH_SIM === "AP-05ok") { window.BATCH_SIM = ""; applyBatch(p); return succeed(" · ответ потерялся, но проверка подтвердила"); }
     window.BATCH_SIM = "AP-05ok";   // в макете: следующая проверка удаётся
-    Object.assign(p, { status: "unknown", lastCode: "AP-05" });
+    Object.assign(p, { status: "unknown", lastCode: "AP-05" }); proposalEvent(p, "Итог применения неизвестен · AP-05");
     fail(bErr("AP-05", { headline: "Неизвестно, применились ли изменения", text: "Ответ сервера потерялся, проверить итог тоже не удалось.",
       todo: "Не применяйте пакет повторно и не меняйте эти записи вручную — это может задвоить изменения. Нажмите «Проверить ещё раз»; если не поможет — обратитесь в IT-отдел и сообщите код и номер пакета." }));
     p.lastError = m.error; render();
@@ -275,14 +288,19 @@ function applyBatch(p) {
 function undoBatch(pid) {
   const p = PROPOSALS[pid];
   if (Date.now() - p.appliedAt >= UNDO_MINUTES * 6e4) { toast("UN-02 · Срок отмены истёк — вернуть прежнее можно новой просьбой агенту", true); return render(); }
-  const applied = p.items.filter((it) => p.appliedIds.includes(it.id));
+  // Необратимые строки (UN-03) и изменённые после применения (UN-01) пропускаем, остальные возвращаем
+  const all = p.items.filter((it) => p.appliedIds.includes(it.id)), fixed = all.filter((it) => !reversible(it)), applied = all.filter(reversible);
+  if (!applied.length) { toast("UN-03 · Изменение необратимо — вернуть прежнее можно только новым изменением", true); return render(); }
   const moved = applied.filter((it) => it.now && String(it.now() ?? "") !== String(it.after ?? ""));
-  confirmDialog({ title: "Отменить пакет?", text: `Вернутся прежние значения у ${nRec(applied.length - moved.length)}.${moved.length ? ` ${nRec(moved.length)} изменили после применения — их не трогаем (UN-01).` : ""} Пакет ${p.no}.`,
+  const back = applied.length - moved.length;
+  const skipped = [moved.length ? `${nRec(moved.length)} изменили после применения — их не трогаем (UN-01).` : "", fixed.length ? `${nRec(fixed.length)} — изменение необратимо, пропускаем (UN-03).` : ""].filter(Boolean).join(" ");
+  confirmDialog({ title: "Отменить пакет?", text: `Вернутся прежние значения у ${nRec(back)}.${skipped ? ` ${skipped}` : ""} Пакет ${p.no}.`,
     confirm: "Отменить пакет", onConfirm: () => {
       applied.filter((it) => !moved.includes(it)).forEach((it) => { it.undo(); it.done = false; });
-      p.status = "undone";
-      logAudit(p.table, "UPDATE", `Пакет ${p.no} отменён`, `${nRec(applied.length - moved.length)} — прежние значения${moved.length ? `; не отменено ${moved.length} (UN-01)` : ""}`);
-      toast(moved.length ? `Отменено ${applied.length - moved.length}, не отменено ${moved.length} · UN-01` : "Пакет отменён"); render();
+      p.status = "undone"; proposalEvent(p, "Отменил пакет");
+      const notes = [moved.length ? `не отменено ${moved.length} (UN-01)` : "", fixed.length ? `необратимо ${fixed.length} (UN-03)` : ""].filter(Boolean);
+      logAudit(p.table, "UPDATE", `Пакет ${p.no} отменён`, `${nRec(back)} — прежние значения${notes.length ? `; ${notes.join("; ")}` : ""}`);
+      toast(notes.length ? `Отменено ${back}${moved.length ? `, не отменено ${moved.length} · UN-01` : ""}${fixed.length ? `, необратимо ${fixed.length} · UN-03` : ""}` : "Пакет отменён"); render();
     } });
 }
 const proposalDialogBase = proposalDialog;
@@ -300,7 +318,8 @@ function requestsBatch(raw, s) {
     warn: isOverdue(r) ? ["Просрочена", "bad"] : r.processed_by && r.processed_by !== ME.full_name ? [`Ведёт ${shortName(r.processed_by)}`, "warn"] : null,
     now: () => (requests.includes(r) ? r.status : GONE), dbRule: "переход статуса запрещён для выданных заявок",
     alter() { r.status = "Отклонена"; r.processed_by = mate.full_name; this.changedBy = `изменила ${shortName(mate.full_name)}`; },
-    apply() { this.prev = [r.status, r.processed_by]; r.status = to; r.processed_by ||= ME.full_name; }, undo() { [r.status, r.processed_by] = this.prev; } }));
+    apply() { this.prev = [r.status, r.processed_by]; r.status = to; r.processed_by ||= ME.full_name; }, undo() { [r.status, r.processed_by] = this.prev; },
+    reversible() { return !FINAL_STATUS.includes(this.before) && !FINAL_STATUS.includes(this.after); } }));
   const over = from.filter(isOverdue).length;
   const batch = makeBatch({ explanation: `${from.length} ${plural(from.length, "заявка", "заявки", "заявок")} → «${to}»`, table: "Заявка на справку", reason: `Запрос сотрудника: «${raw.trim()}»`, prompt: raw.trim(),
     summary: [`${from.length} ${plural(from.length, "заявка перейдёт", "заявки перейдут", "заявок перейдут")} в статус «${esc(to)}», исполнителем там, где его нет, станете вы.`,
@@ -329,7 +348,8 @@ function pointsBatch(raw) {
       warn: before != null ? [`Перезапись: было ${before}`, "warn"] : after == null ? ["Не аттестован", "bad"] : null,
       now: () => (sh.status === "Открыта" ? r.points : GONE), dbRule: "студента перевели в другую группу — в этой ведомости его больше нет",
       alter() { r.points = 30; this.changedBy = "исправил деканат"; },
-      apply() { this.prev = [r.points, r.absent, r.na]; r.points = after; r.absent = false; r.na = after == null; }, undo() { [r.points, r.absent, r.na] = this.prev; } };
+      apply() { this.prev = [r.points, r.absent, r.na]; r.points = after; r.absent = false; r.na = after == null; }, undo() { [r.points, r.absent, r.na] = this.prev; },
+      reversible: () => sh.status === "Открыта" };
   });
   const low = items.filter((it) => !it.rule && it.after == null).length;
   return { tool: "propose_sql_change", html: P(`Подготовил баллы за ${STAGE_NAME[sh.stage].toLowerCase()} по ведомости ${sh.sheet_number} — ${items.length} ${plural(items.length, "студент", "студента", "студентов")}. Проверьте и примените.`),
@@ -340,8 +360,15 @@ function pointsBatch(raw) {
 }
 const replyRoles = reply;
 reply = (raw) => {
+  try { return replyBatch(raw); } catch (e) {
+    if (e.code !== "AG-02") throw e;
+    return { html: P(`Слишком много записей для одного пакета — разбейте, например, по группам. Получилось бы ${nRec(e.n)}, а в одном пакете — не больше ${BATCH_MAX}.`)
+      + `<p class="hint">Код ${codeTag("AG-02")} — слишком много записей для одного пакета</p>` };
+  }
+};
+function replyBatch(raw) {
   const s = norm(raw);
   if (ROLE === "teacher" && /(выстав|заполн|постав|внеси)/.test(s) && /(модул|всем|групп|ведомост)/.test(s)) return pointsBatch(raw);
   if (["dean_staff", "director", "admin"].includes(ROLE) && /(все|всех)/.test(s) && /заявк/.test(s) && CHANGE_WORDS.test(s)) return requestsBatch(raw, s);
   return replyRoles(raw);
-};
+}

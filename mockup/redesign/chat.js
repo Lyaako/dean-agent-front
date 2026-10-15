@@ -6,7 +6,8 @@
 const chat = { open: false, listOpen: true, chats: [], activeId: null, busyId: null, status: null, timers: [],
   texts: {}, att: {}, notice: null, queued: false, editing: null, inputH: 40, copied: null, shownCount: -1 };
 const ATT = {};            // вложения: id → { id, file, name, thumb, status, error }
-const PROPOSALS = {};      // предложения агента: id → { status, explanation, reason, table, operation, rows, effects, apply }
+const PROPOSALS = {};      // предложения агента: id → { status, explanation, reason, table, operation, rows, effects, apply,
+                           //   author, author_role, created_at, assignee, kind, decision_status, execution_status, history[] } — их же показывает «Согласование»
 const ATTACH_TYPES = [".pdf", ".docx", ".txt"];
 const MAX_FILE_BYTES = 10_000_000, MAX_COUNT = 5, MAX_TOTAL = 20_000_000;
 // Сервисы агента. В макете они не падают сами — чтобы посмотреть вид сбоя, в консоли браузера: SERVICES_SIM = "model"
@@ -129,7 +130,10 @@ function runAgent(c, text, files) {
 function finishAgent(c, res, files) {
   chat.timers = [];
   const pid = res.proposal ? uid() : null;
-  if (pid) PROPOSALS[pid] = { status: "pending", decision_reason: null, ...res.proposal };
+  // Автор — тот, кто попросил агента; повторить ту же просьбу можно кнопкой «Подготовить заново»
+  if (pid) PROPOSALS[pid] = { pid, status: "pending", decision_reason: null, author: ME.full_name, author_role: ROLE, created_at: nowStamp(), assignee: null,
+    kind: res.proposal.batch ? "Пакет" : "Обычное", decision_status: null, execution_status: null, prompt: c.messages.at(-1)?.text,
+    history: [{ at: nowStamp(), who: ME.full_name, text: "Подготовлено агентом по запросу" }], ...res.proposal };
   const partial = files.filter((f) => f.partial).map((f) => ({ name: f.name, partial: f.partial }));
   c.messages.push({ id: uid(), role: "agent", html: res.html, proposals: pid ? [pid] : [], ...(partial.length ? { partial } : {}) });
   chat.busyId = null; chat.status = null;
@@ -273,10 +277,12 @@ function proposalDialog(pid) {
   const p = PROPOSALS[pid];
   const m = { label: "Изменение от агента", outsideClose: false, reason: "", busy: null, error: null,
     html: () => {
-      const st = { pending: [p.decision_status ?? "Ждёт решения", "info"], approved: ["Применено", "ok"], rejected: ["Отклонено", "muted"] }[p.status];
-      // Отклонение не окончательное: отклонённое изменение можно открыть снова и применить.
-      // Заявку студента применяет деканат — сам студент только смотрит
-      const can = (p.status === "pending" || p.status === "rejected") && ROLE !== "student", ok = clip(m.reason).length >= REASON_MIN;
+      const expired = apprExpired(p);
+      const st = expired ? ["Истекло", "muted"] : { pending: [p.decision_status ?? "Ждёт решения", "info"], approved: ["Применено", "ok"], rejected: ["Отклонено", "muted"] }[p.status];
+      // Решение окончательное: отклонённое или истёкшее не применяется — его можно только подготовить заново.
+      // Кто вправе решать — canDecide (заявку студента применяет деканат, исправление оценки — директор или заместитель)
+      const can = p.status === "pending" && !expired && canDecide(p), ok = clip(m.reason).length >= REASON_MIN;
+      const redo = (p.status === "rejected" || expired) && canRedo(p);
       return `<div class="dialog proposal-dialog">
         <div class="form-head"><div><h3>${can ? "Применить изменения?" : "Изменение от агента"}</h3><p>${esc(p.explanation)}</p></div>
           <button type="button" class="icon-btn" aria-label="Закрыть" data-a="close">${icon("x")}</button></div>
@@ -285,25 +291,29 @@ function proposalDialog(pid) {
           ${p.effects?.length ? `<ul class="effects">${p.effects.map((e) => `<li>${esc(e)}</li>`).join("")}</ul>` : ""}
           ${p.reason ? `<small class="hint">Основание агента: ${esc(p.reason)}</small>` : ""}
           ${p.decision_reason ? `<small class="hint">Комментарий к решению: ${esc(p.decision_reason)}</small>` : ""}</div>
+        ${apprWorkHtml(p)}
         ${can ? `<label class="field"><span>Комментарий к решению (не короче ${REASON_MIN} символов)</span>
           <textarea class="text-input textarea" rows="2" data-reason maxlength="2000" placeholder="Например: подтверждаю по заявлению студента">${esc(m.reason)}</textarea></label>` : ""}
         ${m.error ? `<p class="form-error" role="alert">${esc(m.error)}</p>` : ""}
-        <div class="actions">${can ? `${p.status === "rejected" ? "" : `<button class="btn ghost danger-text" data-a="reject" ${!ok || m.busy ? "disabled" : ""}>${m.busy === "reject" ? "Отклоняем…" : "Отклонить"}</button>`}
+        ${apprHistHtml(p)}
+        <div class="actions">${can ? `<button class="btn ghost danger-text" data-a="reject" ${!ok || m.busy ? "disabled" : ""}>${m.busy === "reject" ? "Отклоняем…" : "Отклонить"}</button>
           <span class="spacer"></span><button class="btn" data-a="close">Позже</button>
           <button class="btn primary" data-a="approve" ${!ok || m.busy ? "disabled" : ""}>${m.busy === "approve" ? "Применяем…" : "Применить изменения"}</button>`
-          : `<span class="spacer"></span><button class="btn" data-a="close">Закрыть</button>`}</div></div>`;
+          : `<span class="spacer"></span><button class="btn" data-a="close">Закрыть</button>${redo ? `<button class="btn primary" data-a="appr-redo">${icon("refresh")}Подготовить заново</button>` : ""}`}</div></div>`;
     },
     close: () => closeModal(m),
     input: (el) => { if (el.dataset.reason != null) { m.reason = el.value; render(); } },
     async click(el) {
       const a = el.dataset.a;
       if (a === "close") return closeModal(m);
+      if (apprClick(a, p, m)) return;
       if (a !== "approve" && a !== "reject") return;
       m.busy = a; m.error = null; render();
       await wait(600);
       try {
         if (a === "approve") { p.apply(); window.onProposalApplied?.(p); }
         Object.assign(p, { status: a === "approve" ? "approved" : "rejected", decision_reason: clip(m.reason) });
+        proposalEvent(p, `${a === "approve" ? "Применил" : "Отклонил"}: «${clip(m.reason)}»`);
       } catch (e) { m.error = e.message; }
       m.busy = null; render();
     } };

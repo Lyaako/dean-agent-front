@@ -86,14 +86,22 @@ doLogin = async (form) => {
   await wait(500);
   const u = users.find((x) => x.login === login);
   auth.busy = false;
-  if (!u || password !== MOCK_PASSWORD) { auth.error = "Неверный логин или пароль"; return render(); }
+  // После сброса действует только временный пароль, после смены — пароль, заданный пользователем
+  if (!u || password !== (u.mustChange ? u.tempPassword : u.password ?? MOCK_PASSWORD)) { auth.error = "Неверный логин или пароль"; return render(); }
   if (!u.active) { auth.error = "Доступ отключён. Обратитесь в деканат или к администратору"; return render(); }
+  if (u.mustChange) {
+    render();
+    return mustChangeDialog(u, password, (next) => { Object.assign(u, { mustChange: false, tempPassword: null, password: next }); finishLogin(u); });
+  }
+  finishLogin(u);
+};
+function finishLogin(u) {
   u.last = TODAY;
   auth.on = true;
   applyRole(u.role, personOf(u), u.login);
-  try { sessionStorage.setItem("deanery.mock.session", JSON.stringify({ login })); } catch { /* нет доступа */ }
+  try { sessionStorage.setItem("deanery.mock.session", JSON.stringify({ login: u.login })); } catch { /* нет доступа */ }
   render();
-};
+}
 
 /* ═════════ ЖУРНАЛ ИЗМЕНЕНИЙ (audit_log) ═════════ */
 const AUDIT = [];
@@ -350,9 +358,11 @@ function correctionDialog(sh, r) {
     await wait(450);
     const next = { points: f.v.points, absent: f.v.absent }, after = resLabel(sh, { ...next, na: mode === "na" });
     const before = { points: r.points, absent: r.absent };
-    PROPOSALS[uid()] = { status: "pending", kind: "Исправление оценки", decision_status: "Ждёт решения директора", decision_reason: null,
+    const pid = uid();
+    PROPOSALS[pid] = { pid, status: "pending", kind: "Исправление оценки", decision_status: "Ждёт решения директора", execution_status: null, decision_reason: null,
       explanation: `Исправление оценки: ${r.student} · ${sh.discipline}`, table: `Ведомость ${sh.sheet_number} · ${sh.group_name}`, operation: "UPDATE",
-      rows: [{ label: "Результат", before: cur, after }], reason, author: ME.full_name, author_role: ROLE, created_at: `${TODAY} ${new Date().toTimeString().slice(0, 5)}`,
+      rows: [{ label: "Результат", before: cur, after }], reason, author: ME.full_name, author_role: ROLE, created_at: nowStamp(), assignee: null,
+      history: [{ at: nowStamp(), who: ME.full_name, text: `Подал заявку: «${reason}»` }],
       sheet_id: sh.sheet_id, student_id: r.student_id,
       // Как в базе: при одобрении оценка должна быть той же, что при подаче заявки
       apply() {
@@ -672,8 +682,167 @@ PAGES.mystudy = () => {
       `<div class="miss-row"><b>${fmtDate(x.order_date)}</b><span>${esc(x.order_number)}</span><span>${esc(x.order_type)}</span></div>`).join("")}</div>` : `<p class="olap-foot">Приказов о вас за последний год не было.</p>`}</section>`]);
 };
 
-/* ═════════ СОГЛАСОВАНИЕ (у всех ролей; наполнение — отдельной задачей) ═════════ */
-PAGES.approvals = () => pageView("approvals", "Согласование", [`<section class="card empty-day">${icon("check")}<b>Раздел в разработке</b></section>`]);
+/* ═════════ СОГЛАСОВАНИЕ ═════════
+   Одно хранилище PROPOSALS: изменения из чата (в том числе пакеты), заявки студентов и заявки на исправление оценки.
+   Входящие — то, что я могу решить; Мои — отправленные мной; История — решённые, отменённые и истёкшие.
+   Окно решения — то же, что в чате (proposalDialog / batchDialog). */
+const nowStamp = () => `${TODAY} ${new Date().toTimeString().slice(0, 5)}`;
+const EXPIRE_HOURS = 24;
+const isCorrection = (p) => p.kind === "Исправление оценки";
+// Предложение агента действует сутки. Заявка на исправление оценки — запись базы (grade_correction), срока у неё нет
+const apprExpired = (p) => p.status === "pending" && !isCorrection(p) && !!p.created_at
+  && Date.now() - new Date(p.created_at.replace(" ", "T")).getTime() > EXPIRE_HOURS * 36e5;
+const apprOpen = (p) => ["pending", "failed", "unknown"].includes(p.status) && !apprExpired(p);
+// Как fn_manages_institute: директор института или заместитель директора (сотрудник деканата на административной должности)
+const managesInstitute = () => [DIRECTOR, DEPUTY].some((e) => e && e === ME && !e.dismissal_date);
+// Кто вправе решать: исправление оценки — руководитель института, но не автор заявки; преподаватель — только своё; студент — ничего
+function canDecide(p) {
+  if (ROLE === "student") return false;
+  if (isCorrection(p)) return managesInstitute() && p.author !== ME.full_name;
+  if (ROLE === "teacher") return p.author === ME.full_name;
+  return true;
+}
+// Видимость: деканат, директор и админ — всё по институту (в макете он один), преподаватель и студент — только своё
+const apprVisible = (p) => (["student", "teacher"].includes(ROLE) ? p.author === ME.full_name : true);
+// Входящие: у деканата без исправлений оценок (кроме заместителя директора — он их решает), у преподавателя — свои изменения
+const apprInbox = (p) => apprOpen(p) && apprVisible(p) && (!isCorrection(p) || ["director", "admin"].includes(ROLE) || (ROLE === "dean_staff" && managesInstitute()));
+// Подготовить заново может автор: изменение из чата — той же просьбой агенту, исправление оценки — новой заявкой
+const canRedo = (p) => p.author === ME.full_name && (isCorrection(p) ? ROLE !== "student" : !!p.prompt);
+const canWork = (p) => apprOpen(p) && !isCorrection(p) && ["dean_staff", "director", "admin"].includes(ROLE);
+
+const DECISION = { approved: "Одобрено", rejected: "Отклонено", undone: "Одобрено", unknown: "Одобрено" };
+const EXECUTION = { approved: "Выполнено", failed: "Ошибка", unknown: "Неизвестно", undone: "Отменено" };
+const DECISION_KIND = { "Одобрено": "ok", "Отклонено": "bad", "Истекло": "muted" };
+const EXECUTION_KIND = { "Выполнено": "ok", "Ошибка": "bad", "Неизвестно": "warn", "Отменено": "muted" };
+// Событие в истории предложения; после решения обновляются статусы решения и исполнения
+function proposalEvent(p, text) {
+  (p.history ??= []).push({ at: nowStamp(), who: ME.full_name, text });
+  if (p.status !== "pending") Object.assign(p, { decision_status: DECISION[p.status] ?? p.decision_status, execution_status: EXECUTION[p.status] ?? null });
+}
+const apprDecision = (p) => (apprExpired(p) ? "Истекло" : ["pending", "failed"].includes(p.status) ? p.decision_status ?? "Ждёт решения" : p.decision_status ?? DECISION[p.status]);
+const personShort = (n) => (String(n).split(" ").length === 3 ? shortName(n) : n);
+
+/* ── Блоки окна решения: исполнитель (взять в работу, передать) и история ── */
+function apprWorkHtml(p) {
+  if (!apprOpen(p)) return "";
+  return `<div class="appr-work"><span>Исполнитель: <b>${p.assignee ? esc(p.assignee) : "не назначен"}</b></span>${canWork(p) ? `<span class="spacer"></span>
+    ${p.assignee !== ME.full_name ? `<button type="button" class="btn sm soft" data-a="appr-take">${icon("check")}Взять в работу</button>` : ""}
+    <button type="button" class="btn sm ghost" data-a="appr-pass">${icon("users")}Передать сотруднику</button>` : ""}</div>`;
+}
+const apprHistHtml = (p) => (p.history?.length ? `<div class="appr-hist"><h4>История</h4><div class="miss-list">${p.history.map((h) =>
+  `<div class="miss-row"><b>${fmtDateTime(h.at)}</b><span>${esc(personShort(h.who))}</span><span>${esc(h.text)}</span></div>`).join("")}</div></div>` : "");
+function apprClick(a, p, m) {
+  if (a === "appr-take") { p.assignee = ME.full_name; proposalEvent(p, "Взял в работу"); toast("Вы взяли предложение в работу"); render(); return true; }
+  if (a === "appr-pass") { passDialog(p); return true; }
+  if (a === "appr-redo") { closeModal(m); redoProposal(p); return true; }
+  return false;
+}
+function redoProposal(p) {
+  if (isCorrection(p)) {
+    const sh = sheets.find((x) => x.sheet_id === p.sheet_id), r = sh?.rows.find((x) => x.student_id === p.student_id);
+    if (sh && r) correctionDialog(sh, r);
+    return;
+  }
+  chat.open = true; chat.texts[draftKey()] = p.prompt; render(); submitChat();
+}
+// Передать сотруднику деканата института: кому и почему (10–2000 символов) — пишется в историю
+function passDialog(p) {
+  const staff = deanStaff.filter((e) => !e.dismissal_date && e.full_name !== p.assignee && e.full_name !== ME.full_name);
+  formDialog({ title: "Передать сотруднику", subtitle: p.explanation, submitLabel: "Передать", busyLabel: "Передаём…",
+    fields: [{ name: "to", label: "Сотрудник деканата", kind: "relation", required: true, options: () => staff.map((e) => ({ value: e.full_name, label: e.full_name, sub: e.position })) },
+      { name: "reason", label: "Причина", kind: "textarea", required: true, hint: `От ${REASON_MIN} до 2000 символов` }],
+    checks: (v) => ({ reason: v.reason && (v.reason.length < REASON_MIN ? `Не короче ${REASON_MIN} символов` : v.reason.length > 2000 ? "Не длиннее 2000 символов" : undefined) }),
+    onSubmit: (v) => { p.assignee = v.to; proposalEvent(p, `Передал: ${personShort(v.to)} — «${v.reason}»`); return { toast: `Передано: ${personShort(v.to)}` }; } });
+}
+
+/* ── Демо-предложения за последние дни — по правилам базы: баллы модуля 25–54, исправление решает директор (не автор),
+   переходы статусов заявок допустимые ── */
+{
+  const at = (days, hm) => `${addDays(TODAY, -days)} ${hm}`;
+  const ev = (when, who, text) => ({ at: when, who, text });
+  const add = (o) => { const pid = uid(); PROPOSALS[pid] = { pid, decision_reason: null, assignee: null, decision_status: null, execution_status: null, effects: [], ...o }; };
+  const [d0, d1] = deanStaff, newReqs = requests.filter((r) => r.status === "Новая"), workReqs = requests.filter((r) => r.status === "В работе" && r.processed_by);
+  const reqChange = (r, to) => ({ table: "Заявка на справку", operation: "UPDATE", rows: [{ label: "Статус", before: r.status, after: to }],
+    apply: () => { if (r.status !== reqChange.from.get(r)) throw new Error(`Заявка № ${r.request_id} уже в статусе «${r.status}» — изменение не применено`); r.status = to; r.processed_by ||= ME.full_name; } });
+  reqChange.from = new Map(requests.map((r) => [r, r.status]));
+  // Деканат: новое изменение, ещё никто не взял
+  if (newReqs[0]) add({ status: "pending", kind: "Обычное", explanation: `Сменить статус заявки № ${newReqs[0].request_id} на «В работе»`, reason: `Запрос сотрудника: «переведи заявку ${newReqs[0].request_id} в работу»`,
+    prompt: `переведи заявку ${newReqs[0].request_id} в работу`, author: d1.full_name, author_role: "dean_staff", created_at: at(0, "08:05"), ...reqChange(newReqs[0], "В работе"),
+    history: [ev(at(0, "08:05"), d1.full_name, "Подготовлено агентом по запросу")] });
+  // Студент: заявка на справку, её взял в работу сотрудник деканата
+  { const st = DEMO_STUDENT, [doc, days] = DOC_TYPES[0];
+    add({ status: "pending", kind: "Заявка студента", decision_status: "Ждёт подтверждения деканата", explanation: `Заявка на справку: ${doc}, 2 экз.`, table: "Заявка на справку", operation: "INSERT",
+      rows: [{ label: "Документ", before: null, after: doc }, { label: "Экземпляров", before: null, after: 2 }, { label: "Куда", before: null, after: PURPOSES[0] }],
+      reason: "Запрос студента: «закажи справку с места учёбы»", prompt: "закажи справку с места учёбы", author: st.full_name, author_role: "student", created_at: at(0, "07:40"), assignee: d0.full_name,
+      history: [ev(at(0, "07:40"), st.full_name, "Подготовлено агентом по запросу"), ev(at(0, "07:55"), d0.full_name, "Взял в работу")],
+      apply() {
+        const id = Math.max(...requests.map((r) => r.request_id)) + 1;
+        requests.push({ request_id: id, student_id: st.student_id, student: st.student, group_name: st.group_name, document: doc, copies: 2, purpose: PURPOSES[0],
+          status: "Новая", created_at: nowStamp(), due_date: addDays(TODAY, days), processed_by: null });
+      } }); }
+  // Заявки на исправление оценки в закрытой ведомости модуля 1: одна ждёт решения, другую уже одобрил директор
+  const closedM1 = sheets.filter((sh) => sh.stage === "module_1" && sh.status === "Закрыта");
+  const mine = closedM1.find((sh) => sh.examiner === DEMO_TEACHER.full_name && sh.rows.some((r) => r.points >= 25 && r.points <= 50));
+  if (mine) { const r = mine.rows.find((x) => x.points >= 25 && x.points <= 50), next = r.points + 4, before = r.points;
+    add({ status: "pending", kind: "Исправление оценки", decision_status: "Ждёт решения директора", explanation: `Исправление оценки: ${r.student} · ${mine.discipline}`,
+      table: `Ведомость ${mine.sheet_number} · ${mine.group_name}`, operation: "UPDATE", rows: [{ label: "Результат", before: resLabel(mine, r), after: resLabel(mine, { points: next, absent: false }) }],
+      reason: "При подсчёте не учтено третье задание контрольной работы", author: DEMO_TEACHER.full_name, author_role: "teacher", created_at: at(2, "14:10"), sheet_id: mine.sheet_id, student_id: r.student_id,
+      history: [ev(at(2, "14:10"), DEMO_TEACHER.full_name, "Подал заявку: «При подсчёте не учтено третье задание контрольной работы»")],
+      apply() { if (r.points !== before || r.absent) throw new Error("Оценка изменилась после подачи заявки — подайте заявку заново"); Object.assign(r, { points: next, absent: false, na: false }); } }); }
+  const other = closedM1.find((sh) => sh !== mine && sh.rows.some((r) => r.points >= 27));
+  if (other && DIRECTOR) { const r = other.rows.find((x) => x.points >= 27);
+    add({ status: "approved", kind: "Исправление оценки", decision_status: "Одобрено", execution_status: "Выполнено", explanation: `Исправление оценки: ${r.student} · ${other.discipline}`,
+      table: `Ведомость ${other.sheet_number} · ${other.group_name}`, operation: "UPDATE", rows: [{ label: "Результат", before: resLabel(other, { points: r.points - 2, absent: false }), after: resLabel(other, r) }],
+      reason: "Ошибка переноса баллов из журнала преподавателя", decision_reason: "Подтверждено по журналу преподавателя", author: d0.full_name, author_role: "dean_staff", created_at: at(4, "10:20"),
+      sheet_id: other.sheet_id, student_id: r.student_id, apply() {},
+      history: [ev(at(4, "10:20"), d0.full_name, "Подал заявку: «Ошибка переноса баллов из журнала преподавателя»"), ev(at(3, "12:05"), DIRECTOR.full_name, "Применил: «Подтверждено по журналу преподавателя»")] }); }
+  // Преподаватель: баллы в своей открытой ведомости модуля 2 — подтверждает сам
+  const open2 = sheets.find((sh) => sh.examiner === DEMO_TEACHER.full_name && sh.stage === "module_2" && sh.status === "Открыта" && sh.rows.some((r) => r.points == null && !r.absent));
+  if (open2) { const r = open2.rows.find((x) => x.points == null && !x.absent);
+    add({ status: "pending", kind: "Обычное", explanation: `${shortName(r.student)}: 41 ${plural(41, "балл", "балла", "баллов")} · ${open2.discipline}`, table: "Ведомость", operation: "UPDATE", rows: [{ label: "Баллы", before: null, after: 41 }],
+      reason: `Запрос преподавателя: «исправь баллы: ${r.student.split(" ")[0]}, 41»`, prompt: `исправь баллы: ${r.student.split(" ")[0]}, 41`, author: DEMO_TEACHER.full_name, author_role: "teacher", created_at: at(0, "07:30"),
+      history: [ev(at(0, "07:30"), DEMO_TEACHER.full_name, "Подготовлено агентом по запросу")],
+      apply() { if (open2.status !== "Открыта") throw new Error("Ведомость закрыта — баллы меняются только через заявку на исправление"); Object.assign(r, { points: 41, absent: false, na: false }); } }); }
+  // Сотрудник деканата: истёкшее (не решили за сутки), отклонённое директором и применённое коллегой
+  if (workReqs[0]) add({ status: "pending", kind: "Обычное", explanation: `Сменить статус заявки № ${workReqs[0].request_id} на «Готова к выдаче»`,
+    reason: `Запрос сотрудника: «заявка ${workReqs[0].request_id} готова»`, prompt: `заявка ${workReqs[0].request_id} готова`, author: d0.full_name, author_role: "dean_staff", created_at: at(3, "11:30"),
+    ...reqChange(workReqs[0], "Готова к выдаче"), history: [ev(at(3, "11:30"), d0.full_name, "Подготовлено агентом по запросу")] });
+  if (newReqs[1] && DIRECTOR) add({ status: "rejected", kind: "Обычное", decision_status: "Отклонено", explanation: `Сменить статус заявки № ${newReqs[1].request_id} на «Отклонена»`,
+    reason: `Запрос сотрудника: «отклони заявку ${newReqs[1].request_id}»`, prompt: `отклони заявку ${newReqs[1].request_id}`, author: d0.full_name, author_role: "dean_staff", created_at: at(1, "15:00"),
+    decision_reason: "Студенту справка нужна — подготовьте её в обычном порядке", ...reqChange(newReqs[1], "Отклонена"),
+    history: [ev(at(1, "15:00"), d0.full_name, "Подготовлено агентом по запросу"), ev(at(1, "16:40"), DIRECTOR.full_name, "Отклонил: «Студенту справка нужна — подготовьте её в обычном порядке»")] });
+  if (workReqs[1]) { const r = workReqs[1];
+    add({ status: "approved", kind: "Обычное", decision_status: "Одобрено", execution_status: "Выполнено", explanation: `Сменить статус заявки № ${r.request_id} на «В работе»`,
+      reason: `Запрос сотрудника: «возьми заявку ${r.request_id} в работу»`, prompt: `возьми заявку ${r.request_id} в работу`, author: d1.full_name, author_role: "dean_staff", created_at: at(1, "10:15"),
+      table: "Заявка на справку", operation: "UPDATE", rows: [{ label: "Статус", before: "Новая", after: "В работе" }], decision_reason: "Документы студента проверены", apply() {},
+      history: [ev(at(1, "10:15"), d1.full_name, "Подготовлено агентом по запросу"), ev(at(1, "10:32"), r.processed_by, "Применил: «Документы студента проверены»")] }); }
+}
+
+/* ── Вкладка: Входящие / Мои / История, таблица с фильтрами; строка открывает окно решения ── */
+let apprView = null, apprFor = null;   // вид выбирается заново у каждого вошедшего
+const APPR_COLS = [
+  { label: "Что", field: "explanation", filter: "text", className: "wrap" },
+  { label: "Автор", field: "author", filter: "enum" },
+  { label: "Когда", field: "created_at", filter: "date", text: (r) => fmtDateTime(r.created_at) },
+  { label: "Исполнитель", field: (r) => r.assignee ?? "—", filter: "enum" },
+  { label: "Решение", field: apprDecision, filter: "enum", badge: true, render: (r) => { const d = apprDecision(r); return badge(d, DECISION_KIND[d] ?? "info"); } },
+  { label: "Исполнение", field: (r) => r.execution_status ?? "—", filter: "enum", badge: true,
+    render: (r) => (r.execution_status ? badge(r.execution_status, EXECUTION_KIND[r.execution_status] ?? "info") : "—") },
+];
+PAGES.approvals = () => {
+  const all = Object.entries(PROPOSALS).map(([k, p]) => { p.pid ??= k; return p; }).filter((p) => p.created_at)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  // У студента — только «Мои»
+  const views = ROLE === "student" ? [["my", "Мои", all.filter((p) => p.author === ME.full_name)]]
+    : [["in", "Входящие", all.filter(apprInbox)], ["my", "Мои", all.filter((p) => p.author === ME.full_name)], ["hist", "История", all.filter((p) => apprVisible(p) && !apprOpen(p))]];
+  if (apprFor !== ME || !views.some(([v]) => v === apprView)) { apprView = views[0][0]; apprFor = ME; }
+  const base = views.find(([v]) => v === apprView)[2], id = `appr-${apprView}`;
+  const rows = applyTable(id, APPR_COLS, base);
+  return pageView("approvals", "Согласование", [
+    tableTools(id, APPR_COLS, base, rows.length, views.length > 1 ? `<span class="spacer"></span>${seg("appr-view", views.map(([v, l, xs]) => [v, `${l} ${xs.length}`]), apprView)}` : ""),
+    dataTable(id, APPR_COLS, rows, base, { rowKey: (r) => r.pid, onRow: (r) => proposalDialog(r.pid) })]);
+};
+Object.assign(ACT, { "appr-view": (el) => { apprView = el.dataset.v; render(); } });
 
 /* ═════════ АДМИНИСТРАТОР ═════════ */
 const users = [
@@ -725,6 +894,7 @@ function tempPassword() {
 }
 function tempPasswordDialog(u) {
   const pw = tempPassword(), m = { label: "Временный пароль" };
+  Object.assign(u, { mustChange: true, tempPassword: pw });
   m.html = () => `<div class="dialog form-dialog">
     <div class="form-head"><div><h3>Временный пароль</h3><p>${esc(u.login)} · ${esc(u.person)}</p></div><button type="button" class="icon-btn" aria-label="Закрыть" data-a="close">${icon("x")}</button></div>
     <div class="form-body"><div class="pw-box"><code>${esc(pw)}</code><button type="button" class="btn sm soft" data-a="pw-copy">${icon("copy")}Скопировать</button></div>
@@ -949,5 +1119,5 @@ document.addEventListener("change", (e) => {
 });
 
 { const u = users.find((x) => x.login === auth.login);
-  if (auth.on && u?.active) applyRole(u.role, personOf(u), u.login); else if (auth.on) { auth.on = false; try { sessionStorage.removeItem("deanery.mock.session"); } catch { /* нет доступа */ } } }
+  if (auth.on && u?.active && !u.mustChange) applyRole(u.role, personOf(u), u.login); else if (auth.on) { auth.on = false; try { sessionStorage.removeItem("deanery.mock.session"); } catch { /* нет доступа */ } } }
 render();

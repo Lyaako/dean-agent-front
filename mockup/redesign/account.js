@@ -19,15 +19,21 @@ function setTheme(v) {
 
 const myLogin = () => ME.email.split("@")[0];
 const fullDate = (s) => `${human(s)} ${s.slice(0, 4)}`;
-function browserName() {
-  const ua = navigator.userAgent;
-  const b = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "Браузер";
-  const os = /Mac OS X/.test(ua) ? "macOS" : /Windows/.test(ua) ? "Windows" : /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS" : /Linux/.test(ua) ? "Linux" : "";
-  return os ? `${b} · ${os}` : b;
-}
-
 const THEMES = [["light", "Светлая"], ["dark", "Тёмная"], ["system", "Как в системе"]];
 const PW_FIELDS = [["cur", "Текущий пароль", "current-password"], ["next", "Новый пароль", "new-password"], ["rep", "Повторите новый пароль", "new-password"]];
+// Поля смены пароля и проверки — общие для кабинета и обязательной смены после сброса
+const pwFields = (m, list) => list.map(([n, l, ac]) => `<div class="field form-field${m.errors[n] ? " invalid" : ""}">
+        <label for="pw-${n}">${l}</label>
+        <input id="pw-${n}" class="text-input" type="password" data-pw="${n}" value="${esc(m.pw[n])}" autocomplete="${ac}" ${m.busy ? "disabled" : ""}>
+        ${m.errors[n] ? `<small class="field-error" role="alert">${esc(m.errors[n])}</small>` : n === "next" ? `<small class="hint">Не короче 8 символов</small>` : ""}</div>`).join("");
+function pwErrors({ cur, next, rep }) {
+  const err = {};
+  if (!cur) err.cur = "Введите текущий пароль";
+  if (next.length < 8) err.next = "Не короче 8 символов";
+  else if (next === cur) err.next = "Новый пароль совпадает с текущим";
+  if (!err.next && rep !== next) err.rep = "Пароли не совпадают";
+  return err;
+}
 
 function accountDialog() {
   const m = { label: "Личный кабинет", tab: "profile", pw: { cur: "", next: "", rep: "" }, errors: {}, busy: false };
@@ -51,16 +57,11 @@ function accountDialog() {
 
   const security = () => `<form class="acc-block" data-pwform novalidate>
       <h4>Смена пароля</h4>
-      <div class="acc-pw">${PW_FIELDS.map(([n, l, ac]) => `<div class="field form-field${m.errors[n] ? " invalid" : ""}">
-        <label for="pw-${n}">${l}</label>
-        <input id="pw-${n}" class="text-input" type="password" data-pw="${n}" value="${esc(m.pw[n])}" autocomplete="${ac}" ${m.busy ? "disabled" : ""}>
-        ${m.errors[n] ? `<small class="field-error" role="alert">${esc(m.errors[n])}</small>` : n === "next" ? `<small class="hint">Не короче 8 символов</small>` : ""}</div>`).join("")}</div>
+      <div class="acc-pw">${pwFields(m, PW_FIELDS)}</div>
       <div><button class="btn sm primary" ${m.busy ? "disabled" : ""}>${m.busy ? "Меняем…" : "Сменить пароль"}</button></div>
     </form>
     <div class="acc-block">
       <h4>Сеансы</h4>
-      <div class="acc-session"><span class="dialog-ico sm">${icon("grid")}</span>
-        <div><b>${esc(browserName())}</b><small>Этот браузер · вход выполнен сегодня</small></div>${badge("Текущий", "ok")}</div>
       <div><button type="button" class="btn sm ghost danger-text" data-a="logout-all">${icon("logout")}Выйти на всех устройствах</button></div>
     </div>`;
 
@@ -89,17 +90,40 @@ function accountDialog() {
   };
   m.submit = async (e) => {
     if (!e.target.closest("[data-pwform]") || m.busy) return;
-    const { cur, next, rep } = m.pw, err = {};
-    if (!cur) err.cur = "Введите текущий пароль";
-    if (next.length < 8) err.next = "Не короче 8 символов";
-    else if (next === cur) err.next = "Новый пароль совпадает с текущим";
-    if (!err.next && rep !== next) err.rep = "Пароли не совпадают";
+    const err = pwErrors(m.pw);
     m.errors = err;
     if (Object.keys(err).length) { render(); $(`[data-k="${m.key}"] #pw-${Object.keys(err)[0]}`)?.focus(); return; }
     m.busy = true; render();
     await wait(600);   // как запрос к серверу
     Object.assign(m, { busy: false, pw: { cur: "", next: "", rep: "" } });
     render(); toast("Пароль изменён");
+  };
+  return openModal(m);
+}
+
+/* ── Обязательная смена пароля: вход временным паролем после сброса администратором.
+   Окно не закрывается (нет крестика, Esc и клик мимо не действуют), пока пароль не сменён ── */
+function mustChangeDialog(u, cur, onDone) {
+  const m = { label: "Задайте новый пароль", pw: { cur, next: "", rep: "" }, errors: {}, busy: false, outsideClose: false, esc: () => true };
+  m.html = () => `<form class="dialog form-dialog" data-pwform novalidate>
+    <div class="form-head"><div><h3>Задайте новый пароль</h3><p>${esc(u.login)} · вход по временному паролю</p></div></div>
+    <div class="form-body"><div class="form-note">Пароль сброшен администратором. Чтобы продолжить, задайте свой пароль.</div>
+      <div class="form-grid">${pwFields(m, PW_FIELDS.slice(1))}</div></div>
+    <div class="actions"><span class="spacer"></span><button class="btn primary" ${m.busy ? "disabled" : ""}>${m.busy ? "Меняем…" : "Сменить пароль"}</button></div></form>`;
+  m.close = () => {};
+  m.opened = () => $(`[data-k="${m.key}"] #pw-next`)?.focus();
+  m.input = (el) => {
+    if (el.dataset.pw == null) return;
+    m.pw[el.dataset.pw] = el.value;
+    if (m.errors[el.dataset.pw]) { delete m.errors[el.dataset.pw]; render(); }
+  };
+  m.submit = async (e) => {
+    if (m.busy) return;
+    m.errors = pwErrors(m.pw);
+    if (Object.keys(m.errors).length) { render(); $(`[data-k="${m.key}"] #pw-${Object.keys(m.errors)[0]}`)?.focus(); return; }
+    m.busy = true; render();
+    await wait(600);   // как запрос к серверу
+    closeModal(m); onDone(m.pw.next); toast("Пароль изменён");
   };
   return openModal(m);
 }
