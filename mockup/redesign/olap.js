@@ -60,12 +60,11 @@ students.forEach((s) => {
 moves.sort((a, b) => a.order_date.localeCompare(b.order_date));
 
 /* ── Состояние вкладки ── */
-const olap = { op: "session", path: [], sem: "", course: "", group: "", modMin: "25", attMin: "70", level: "group", period: "month", pick: null };
+const olap = { op: "session", path: [], sem: "", course: "", group: "", modMin: "30", attMin: "70", level: "group", period: "month", pick: null };
 const OPS = [
   ["session", "Итоги сессии", "Roll-up · Drill-down", "Свёртка студентов в группы и курсы. Нажатие на строку раскрывает уровень ниже: курс → группы → дисциплины → студенты."],
   ["heat", "Проблемные дисциплины", "Pivot · Slice", "Поворот куба: дисциплины в строках, группы в столбцах, срез — один семестр. В ячейке — доля не сдавших с первого раза."],
-  ["risk", "Раннее предупреждение", "Dice", "Подкуб: обучающиеся × текущий семестр × пороги по модулю 1 и посещаемости. Видно, кому помочь до сессии."],
-  ["attend", "Посещаемость и долги", "Slice", "Срез по курсу или группе: каждый студент — точка. Видно, как прогулы связаны с баллами и долгами."],
+  ["risk", "Раннее предупреждение", "Dice", "Подкуб: обучающиеся × текущий семестр × пороги по модулю 1 и посещаемости. Видно, кому помочь до сессии. «Не аттестован» по модулю 1 — всегда риск."],
   ["retake", "Пересдачи", "Roll-up по попыткам", "Свёртка результатов по попытке сдачи: сессия → пересдача → комиссия. Видно, закрываются долги или копятся."],
   ["moves", "Движение контингента", "Roll-up по времени · Drill-down", "Свёртка приказов по времени: месяц → семестр → год. Нажатие на столбец раскрывает приказы периода."],
 ];
@@ -78,7 +77,11 @@ const ACTIVE_GROUPS = () => OLAP_GROUPS().filter((g) => doneSemesters(g.year) > 
 const courseOpts = () => [...new Set(OLAP_GROUPS().map((g) => course(g.year)))].sort().map((c) => [c, `${c} курс`]);
 const olapSelect = (label, key, opts, value, all) => `<label class="field"><span>${label}</span><select class="select" data-olap="${key}">${all ? `<option value="">${all}</option>` : ""}${opts.map(([v, l]) =>
   `<option value="${esc(v)}" ${String(v) === String(value) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>`;
-const olapNum = (label, key, value, suffix) => `<label class="field"><span>${label}</span><span class="num-in"><input class="text-input" type="number" min="0" max="100" data-olap="${key}" value="${esc(value)}"><i>${suffix}</i></span></label>`;
+// Порог: число в пределах [min, max]; вне пределов — ошибка под полем, а в расчёте остаётся значение по умолчанию
+const numIn = (v, [min, max], def) => { const n = Number(v); return v !== "" && Number.isInteger(n) && n >= min && n <= max ? n : def; };
+const olapNum = (label, key, value, suffix, [min, max] = [0, 100]) => { const bad = numIn(value, [min, max], null) == null;
+  return `<label class="field${bad ? " form-field invalid" : ""}"><span>${label}</span><span class="num-in"><input class="text-input" type="number" min="${min}" max="${max}" step="1" data-olap="${key}" value="${esc(value)}"><i>${suffix}</i></span>
+    ${bad ? `<small class="field-error" role="alert">Целое число от ${min} до ${max}</small>` : ""}</label>`; };
 const inCourse = (s) => !olap.course || String(s.course) === String(olap.course);
 const inGroup = (s) => olapMine(s) && (!olap.group || s.group_name === olap.group);
 const groupOptsFor = () => OLAP_GROUPS().filter((g) => !olap.course || String(course(g.year)) === String(olap.course)).map((g) => [g.name, g.name]);
@@ -175,7 +178,8 @@ function heatView() {
 
 /* ═════════ 3. Раннее предупреждение: Dice по курсу, модулю 1 и посещаемости ═════════ */
 function riskView() {
-  const mMin = +olap.modMin || 0, aMin = +olap.attMin || 0;
+  // Модуль 1 — в шкале баллов (25–54), посещаемость — 0–100 %
+  const mMin = numIn(olap.modMin, [25, 54], 30), aMin = numIn(olap.attMin, [0, 100], 70);
   const pool = students.filter((s) => s.status === ACTIVE && inCourse(s) && inGroup(s));
   const rows = pool.map((s) => {
     const low = modules.filter((m) => m.student_id === s.student_id && (m.points == null || m.points < mMin));
@@ -193,18 +197,18 @@ function riskView() {
     { label: "Риск", field: "risk", filter: "enum", badge: true, render: (r) => badge(r.risk, r.score >= 2 ? "bad" : "warn") }];
   const n = (f) => rows.filter(f).length;
   return [`<div class="olap-filters">${olapSelect("Курс", "course", courseOpts(), olap.course, "Все")}${olapSelect("Группа", "group", groupOptsFor(), olap.group, "Все")}
-      ${olapNum("Модуль 1 меньше", "modMin", olap.modMin, "баллов")}${olapNum("Посещаемость ниже", "attMin", olap.attMin, "%")}</div>`,
+      ${olapNum("Модуль 1 меньше", "modMin", olap.modMin, "баллов", [25, 54])}${olapNum("Посещаемость ниже", "attMin", olap.attMin, "%", [0, 100])}</div>`,
     tiles([["В зоне риска", `${rows.length} из ${pool.length}`, `высокий риск — ${n((r) => r.score >= 2)}`, rows.length ? "bad" : "ok"],
-      ["Слабый модуль 1", n((r) => r.low), `меньше ${mMin} баллов хотя бы по одной дисциплине`], ["Низкая посещаемость", n((r) => r.att), `ниже ${aMin}%`],
+      ["Слабый модуль 1", n((r) => r.low), `меньше ${mMin} баллов или «не аттестован» хотя бы по одной дисциплине`], ["Низкая посещаемость", n((r) => r.att), `ниже ${aMin}%`],
       ["С долгами прошлых сессий", n((r) => r.debts)]]),
     dataTable("olap-risk", cols, applyTable("olap-risk", cols, rows), rows, { rowKey: (r) => r.student_id,
-      title: "Студенты, которым нужна помощь до сессии · Dice: обучающиеся × текущий семестр × пороги", onRow: olapOpenStudent() })];
+      title: "Студенты, которым нужна помощь до сессии · Dice: обучающиеся × текущий семестр × пороги", onRow: olapOpenStudent() }),
+    attendChart(students.filter((s) => s.status === ACTIVE && s.avg_points != null && inCourse(s) && inGroup(s)), aMin)];
 }
 
-/* ═════════ 4. Посещаемость и долги: Slice по курсу и группе ═════════ */
-function attendView() {
-  const pool = students.filter((s) => s.status === ACTIVE && s.avg_points != null && inCourse(s) && inGroup(s));
-  const aMin = +olap.attMin || 70;
+/* ── Точечный график «посещаемость × средний балл» (бывший срез «Посещаемость и долги») — под таблицей «Раннего предупреждения» ── */
+function attendChart(pool, aMin) {
+  if (!pool.length) return "";
   // Шкалы по данным, а не по всей шкале оценок: точки занимают всё поле
   const atts = pool.map((s) => s.attendance_pct), pts = pool.map((s) => s.avg_points);
   const X0 = Math.max(0, Math.floor((Math.min(aMin, ...atts) - 4) / 10) * 10), X1 = 100;
@@ -218,19 +222,12 @@ function attendView() {
   g += range(X0, X1, 10).map((v) => `<line class="grid" x1="${x(v)}" x2="${x(v)}" y1="${T}" y2="${H - B}"/><text x="${x(v)}" y="${H - 8}" text-anchor="middle">${v}%</text>`).join("");
   g += `<line class="cut" x1="${x(aMin)}" x2="${x(aMin)}" y1="${T}" y2="${H - B}"/><text class="cut-l" x="${x(aMin) - 8}" y="${T + 16}" text-anchor="end">ниже ${aMin}%</text>`;
   g += pool.map((s, i) => `<circle class="${s.debts ? "debt" : "ok"}" style="--i:${i % 40}" cx="${x(s.attendance_pct)}" cy="${y(s.avg_points)}" r="7"><title>${esc(s.student)} · ${s.group_name}: посещаемость ${s.attendance_pct}%, средний балл ${s.avg_points}${s.debts ? `, долгов ${s.debts}` : ""}</title></circle>`).join("");
-  const lo = pool.filter((s) => s.attendance_pct < aMin), hi = pool.filter((s) => s.attendance_pct >= aMin);
-  const debtShare = (a) => pctOf(a.filter((s) => s.debts).length, a.length);
-  const avgOf = (a) => (a.length ? (a.reduce((t, s) => t + s.avg_points, 0) / a.length).toFixed(1).replace(".", ",") : "—");
-  return [`<div class="olap-filters">${olapSelect("Slice: курс", "course", courseOpts(), olap.course, "Все")}${olapSelect("Группа", "group", groupOptsFor(), olap.group, "Все")}
-      ${olapNum("Граница посещаемости", "attMin", olap.attMin, "%")}</div>`,
-    tiles([[`Посещаемость ниже ${aMin}%`, `${debtShare(lo) ?? "—"}%`, `с долгами · ${lo.length} ${plural(lo.length, "студент", "студента", "студентов")}, средний балл ${avgOf(lo)}`, "bad"],
-      [`Посещаемость ${aMin}% и выше`, `${debtShare(hi) ?? "—"}%`, `с долгами · ${hi.length} ${plural(hi.length, "студент", "студента", "студентов")}, средний балл ${avgOf(hi)}`, "ok"]]),
-    `<section class="card"><div class="table-head"><h2>Посещаемость и средний балл</h2>
+  return `<section class="card"><div class="table-head"><h2>Посещаемость и средний балл</h2>
       <span class="chart-legend"><span><i class="dot ok"></i>без долгов</span><span><i class="dot debt"></i>есть долги</span><span>точка — студент</span></span></div>
-      <div class="chart scatter"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Посещаемость и средний балл">${g}</svg></div></section>`];
+      <div class="chart scatter"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Посещаемость и средний балл">${g}</svg></div></section>`;
 }
 
-/* ═════════ 5. Пересдачи: Roll-up по попытке сдачи ═════════ */
+/* ═════════ 4. Пересдачи: Roll-up по попытке сдачи ═════════ */
 function retakeView() {
   const rs = results.filter((r) => inCourse(r) && inGroup(r) && isActive(r.student_id));
   const fail = (a) => a.filter(failedFirst);
@@ -255,7 +252,7 @@ function retakeView() {
     dataTable("olap-retake", cols, applyTable("olap-retake", cols, rows), rows, { rowKey: (r) => r.name, title: `Roll-up по ${olap.level === "course" ? "курсам" : "группам"}` })];
 }
 
-/* ═════════ 6. Движение контингента: Roll-up по времени (месяц → семестр → год), Drill-down до приказов ═════════ */
+/* ═════════ 5. Движение контингента: Roll-up по времени (месяц → семестр → год), Drill-down до приказов ═════════ */
 const termOf = (m) => { const y = +m.slice(0, 4), mo = +m.slice(5); return mo >= 9 ? `${y}/${String(y + 1).slice(2)}, осень` : mo === 1 ? `${y - 1}/${String(y).slice(2)}, осень` : `${y - 1}/${String(y).slice(2)}, весна`; };
 const yearOf = (m) => { const y = +m.slice(0, 4), mo = +m.slice(5); return mo >= 9 ? `${y}/${String(y + 1).slice(2)} уч. год` : `${y - 1}/${String(y).slice(2)} уч. год`; };
 function movesView() {
@@ -287,7 +284,7 @@ function movesView() {
 
 /* ── Страница ── */
 PAGES.olap = () => {
-  const view = { session: sessionView, heat: heatView, risk: riskView, attend: attendView, retake: retakeView, moves: movesView }[olap.op];
+  const view = { session: sessionView, heat: heatView, risk: riskView, retake: retakeView, moves: movesView }[olap.op];
   return pageView("olap", "OLAP-анализ", [
     `<nav class="olap-ops" aria-label="Срезы">${OPS.map(([v, l, t]) => `<button type="button" class="olap-op" data-a="olap-op" data-v="${v}" aria-pressed="${v === olap.op}"><b>${l}</b><small>${t}</small></button>`).join("")}</nav>`,
     ...view().map((x, i) => `<div class="enter" data-k="${olap.op}#${i}">${x}</div>`)]);

@@ -61,7 +61,7 @@ const copyBtn = (id) => `<div class="msg-acts"><button type="button" class="msg-
 function messageHtml(m) {
   if (m.role === "user") {
     return `<div class="msg user" data-k="${m.id}">${m.attachments?.length ? `<div class="thumbs">${m.attachments.map((a) =>
-      `<div class="thumb"><button type="button" class="pic" data-a="msg-file" data-id="${a.id}" title="${esc(a.name)}">${picHtml(ATT[a.id]?.thumb ?? { kind: "ext", ext: extOf(a.name).slice(1) })}</button><span class="name">${esc(a.name)}</span></div>`).join("")}</div>` : ""}
+      `<div class="thumb${a.partial ? " st-partial" : ""}"><button type="button" class="pic" data-a="msg-file" data-id="${a.id}" title="${esc(a.name)}">${picHtml(ATT[a.id]?.thumb ?? { kind: "ext", ext: extOf(a.name).slice(1) })}${partialBadge(a.partial)}</button><span class="name" title="${esc(a.name)}">${esc(a.partial ? partialText(a.partial) : a.name)}</span></div>`).join("")}</div>` : ""}
       ${m.text ? `<div class="bubble" data-k="bubble">${esc(m.text)}</div>` : ""}${copyBtn(m.id)}</div>`;
   }
   if (m.role === "error") {
@@ -69,6 +69,7 @@ function messageHtml(m) {
       <div class="body"><p>${esc(m.text)}</p>${copyBtn(m.id)}</div></div>`;
   }
   return `<div class="msg agent" data-k="${m.id}"><span class="orb"></span><div class="body"><div class="md">${m.html}</div>
+    ${(m.partial ?? []).map((a) => `<p class="partial-note">${icon("alert")}<span>Файл «${esc(a.name)}» прочитан не полностью — ${partialText(a.partial).toLowerCase()}. Ответ может быть неполным.</span></p>`).join("")}
     ${(m.proposals ?? []).map((pid) => { const p = PROPOSALS[pid], d = p.status !== "pending" ? p.status : null;
       if (p.batch) return batchCard(pid);   // много записей — сводка (batch.js)
       return `<div class="proposal-card">${icon("sparkle")}<div><b>${esc(p.explanation)}</b><small>${esc(p.table)} · ${p.operation === "INSERT" ? "новая запись" : `полей: ${p.rows.length}`}</small></div>
@@ -85,7 +86,7 @@ function chatListHtml() {
       ? `<form class="cl-item editing" data-rename="${c.id}" data-k="${c.id}-edit"><input class="ff-in" data-rename-input value="${esc(chat.editing.title)}"></form>`
       : `<div class="cl-item${c.id === chat.activeId ? " active" : ""}" data-k="${c.id}"><button type="button" class="cl-open" data-a="open-chat" data-id="${c.id}" title="${esc(c.title)}">${icon("message")}<span>${esc(c.title)}</span></button>
         <button type="button" class="cl-act" aria-label="Переименовать" data-a="rename-chat" data-id="${c.id}">${icon("edit")}</button>
-        <button type="button" class="cl-act" aria-label="Удалить" data-a="remove-chat" data-id="${c.id}">${icon("trash")}</button></div>`)).join("")}</div>`).join("")}
+        <button type="button" class="cl-act" aria-label="Удалить" data-a="remove-chat" data-id="${c.id}" ${chat.busyId === c.id ? `disabled title="Сначала остановите агента"` : ""}>${icon("trash")}</button></div>`)).join("")}</div>`).join("")}
   </aside>`;
 }
 
@@ -109,28 +110,59 @@ function send() {
   const names = files.map((f) => f.name).join(", ");
   let c = activeChat();
   if (!c) { c = { id: uid(), title: titleFrom(text || names), updatedAt: Date.now(), messages: [] }; chat.chats.unshift(c); chat.activeId = c.id; }
-  c.messages.push({ id: uid(), role: "user", text, attachments: files.length ? files.map((f) => ({ id: f.id, name: f.name })) : undefined });
+  c.messages.push({ id: uid(), role: "user", text, attachments: files.length ? files.map((f) => ({ id: f.id, name: f.name, partial: f.partial })) : undefined });
   chat.texts[key] = ""; chat.att[key] = []; chat.notice = null; chat.inputH = 40;
   touch(c);
   runAgent(c, text, files);
 }
 // Ответ агента приходит потоком: сначала «думает», потом инструмент (поиск в базе / подготовка изменения), потом ответ
+const agentReply = (text, files) => (text ? reply(text) : { html: `<p>Вижу вложения: <b>${esc(files.map((f) => f.name).join(", "))}</b>. Читать содержимое файлов я пока не умею — напишите словами, что с ними сделать.</p>` });
+const agentLater = (ms, fn) => chat.timers.push(setTimeout(fn, REDUCED ? 0 : ms));
 function runAgent(c, text, files) {
-  const res = text ? reply(text) : { html: `<p>Вижу вложения: <b>${esc(files.map((f) => f.name).join(", "))}</b>. Читать содержимое файлов я пока не умею — напишите словами, что с ними сделать.</p>` };
+  const res = agentReply(text, files);
   chat.busyId = c.id; chat.status = "Агент думает…";
+  saveRunning(c, text);
   render();
-  const later = (ms, fn) => chat.timers.push(setTimeout(fn, REDUCED ? 0 : ms));
-  if (res.tool) later(650, () => { chat.status = TOOL_STATUS[res.tool]; render(); });
-  later(res.tool ? 1500 + Math.random() * 500 : 900, () => {
-    chat.timers = [];
-    const pid = res.proposal ? uid() : null;
-    if (pid) PROPOSALS[pid] = { status: "pending", decision_reason: null, ...res.proposal };
-    c.messages.push({ id: uid(), role: "agent", html: res.html, proposals: pid ? [pid] : [] });
-    chat.busyId = null; chat.status = null;
-    touch(c); render();
-  });
+  if (res.tool) agentLater(650, () => { chat.status = TOOL_STATUS[res.tool]; render(); });
+  agentLater(res.tool ? 1500 + Math.random() * 500 : 900, () => finishAgent(c, res, files));
 }
+function finishAgent(c, res, files) {
+  chat.timers = [];
+  const pid = res.proposal ? uid() : null;
+  if (pid) PROPOSALS[pid] = { status: "pending", decision_reason: null, ...res.proposal };
+  const partial = files.filter((f) => f.partial).map((f) => ({ name: f.name, partial: f.partial }));
+  c.messages.push({ id: uid(), role: "agent", html: res.html, proposals: pid ? [pid] : [], ...(partial.length ? { partial } : {}) });
+  chat.busyId = null; chat.status = null;
+  saveRunning(null);
+  touch(c); render();
+}
+/* ── Ответ не теряется при перезагрузке страницы: запрос сохраняется в sessionStorage, после загрузки агент «продолжает отвечать» ── */
+const RUNNING_KEY = "deanery.mock.agent";
+function saveRunning(c, text) {
+  try {
+    if (!c) return sessionStorage.removeItem(RUNNING_KEY);
+    sessionStorage.setItem(RUNNING_KEY, JSON.stringify({ login: myLogin(), chatId: c.id, title: c.title, text, startedAt: Date.now(),
+      messages: c.messages.map((m) => ({ ...m, proposals: [] })) }));
+  } catch { /* нет доступа к sessionStorage — ответ просто не переживёт перезагрузку */ }
+}
+function resumeAgent() {
+  let run;
+  try { run = JSON.parse(sessionStorage.getItem(RUNNING_KEY) || "null"); } catch { return; }
+  if (!run) return;
+  if (!auth.on || run.login !== myLogin()) return saveRunning(null);
+  // Чат ищем по id, а демо-чаты пересоздаются при загрузке — тогда по названию и первому сообщению
+  let c = chat.chats.find((x) => x.id === run.chatId) ?? chat.chats.find((x) => x.title === run.title && x.messages[0]?.text === run.messages[0]?.text);
+  if (!c) chat.chats.unshift(c = { id: run.chatId, title: run.title, updatedAt: Date.now(), messages: [] });
+  c.messages = run.messages;
+  const files = (run.messages.at(-1)?.attachments ?? []).map((a) => ({ name: a.name, partial: a.partial }));
+  Object.assign(chat, { open: true, activeId: c.id, busyId: c.id, status: "Агент продолжает отвечать…" });
+  render();
+  const res = agentReply(run.text, files);
+  agentLater(Math.max(1200, run.startedAt + 2000 - Date.now()), () => finishAgent(c, res, files));
+}
+window.addEventListener("load", resumeAgent);   // после roles.js: вход и чаты пользователя уже восстановлены
 function stopAgent() {
+  saveRunning(null);
   chat.timers.forEach(clearTimeout); chat.timers = [];
   const c = chat.chats.find((x) => x.id === chat.busyId);
   c?.messages.push({ id: uid(), role: "error", text: "Остановлено. Агент мог успеть выполнить запрос на сервере." });
@@ -166,7 +198,11 @@ function upload(it) {
     it.status = "processing"; render();
     setTimeout(() => {
       if (/вирус|virus/i.test(it.name)) Object.assign(it, { status: "error", error: "Файл не прошёл антивирусную проверку" });
-      else it.status = "ready";
+      else {
+        it.status = "ready";
+        // Скан: часть страниц не распознана
+        if (/scan/i.test(it.name)) { const total = 6 + (it.name.length % 7); it.partial = { read: total - 1 - (it.name.length % 3), total }; }
+      }
       if (chat.queued && !pendingFiles()) { chat.queued = false; if (!draftItems().some((i) => i.status === "error")) send(); }
       render();
     }, REDUCED ? 0 : 900 + Math.random() * 600);
@@ -175,11 +211,14 @@ function upload(it) {
 const picHtml = (th, loading) => (!th ? `<span class="pic-inner${loading ? "" : " ext"}">${loading ? "" : "файл"}</span>`
   : th.kind === "img" ? `<img src="${th.src}" alt="">` : th.kind === "text" ? `<div class="page">${esc(th.text)}</div>` : `<div class="ext">${esc(th.ext)}</div>`);
 const leaving = new Set();   // файлы, которые сейчас плавно исчезают
-const composerThumb = (it) => `<div class="thumb st-${it.status}${leaving.has(it.id) ? " out" : ""}" data-k="${it.id}">
+// Файл прочитан не полностью (в макете — «scan» в имени): значок на миниатюре и «Прочитано N из M страниц»
+const partialText = (pt) => `Прочитано ${pt.read} из ${pt.total} ${plural(pt.total, "страницы", "страниц", "страниц")}`;
+const partialBadge = (pt) => (pt ? `<span class="thumb-state warn" title="${esc(partialText(pt))}">${icon("alert")}Частично</span>` : "");
+const composerThumb = (it) => `<div class="thumb st-${it.status}${it.status === "ready" && it.partial ? " st-partial" : ""}${leaving.has(it.id) ? " out" : ""}" data-k="${it.id}">
   <button type="button" class="pic${!it.thumb ? " loading" : ""}" data-a="att-open" data-id="${it.id}" title="${esc(it.name)}">${picHtml(it.thumb, !it.thumb)}
     ${it.status === "uploading" || it.status === "processing" ? `<span class="thumb-busy" aria-label="Загружается"><span class="spinner"></span></span>` : ""}
-    ${it.status === "error" ? `<span class="thumb-state bad" title="${esc(it.error)}">Ошибка</span>` : ""}</button>
-  <span class="name" title="${esc(it.error ?? it.name)}">${esc(it.status === "error" ? it.error : it.name)}</span>
+    ${it.status === "error" ? `<span class="thumb-state bad" title="${esc(it.error)}">Ошибка</span>` : it.status === "ready" ? partialBadge(it.partial) : ""}</button>
+  <span class="name" title="${esc(it.error ?? it.name)}">${esc(it.status === "error" ? it.error : it.status === "ready" && it.partial ? partialText(it.partial) : it.name)}</span>
   ${it.status === "error" ? `<button type="button" class="thumb-retry" data-a="att-retry" data-id="${it.id}">${icon("refresh")}Повторить</button>` : ""}
   <button type="button" class="remove" aria-label="Убрать ${esc(it.name)}" data-a="att-remove" data-id="${it.id}">${icon("x")}</button></div>`;
 

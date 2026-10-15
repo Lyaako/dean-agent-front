@@ -146,6 +146,13 @@ button.lesson { width: 100%; border: 0; text-align: left; font: inherit; color: 
 .thumb-state.bad { background: var(--rose); }
 .thumb.st-error .pic { border-color: var(--rose); }
 .thumb.st-error .name { color: var(--rose-700); white-space: normal; }
+/* Файл прочитан частично: значок цветом предупреждения, подпись «Прочитано N из M страниц», строка под ответом агента */
+.thumb-state.warn { background: var(--orchid); }
+.thumb-state .ic { width: 11px; height: 11px; }
+.thumb.st-partial .pic { border-color: var(--orchid); }
+.thumb.st-partial .name { color: var(--orchid-700); white-space: normal; }
+.partial-note { display: flex; align-items: flex-start; gap: 6px; margin: 8px 0 0; font-size: 12.5px; color: var(--orchid-700); }
+.partial-note .ic { width: 14px; height: 14px; flex: none; margin-top: 2px; }
 .thumb-retry { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 3px 6px; border: 0; border-radius: 8px; background: var(--sky-100); color: var(--indigo); font-size: 11px; font-weight: 500; }
 .thumb-retry .ic { width: 12px; height: 12px; }
 .spinner.sm { width: 11px; height: 11px; border-width: 2px; border-color: rgba(255, 255, 255, .35); border-top-color: #fff; }
