@@ -136,13 +136,16 @@ export function Field({ name, spec, value, onChange, label, required, disabled, 
 }
 
 // Выпадающий список с поиском по связанной таблице
-export function LookupSelect({ id, table, column, value, onChange, disabled, required, filter, placeholder = "Выберите…", byLabel }: {
-  id?: string; table: string; column: string; value: string; onChange: (v: string) => void;
+export function LookupSelect({ id, table, column, value, onChange, disabled, required, filter, placeholder = "Выберите…", byLabel, source }: {
+  id?: string; table?: string; column?: string; value: string; onChange: (v: string) => void;
+  /** Готовый список вместо справочника (например, подписанты из /orders/signers) */
+  source?: { data?: Option[]; isLoading: boolean; error: unknown };
   disabled?: boolean; required?: boolean; filter?: (o: Option) => boolean; placeholder?: string;
   /** Значение — подпись, а не id (команды бэкенда принимают название группы, основы и т. п.) */
   byLabel?: boolean;
 }) {
-  const { data, isLoading, error } = useLookup(table, column);
+  const lookup = useLookup(source ? undefined : table, source ? undefined : column);
+  const { data, isLoading, error } = source ?? lookup;
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [hi, setHi] = useState(0);

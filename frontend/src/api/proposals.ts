@@ -32,7 +32,10 @@ export interface Proposal extends ProposalSummary {
   routing: { institute_id: number | null; assignee_user_id: number | null; assignee_name: string | null };
   execution: { status: ExecutionStatus; effective_date: string | null; order_id: number | null; job_id: string | null;
     started_at: string | null; completed_at: string | null; error: { code?: string; message?: string } | string | null };
-  actions: { can_claim: boolean; can_assign: boolean; can_submit: boolean; can_approve: boolean; can_reject: boolean };
+  actions: { can_claim: boolean; can_assign: boolean; can_submit: boolean; can_approve: boolean; can_reject: boolean;
+    can_undo?: boolean; can_redo?: boolean };
+  /** Текст исходной просьбы агенту — только автору и только у предложений агента (Р4) */
+  request_text?: string | null;
   context_files: (AttachmentMeta & { chunks: { chunk_id: string; page?: number; block?: number; block_end?: number }[] })[];
 }
 export type ProposalBox = "incoming" | "mine" | "completed";
@@ -54,6 +57,12 @@ export const listProposals = (filters: ProposalFilters) => api<ProposalPage>("/a
 export const getAssignees = (id: string) => api<Assignee[]>(`/agent/proposals/${id}/assignees`);
 export const getProposalEvents = (id: string, after = 0) => api<EventPage>(`/agent/proposals/${id}/events`, { query: { after, limit: 25 } });
 
+// Комментарий к решению — 10–2000 символов; по исправлению оценки — до 500 (столбец decision_comment, Р1).
+// Причина передачи — 10–2000 (Р3)
+export const REASON_MIN = 10;
+export const reasonMax = (p: Pick<Proposal, "kind"> | undefined, action: ProposalIntent["action"] = "decision") =>
+  action === "decision" && p?.kind === "grade_correction" ? 500 : 2000;
+
 export function createProposalAttempt(proposal: Proposal, intent: ProposalIntent): ProposalAttempt {
   const allowed = intent.action === "submit" ? proposal.actions.can_submit : intent.action === "decision"
     ? (intent.approve ? proposal.actions.can_approve : proposal.actions.can_reject)
@@ -62,7 +71,7 @@ export function createProposalAttempt(proposal: Proposal, intent: ProposalIntent
   const body: Record<string, string | number | boolean> = { expected_version: proposal.version };
   if (intent.action !== "submit") {
     const reason = intent.reason.trim();
-    if (reason.length < (intent.action === "decision" ? 10 : 1) || reason.length > 2000) throw new Error("Проверьте длину комментария");
+    if (reason.length < REASON_MIN || reason.length > reasonMax(proposal, intent.action)) throw new Error("Проверьте длину комментария");
     body.reason = reason;
     if (intent.action === "decision") body.approve = intent.approve;
     else {

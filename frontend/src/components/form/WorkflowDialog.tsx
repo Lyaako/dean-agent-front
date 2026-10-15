@@ -1,8 +1,11 @@
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Modal, CodedText, ErrorNote, UnsavedDialog, useToast } from "../ui";
 import { Icon } from "../Icon";
 import { LookupSelect } from "./fields";
+import type { Option } from "./lookups";
+import { useAuth } from "../../auth/AuthProvider";
+import { getSigners } from "../../api/orders";
 import { newKey } from "../../api/client";
 import { runWorkflow, type Row } from "../../api/resources";
 import { errorCode, errorField, errorText, requestIdOf } from "../../api/errors";
@@ -51,7 +54,7 @@ export function WorkflowDialog({ def, studentId, subtitle, onClose }: Props) {
       const body: Row = studentId ? { student_id: studentId } : {};
       for (const f of def.fields) {
         const v = values[f.name]?.trim();
-        if (v) body[f.name] = f.kind === "employee" ? Number(v) : v;
+        if (v) body[f.name] = f.kind === "employee" || f.kind === "signer" ? Number(v) : v;
       }
       const serialized = JSON.stringify(body);
       if (attempt.current?.body !== serialized) attempt.current = { body: serialized, key: newKey() };
@@ -119,6 +122,9 @@ function WfInput({ f, value, onChange, disabled, error }: { f: WfField; value: s
     case "leave_reason":
       input = <LookupSelect id={id} table="leave_reason" column="reason_id" byLabel value={value} onChange={onChange} disabled={disabled} required={f.required} />;
       break;
+    case "signer":
+      input = <SignerSelect id={id} value={value} onChange={onChange} disabled={disabled} required={f.required} />;
+      break;
     case "employee":
       input = <LookupSelect id={id} table="employee" column="employee_id" value={value} onChange={onChange} disabled={disabled}
         required={f.required} filter={(o) => !o.row.dismissal_date} />;
@@ -144,4 +150,18 @@ function WfInput({ f, value, onChange, disabled, error }: { f: WfField; value: s
       {error ? <small className="field-error" role="alert">{error}</small> : f.hint && <small className="hint">{f.hint}</small>}
     </div>
   );
+}
+
+// «Подписал» — действующие директор и заместители института из /orders/signers (Р5): значение — employee_id,
+// подпись — ФИО и должность, директор первым. У админа институтов несколько — список по каждому
+function SignerSelect(props: { id: string; value: string; onChange: (v: string) => void; disabled: boolean; required?: boolean }) {
+  const { me } = useAuth();
+  const ids = me?.institute_ids ?? [];
+  const signers = useQuery({
+    queryKey: ["signers", ids],
+    queryFn: async () => (await Promise.all(ids.map((i) => getSigners(i)))).flat(),
+    enabled: ids.length > 0, staleTime: 60_000,
+  });
+  const data = signers.data?.map((s): Option => ({ value: s.employee_id, label: s.person, sub: s.position, row: s as unknown as Row }));
+  return <LookupSelect {...props} source={{ data, isLoading: signers.isLoading, error: signers.error }} />;
 }

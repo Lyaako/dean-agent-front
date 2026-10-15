@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createProposalAttempt, getAssignees, getProposal, getProposalEvents, sendProposalAttempt,
+import { createProposalAttempt, getAssignees, getProposal, getProposalEvents, reasonMax, REASON_MIN, sendProposalAttempt,
   type Proposal, type ProposalAttempt, type ProposalIntent } from "../../api/proposals";
 import { ApiError } from "../../api/client";
 import { errorCode, errorText, requestIdOf } from "../../api/errors";
@@ -15,8 +15,7 @@ export const TABLE_NAME: Record<string, string> = {
   scholarship: "Стипендия", student_scholarship: "Назначение стипендии", scholarship_assignment: "Назначение стипендии",
   order: "Приказ", student_order: "Приказ", order_student: "Студент в приказе", grade_correction: "Коррекция оценки",
 };
-export const REASON_MIN = 10;
-export const REASON_MAX = 2000;
+export { REASON_MIN };
 
 export function useProposal(id: string, onDecided?: (proposal: Proposal) => void) {
   const qc = useQueryClient();
@@ -32,6 +31,8 @@ export function useProposal(id: string, onDecided?: (proposal: Proposal) => void
   const [busy, setBusy] = useState(false);
   const sending = useRef(false);
   const [error, setError] = useState<{ text: string; requestId?: string; code?: string } | null>(null);
+  // Ошибка длины с details.field = "reason" — под полем: комментария к решению или причины передачи
+  const [reasonError, setReasonError] = useState<{ action: ProposalIntent["action"]; text: string } | null>(null);
   const p = q.data;
   const rows: DiffRow[] = useMemo(() => {
     if (!p) return [];
@@ -42,7 +43,7 @@ export function useProposal(id: string, onDecided?: (proposal: Proposal) => void
 
   async function mutate(intent?: ProposalIntent) {
     if (sending.current || !p) return;
-    sending.current = true; setBusy(true); setError(null);
+    sending.current = true; setBusy(true); setError(null); setReasonError(null);
     try {
       const current = attempt ?? (intent ? createProposalAttempt(p, intent) : null);
       if (!current) return;
@@ -57,13 +58,18 @@ export function useProposal(id: string, onDecided?: (proposal: Proposal) => void
       if (e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 408) {
         qc.removeQueries({ queryKey: attemptKey, exact: true }); setAttempt(null);
       }
-      setError({ text: errorText(e), requestId: requestIdOf(e), code: errorCode(e) });
+      const field = e instanceof ApiError ? (e.details as { field?: unknown; max?: unknown } | null)?.field : undefined;
+      if (e instanceof ApiError && e.code === "validation_error" && field === "reason") {
+        const max = Number((e.details as { max?: unknown }).max) || reasonMax(p, (attempt ?? intent)?.action);
+        setReasonError({ action: (attempt ?? intent)!.action, text: `От ${REASON_MIN} до ${max} символов` });
+      } else setError({ text: errorText(e), requestId: requestIdOf(e), code: errorCode(e) });
       void q.refetch();
       void qc.invalidateQueries({ queryKey: ["proposals"] });
     } finally { sending.current = false; setBusy(false); }
   }
   return { proposal: p, loading: q.isLoading, loadError: q.error ? errorText(q.error) : null, refresh: q.refetch,
     tableName: p?.preview.table, operation: p?.preview.operation, rows, reason, setReason,
-    reasonOk: reason.trim().length >= REASON_MIN && reason.trim().length <= REASON_MAX,
-    busy, error, attempt, mutate, events, assignees };
+    reasonMax: reasonMax(p),
+    reasonOk: reason.trim().length >= REASON_MIN && reason.trim().length <= reasonMax(p),
+    busy, error, reasonError, attempt, mutate, events, assignees };
 }

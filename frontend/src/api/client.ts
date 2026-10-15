@@ -20,6 +20,9 @@ let accessToken: string | null = null;
 let refreshing: Promise<boolean> | null = null;
 let onExpired: (() => void) | null = null;
 let onPasswordRequired: (() => void) | null = null;
+// Почему сеанс закрылся — экран входа показывает это один раз
+let endedBecause: string | null = null;
+export const takeEndedReason = () => { const r = endedBecause; endedBecause = null; return r; };
 let revision = 0;
 
 export const session = {
@@ -93,7 +96,13 @@ export function refreshSession(): Promise<boolean> {
       });
       if (started !== revision) return false;
       if (!res.ok) {
-        if (res.status === 401 || res.status === 403) { session.clear(); onExpired?.(); }
+        if (res.status === 401 || res.status === 403) {
+          // Пароль сброшен администратором: обновить сеанс до смены нельзя, а без действующего токена
+          // сменить пароль тоже нельзя — входим заново временным паролем, и откроется окно смены
+          if (res.status === 403 && (await readError(res)).code === "password_change_required")
+            endedBecause = "Пароль сброшен администратором. Войдите с временным паролем, чтобы задать новый";
+          session.clear(); onExpired?.();
+        }
         return false;
       }
       const body = await res.json();

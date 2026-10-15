@@ -12,7 +12,18 @@ const MESSAGES: Record<string, string> = {
   password_change_required: "Сначала задайте новый пароль",
   invalid_current_password: "Неверный текущий пароль",
   password_unchanged: "Новый пароль совпадает с текущим",
-  password_already_issued: "Временный пароль уже выдан — повторно он не показывается",
+  password_already_issued: "Пароль уже выдан",
+  // Ошибки базы по решению Р2 (docs/api-gaps.md §6.2)
+  correction_pending_exists: "По этой оценке уже есть заявка",
+  sheet_open: "Ведомость открыта — исправьте оценку в ведомости",
+  sheet_cancelled: "Ведомость отменена — исправлять в ней нечего",
+  correction_not_allowed: "Подать заявку на исправление может только работающий сотрудник",
+  correction_not_own_sheet: "Преподаватель может подать заявку только по своей ведомости",
+  correction_self_decision: "Автор заявки не может сам её подтвердить",
+  correction_not_manager: "Решение по заявке принимает директор или заместитель директора института",
+  correction_decided: "Заявка уже рассмотрена",
+  order_cancel_enrollment: "Зачисление отменяется удалением студента",
+  order_not_pending: "Приказ уже исполнен или отменён",
   forbidden: "Недостаточно прав для этого действия",
   validation_error: "Сервер не принял данные — проверьте заполнение полей",
   invalid_filter: "Недопустимый фильтр",
@@ -101,20 +112,33 @@ export const ERROR_CODES: Record<string, string> = {
 };
 
 // Коды бекенда (error.code, задача Б11) → коды макета (mockup/redesign/batch.js, BACKEND_CODES).
-// Коды без пары в макете (correction_later_attempt, correction_stale, correction_manager_missing) — сообщением бекенда, без кода
+// stale_item при решении откатывает пакет целиком — это AP-01 с номером строки в details.item_id (§6.1).
+// Коды без пары в макете (correction_*, коды Р2, order_*) — текстом без кода; undo_unavailable — по details.reason (Р9)
 export const BACKEND_CODES: Record<string, string> = {
   order_past_date: "RW-07", effective_date_past: "RW-07", order_signer_invalid: "RW-08", order_pending_exists: "RW-09",
   slot_semester_mismatch: "RW-10", sheet_dates_invalid: "RW-11", points_out_of_scale: "RW-12", sheet_incomplete: "RW-13",
   sheet_closed: "RW-03", request_final: "RW-02", blank_text: "RW-01", batch_too_large: "AG-02",
-  stale_item: "CH-02", undo_changed: "UN-01", undo_unavailable: "UN-02",
+  stale_item: "AP-01", undo_changed: "UN-01", undo_unavailable: "UN-02",
 };
 
 // Поле из details.field, если в форме его нет под этим именем: подписант приходит и как signed_by_id,
 // а у академического отпуска нет «Вступает в силу» — дата приказа там «Начало»
 const FIELD_ALIASES: Record<string, string[]> = { signed_by_id: ["signed_by"], effective_date: ["start"] };
 
+// Причина недоступности отмены (Р9): срок истёк — UN-02, остальное — UN-03
+const UNDO_REASON: Record<string, [string, string]> = {
+  expired: ["UN-02", "Срок отмены истёк"],
+  sheet_closed: ["UN-03", "Ведомость закрыта — нужна заявка на исправление"],
+  request_final: ["UN-03", "Заявка в завершающем статусе"],
+  irreversible: ["UN-03", "Это изменение не отменяется"],
+};
+const detail = (e: ApiError, k: string) => (e.details as Record<string, unknown> | null | undefined)?.[k];
+const undoReason = (e: unknown) => (e instanceof ApiError && e.code === "undo_unavailable" ? UNDO_REASON[String(detail(e, "reason"))] : undefined);
+/** Текст причины для строки пакета (items[].undo_reason) */
+export const undoReasonText = (reason: string | null | undefined) => (reason ? UNDO_REASON[reason]?.[1] : undefined);
+
 /** Код макета для ошибки бекенда, если он согласован */
-export const errorCode = (e: unknown) => (e instanceof ApiError ? BACKEND_CODES[e.code] : undefined);
+export const errorCode = (e: unknown) => undoReason(e)?.[0] ?? (e instanceof ApiError ? BACKEND_CODES[e.code] : undefined);
 
 /** Поле формы, под которым показать ошибку (из details.field), или undefined — тогда ошибка внизу формы */
 export function errorField(e: unknown, names: string[]): string | undefined {
@@ -131,6 +155,8 @@ export function errorItems(e: unknown): string[] {
 }
 
 export function errorText(e: unknown, table?: string): string {
+  const undo = undoReason(e);
+  if (undo) return undo[1];
   const code = errorCode(e);
   if (code) return ERROR_CODES[code];
   if (e instanceof ApiError) {

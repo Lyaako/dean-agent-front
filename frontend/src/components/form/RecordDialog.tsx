@@ -37,11 +37,12 @@ interface Props {
   onClose: () => void;
   onSaved?: (row: Row, created: boolean) => void;
   extra?: (row: Row | null) => ReactNode;  // дополнительные действия в подвале окна
+  top?: ReactNode;                // блок над полями (например, запланированный приказ студента)
 }
 
 const isRequired = (sp: FieldSpec) => !sp.nullable && sp.default == null;
 
-export function RecordDialog({ table, recordKey, title, config, initial, onClose, onSaved, extra }: Props) {
+export function RecordDialog({ table, recordKey, title, config, initial, onClose, onSaved, extra, top }: Props) {
   const qc = useQueryClient();
   const toast = useToast();
   const can = useCan();
@@ -225,6 +226,7 @@ export function RecordDialog({ table, recordKey, title, config, initial, onClose
 
         <div className="form-body">
           {config?.note && <div className="form-note">{config.note}</div>}
+          {top}
 
           {!schema ? <div className="skel" style={{ height: 120 }} />
             : !spec ? <p className="form-error">Таблица «{table}» недоступна для вашей роли</p>

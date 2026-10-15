@@ -27,10 +27,12 @@ export interface ResourceTableProps {
   actions?: ReactNode;
   /** Свои действия в окне записи */
   dialogExtra?: (viewRow: Row) => (row: Row | null) => ReactNode;
+  /** Свой блок над полями окна записи */
+  dialogTop?: (viewRow: Row) => ReactNode;
 }
 
 // Вкладка = таблица представления + окно записи исходной таблицы (ключ в представлении и в таблице один)
-export function ResourceTablePage({ id, title, view, table, keyField, cols, form, rowTitle, newTitle, initial, actions, dialogExtra }: ResourceTableProps) {
+export function ResourceTablePage({ id, title, view, table, keyField, cols, form, rowTitle, newTitle, initial, actions, dialogExtra, dialogTop }: ResourceTableProps) {
   const can = useCan();
   const data = useResource(view);
   const rows = useMemo(() => data.data ?? [], [data.data]);
@@ -55,6 +57,7 @@ export function ResourceTablePage({ id, title, view, table, keyField, cols, form
           recordKey={open.row ? { [keyField]: open.row[keyField] } : null}
           title={open.row ? rowTitle(open.row) : newTitle}
           extra={dialogRow && dialogExtra ? dialogExtra(dialogRow) : undefined}
+          top={dialogRow && dialogTop ? dialogTop(dialogRow) : undefined}
           onClose={() => setOpen(null)}
           onSaved={(saved) => { setFlash(null); requestAnimationFrame(() => setFlash(String(saved[keyField]))); }} />
       )}

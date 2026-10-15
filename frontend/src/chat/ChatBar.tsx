@@ -11,6 +11,7 @@ import { ProposalDialog } from "./proposals/ProposalDialog";
 import { ProposalQueue } from "./proposals/ProposalQueue";
 import { TABLE_NAME } from "./proposals/useProposal";
 import type { ChatMessage, ChatSummary } from "./store/ChatStore";
+import { onChatPrefill } from "../lib/chatPrefill";
 
 // Чат в шапке: свёрнут — строка ввода; развёрнут — список чатов слева и переписка (как в макете)
 export function ChatBar({ open, setOpen }: { open: boolean; setOpen: (v: boolean) => void }) {
@@ -56,6 +57,14 @@ export function ChatBar({ open, setOpen }: { open: boolean; setOpen: (v: boolean
   const grow = () => { const t = input.current; if (t) { t.style.height = "40px"; t.style.height = Math.min(t.scrollHeight, 160) + "px"; } };
   // Другой чат — другой черновик: подстраиваем высоту поля, ожидание отправки сбрасываем
   useEffect(() => { setQueued(false); requestAnimationFrame(grow); }, [draftKey]);
+
+  // «Подготовить заново» из окна предложения: текст просьбы — в поле сообщения текущего чата, без отправки
+  useEffect(() => onChatPrefill((t) => {
+    setText(t);
+    setOpen(true);
+    requestAnimationFrame(() => { grow(); input.current?.focus(); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [draftKey, setOpen]);
 
   // Можно отправить текст, вложения или и то и другое; файлы с ошибкой надо убрать или повторить
   const canSend = (!!text.trim() || att.items.length > 0) && !att.hasErrors && !c.anyBusy && !queued;
