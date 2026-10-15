@@ -25,6 +25,14 @@ const ERRORS = {
   "RW-04": { title: "Нет доступа к записи" },
   "RW-05": { title: "Запись удалена" },
   "RW-06": { title: "Противоречие внутри пакета" },
+  // Правила новой базы (deanery_db 4): в формах показываются под полем, к которому относятся
+  "RW-07": { title: "Приказ не может вступить в силу задним числом" },
+  "RW-08": { title: "Подписать может только директор или заместитель института" },
+  "RW-09": { title: "У студента уже есть запланированный приказ" },
+  "RW-10": { title: "Дисциплина не из семестра этой группы" },
+  "RW-11": { title: "Даты ведомости не сходятся" },
+  "RW-12": { title: "Баллы — от 25 до 54" },
+  "RW-13": { title: "Не у всех студентов есть результат" },
   "CH-01": { title: "Уже сделано" },
   "CH-02": { title: "Конфликт: запись изменили по-другому" },
   "CH-03": { title: "Запись удалили" },
@@ -40,9 +48,28 @@ const ERRORS = {
   "UN-02": { title: "Срок отмены истёк" },
   "XX-00": { title: "Неизвестная ошибка", data: DATA_UNKNOWN },
 };
+// Соответствие кодов бекенда (error.code в ответе {error: {code, message, details: {field?, items?}}}, задача Б11) кодам макета.
+// Коды бекенда без пары здесь (correction_later_attempt, correction_stale, password_change_required) получат свой код в задачах про них
+const BACKEND_CODES = {
+  order_past_date: "RW-07", effective_date_past: "RW-07", order_signer_invalid: "RW-08", order_pending_exists: "RW-09",
+  slot_semester_mismatch: "RW-10", sheet_dates_invalid: "RW-11", points_out_of_scale: "RW-12", sheet_incomplete: "RW-13",
+  sheet_closed: "RW-03", request_final: "RW-02", blank_text: "RW-01", batch_too_large: "AG-02",
+  stale_item: "CH-02", undo_changed: "UN-01", undo_unavailable: "UN-02",
+};
 const codeTag = (code) => `<span class="err-code">${code}</span>`;
 // Ошибка — объект с кодом; всё, что не наше, превращается в XX-00, а не в тишину
 const bErr = (code, extra = {}) => Object.assign(new Error(ERRORS[code].title), { code, ...extra });
+// Ошибки форм не случаются в макете сами. Чтобы посмотреть их вид, в консоли браузера: FORM_SIM = "RW-08" и отправить форму:
+// RW-07, RW-08, RW-09 — приказ по студенту; RW-10 — занятие в расписании; RW-12 — ведомость («Сохранить»); RW-11, RW-13 — окно «Закрыть ведомость».
+// Срабатывает один раз; пусто — без сбоя
+window.FORM_SIM = "";
+// fields: код → поле, под которым показать ошибку (null — общая ошибка внизу формы, как ответ без details.field)
+const formSim = (fields) => {
+  const code = window.FORM_SIM;
+  if (!code || !(code in fields)) return;
+  window.FORM_SIM = "";
+  throw bErr(code, { field: fields[code] });
+};
 const asErr = (e) => (e?.code && ERRORS[e.code] ? e : bErr("XX-00", { text: String(e?.message ?? e), todo: "Обратитесь в IT-отдел и сообщите код и номер пакета." }));
 const stamp = () => `${fmtDate(TODAY)} ${new Date().toTimeString().slice(0, 8)}`;
 
@@ -111,7 +138,7 @@ function batchDialog(pid) {
   m.html = () => {
     // Строки, которые стали недоступны, пока окно открыто, снимаются — и об этом говорится над кнопками
     p.items.filter((it) => blocked(it) && p.picked.has(it.id) && it.changedBy).forEach((it) => { p.picked.delete(it.id); m.seen.add(it.id); });
-    const list = shown(), rows = m.all ? list : list.slice(0, BATCH_PREVIEW), n = p.picked.size, ok = m.reason.trim().length >= REASON_MIN;
+    const list = shown(), rows = m.all ? list : list.slice(0, BATCH_PREVIEW), n = p.picked.size, ok = clip(m.reason).length >= REASON_MIN;
     const pickable = list.filter((it) => !blocked(it)), allOn = pickable.length && pickable.every((it) => p.picked.has(it.id));
     const oneField = new Set(p.items.map((it) => it.field)).size === 1 ? p.items[0].field : undefined;
     const none = !p.items.some((it) => !blocked(it));
@@ -181,7 +208,7 @@ function batchDialog(pid) {
     if (a === "approve") return approve();
     if (a === "reject") {
       m.busy = "reject"; render(); await wait(500);
-      Object.assign(p, { status: "rejected", decision_reason: m.reason.trim() }); closeModal(m); toast("Пакет отклонён");
+      Object.assign(p, { status: "rejected", decision_reason: clip(m.reason) }); closeModal(m); toast("Пакет отклонён");
     }
   };
   const fail = (err) => {
@@ -198,7 +225,7 @@ function batchDialog(pid) {
     if (["AP-01", "AP-02", "AP-03", "AP-04", "XX-00"].includes(e.code)) Object.assign(p, { status: "failed", lastCode: e.code });
   };
   const succeed = (note = "") => {
-    Object.assign(p, { status: "approved", decision_reason: m.reason.trim(), lastError: null });
+    Object.assign(p, { status: "approved", decision_reason: clip(m.reason), lastError: null });
     closeModal(m);
     toast(`Применено ${nRec(p.appliedIds.length)} · пакет ${p.no}${note}`);
   };
@@ -291,19 +318,20 @@ function pointsBatch(raw) {
   if (!sh) return { html: P("У вас нет открытых ведомостей.") };
   const m1 = sheets.find((x) => x.group_name === sh.group_name && x.discipline === sh.discipline && x.stage === "module_1");
   const items = sh.rows.map((r, i) => {
-    const base = m1?.rows.find((x) => x.student_id === r.student_id)?.points ?? 35;
-    // Баллы «из файла»: близко к модулю 1; одна строка с опечаткой (больше 54), у одной уже стояли баллы
-    const after = i === 3 ? 58 : Math.max(10, Math.min(54, Math.round(base + (h01(`m2|${r.student_id}`) - 0.45) * 14)));
-    if (i === 5 && r.points == null) r.points = 35;
+    const m1r = m1?.rows.find((x) => x.student_id === r.student_id), base = m1r ? m1r.points ?? 20 : 35;
+    // Баллы «из файла»: близко к модулю 1; одна строка с опечаткой (больше 54). Если баллы уже стоят — строка помечается «Перезапись»
+    // меньше 25 баллы не ставятся — пусто, то есть «не аттестован»
+    const pts = Math.max(10, Math.min(54, Math.round(base + (h01(`m2|${r.student_id}`) - 0.45) * 14)));
+    const after = i === 3 ? 58 : pts < 25 ? null : pts;
     const before = r.points;
     return { record: shortName(r.student), sub: sh.group_name, field: null, before, after,
       rule: after > 54 ? ["RW-01", "Больше 54 — не пройдёт проверку"] : null,
-      warn: before != null ? [`Перезапись: было ${before}`, "warn"] : after < 25 ? ["Не аттестован", "bad"] : null,
+      warn: before != null ? [`Перезапись: было ${before}`, "warn"] : after == null ? ["Не аттестован", "bad"] : null,
       now: () => (sh.status === "Открыта" ? r.points : GONE), dbRule: "студента перевели в другую группу — в этой ведомости его больше нет",
       alter() { r.points = 30; this.changedBy = "исправил деканат"; },
-      apply() { this.prev = [r.points, r.absent]; r.points = after; r.absent = false; }, undo() { [r.points, r.absent] = this.prev; } };
+      apply() { this.prev = [r.points, r.absent, r.na]; r.points = after; r.absent = false; r.na = after == null; }, undo() { [r.points, r.absent, r.na] = this.prev; } };
   });
-  const low = items.filter((it) => !it.rule && it.after < 25).length;
+  const low = items.filter((it) => !it.rule && it.after == null).length;
   return { tool: "propose_sql_change", html: P(`Подготовил баллы за ${STAGE_NAME[sh.stage].toLowerCase()} по ведомости ${sh.sheet_number} — ${items.length} ${plural(items.length, "студент", "студента", "студентов")}. Проверьте и примените.`),
     proposal: makeBatch({ explanation: `Баллы: ${STAGE_NAME[sh.stage]} · ${sh.discipline}`, table: `Ведомость ${sh.sheet_number} · ${sh.group_name}`, reason: `Запрос преподавателя: «${raw.trim()}»`, prompt: raw.trim(),
       summary: [`${items.length} студентам выставятся баллы за ${STAGE_NAME[sh.stage].toLowerCase()} по «${esc(sh.discipline)}».`,
@@ -314,6 +342,6 @@ const replyRoles = reply;
 reply = (raw) => {
   const s = norm(raw);
   if (ROLE === "teacher" && /(выстав|заполн|постав|внеси)/.test(s) && /(модул|всем|групп|ведомост)/.test(s)) return pointsBatch(raw);
-  if (["dean_staff", "director"].includes(ROLE) && /(все|всех)/.test(s) && /заявк/.test(s) && CHANGE_WORDS.test(s)) return requestsBatch(raw, s);
+  if (["dean_staff", "director", "admin"].includes(ROLE) && /(все|всех)/.test(s) && /заявк/.test(s) && CHANGE_WORDS.test(s)) return requestsBatch(raw, s);
   return replyRoles(raw);
 };

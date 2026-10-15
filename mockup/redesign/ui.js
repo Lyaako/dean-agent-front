@@ -13,6 +13,10 @@ const fmtNum = (v, dec = 0) => (v == null || v === "" || Number.isNaN(Number(v))
   : Number(v).toLocaleString("ru-RU", { minimumFractionDigits: dec, maximumFractionDigits: dec }));
 const plural = (n, one, few, many) => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many; };
 const norm = (s) => String(s ?? "").toLowerCase().replace(/ё/g, "е");
+// Текст ошибки формы: строка или ошибка с кодом (код — в рамке, как в пакетах)
+const errHtml = (e) => (e?.code ? `${esc(e.message)} ${codeTag(e.code)}` : esc(e?.message ?? e));
+// Как btrim(s, E' \t\r\n') в базе: по краям текстовых полей не бывает пробелов, табуляции и переводов строк
+const clip = (s) => String(s ?? "").replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, "");
 const initials = (n) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 const shortName = (n) => { const [l, f, p] = String(n).split(" "); return f ? `${l} ${f[0]}.${p ? ` ${p[0]}.` : ""}` : l; };
 const tone = (s) => [...s].reduce((a, c) => a + c.charCodeAt(0), 0) % 5;
@@ -347,6 +351,7 @@ function formDialog(opts) {
   };
   m.save = async () => {
     m.lk = null;
+    for (const f of fields()) if ((!f.kind || f.kind === "text" || f.kind === "textarea") && typeof m.values[f.name] === "string") m.values[f.name] = clip(m.values[f.name]);
     if (!m.validate()) return render();
     m.busy = true; m.err = null; render();
     await wait(450);   // как запрос к серверу
@@ -356,7 +361,10 @@ function formDialog(opts) {
       if (res.toast) toast(res.toast);
       if (res.flash) { flashReq = res.flash; render(); }
     } catch (e) {
-      m.err = e.message; m.busy = false; render();
+      // Ошибка с кодом и полем (details.field) — под этим полем; без поля — внизу формы
+      if (e.code && e.field && fields().some((f) => f.name === e.field)) m.errors = { ...m.errors, [e.field]: e };
+      else m.err = e.code ? e : e.message;
+      m.busy = false; render();
     }
   };
   m.html = () => {
@@ -367,7 +375,7 @@ function formDialog(opts) {
       <div class="form-head"><div><h3>${esc(opts.title)}</h3>${opts.subtitle ? `<p>${esc(opts.subtitle)}</p>` : ""}</div>
         <button type="button" class="icon-btn" aria-label="Закрыть" data-a="close">${icon("x")}</button></div>
       <div class="form-body">${opts.note ? `<div class="form-note" data-k="note">${esc(opts.note)}</div>` : ""}
-        <div class="form-grid" data-k="grid">${grid}</div>${m.err ? `<p class="form-error" role="alert" data-k="err">${esc(m.err)}</p>` : ""}</div>
+        <div class="form-grid" data-k="grid">${grid}</div>${m.err ? `<p class="form-error" role="alert" data-k="err">${errHtml(m.err)}</p>` : ""}</div>
       <div class="actions">${opts.onDelete ? `<button type="button" class="btn sm danger" data-a="delete" ${dis ? "disabled" : ""}>${icon("trash")}Удалить</button>` : ""}
         ${opts.extra ? opts.extra(m) : ""}<span class="spacer"></span>
         <button class="btn primary" ${dis || !canSave ? "disabled" : ""}>${m.busy ? opts.busyLabel : opts.submitLabel}</button></div></form>`;
@@ -441,7 +449,7 @@ function fieldHtml(m, f, busy) {
   }
   return `<div class="field form-field${f.kind === "textarea" || f.wide ? " wide" : ""}${err ? " invalid" : ""}" data-field="${f.name}">
     <label for="${id}">${esc(f.label)}${f.required ? `<i class="req" aria-label="обязательное">*</i>` : ""}</label>${input}
-    ${err ? `<small class="field-error" role="alert">${esc(err)}</small>` : f.hint && f.kind !== "choice" ? `<small class="hint">${esc(f.hint)}</small>` : ""}</div>`;
+    ${err ? `<small class="field-error" role="alert">${errHtml(err)}</small>` : f.hint && f.kind !== "choice" ? `<small class="hint">${esc(f.hint)}</small>` : ""}</div>`;
 }
 // Выпадающий список с поиском по связанной таблице: закрыт — выбранное значение целиком, открыт — строка поиска
 function lookupHtml(m, f, value, id, dis) {

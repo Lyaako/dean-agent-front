@@ -522,7 +522,8 @@ body {
 /* ═════════ Роли (roles.js) ═════════ */
 .muted { color: var(--muted); }
 /* Ведомость и таблицы в карточках */
-.sheet-dialog { width: min(720px, 100%); }
+.sheet-dialog { width: min(720px, 100%); min-width: 0; }
+.modal-box:has(> .sheet-dialog) { min-width: 0; }   /* широкая таблица прокручивается внутри окна, а не растягивает его */
 .sheet-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; font-size: 13.5px; color: var(--ink-2); }
 .sheet-meta span { display: inline-flex; align-items: center; gap: 6px; }
 .sheet-meta .ic { width: 15px; height: 15px; color: var(--muted); }
@@ -535,6 +536,18 @@ body {
 .sheet-table tbody tr:hover td { background: none; }
 .sheet-table th:not(:first-child), .sheet-table td:not(:first-child) { text-align: center; }
 .sheet-table .pts { width: 84px; height: 36px; text-align: center; }
+.sheet-table .field-error { display: block; margin-top: 4px; white-space: nowrap; }   /* ошибка базы — под баллами, а не сбоку */
+/* Ввод результата: переключатель «Баллы / Не аттестован / Неявка» в строке — компактнее, окно шире */
+.sheet-dialog.sheet-edit { width: min(880px, 100%); }
+.sheet-table .seg button { height: 30px; padding: 0 10px; font-size: 12.5px; }
+.sheet-table .seg button:disabled { cursor: default; }
+.sheet-table td .btn.sm { padding: 0 10px; }
+/* Закрытие ведомости и заявка на исправление */
+.form-note .effects { margin-top: 6px; }
+.cur-res { font-size: 14.5px; font-weight: 600; color: var(--ink); }
+.fix-res { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.fix-res .pts { width: 84px; height: 40px; text-align: center; }
+.fix-res .form-field { display: flex; flex-direction: column; gap: 4px; }
 .sheet-table input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--indigo); }
 .grades td:first-child { font-weight: 500; }
 /* Посещаемость: список группы с переключателем «был / не был» */

@@ -156,6 +156,8 @@ const isActive = (id) => studentById(id)?.status === ACTIVE;
 // v_debtors и v_expulsion_risk показывают только обучающихся
 const debtorsNow = () => debtors.filter((d) => isActive(d.student_id));
 const expulsion = [];
+// Виды стипендий (scholarship_type) и размер по умолчанию, руб. в месяц
+const SCHOLARSHIP_AMOUNT = { "Государственная академическая": 3500, "Повышенная государственная академическая": 12000 };
 // Категория и стипендия пересчитываются и после правок через чат
 function categorize(s) {
   s.debts = s.status === ACTIVE ? debtors.filter((d) => d.student_id === s.student_id).length : 0;
@@ -166,6 +168,10 @@ function categorize(s) {
     : s.min_mark === 5 ? "Отличник" : s.min_mark === 4 ? "Хорошист" : s.min_mark === 3 ? "Есть тройки" : "Только зачёты";
   s.scholarships = s.funding === "Бюджет" && ["Отличник", "Хорошист"].includes(s.category)
     ? (s.category === "Отличник" ? "Повышенная государственная академическая" : "Государственная академическая") : null;
+  // scholarship.amount — размер по приказу о назначении: фиксируется при назначении, показывается из назначения
+  if (!s.scholarships) s.scholarship_amount = null;
+  else if (s.scholarships !== s.scholarship_type) s.scholarship_amount = SCHOLARSHIP_AMOUNT[s.scholarships];
+  s.scholarship_type = s.scholarships;
 }
 students.forEach((s) => {
   const ds = debtors.filter((d) => d.student_id === s.student_id).sort((a, b) => a.discipline.localeCompare(b.discipline, "ru"));
@@ -373,3 +379,22 @@ const PEOPLE = ["Гусев Павел Сергеевич", "Комарова Л
 works.forEach((w, i) => Object.assign(w, { work_id: i + 1, item_id: itemOf(w.discipline, w.semester, groupYear(w.group_name)) }));
 practices.forEach((p, i) => Object.assign(p, { placement_id: i + 1, item_id: itemOf(p.practice, p.semester, groupYear(p.group_name)),
   org_contact_id: ORG_CONTACTS.find(([, n]) => p.org_supervisor.startsWith(n))[1] }));
+
+/* ── Запланированные приказы (academic_order + order_student с пустым applied_at) ──
+   Дата вступления в силу ещё не наступила; у студента не больше одного такого приказа.
+   Подписывает работающий директор или заместитель директора института. */
+const DIRECTOR = employees.find((e) => e.position === POSITIONS[1][0] && e.unit === "Дирекция ИИТ");
+const DEPUTY = employees.find((e) => e.position === POSITIONS[2][0] && e.unit === "Деканат");
+const plannedPick = (group) => students.find((s) => s.group_name === group && s.status === ACTIVE && !s.is_headman);
+const plannedOrders = [
+  { order_number: "171-с/26", order_type: "Перевод", student: plannedPick("ИДБ-24-11"), new_group: "ИДБ-24-12", signed_by: DIRECTOR, days: 12 },
+  { order_number: "172-с/26", order_type: "Академический отпуск", student: plannedPick("ИДБ-23-12"), signed_by: DEPUTY, days: 19,
+    leave: { reason: LEAVE_REASONS[1], months: 6 } },
+  { order_number: "173-с/26", order_type: "Перевод", student: plannedPick("ИДБ-23-11"), new_group: "ИДБ-23-12", signed_by: DIRECTOR, days: 26 },
+].map(({ student: s, signed_by, days, leave, ...o }, i) => {
+  const effective_date = addDays(TODAY, days);
+  return { order_id: i + 1, ...o, order_date: TODAY, effective_date, signed_by: signed_by.full_name, applied_at: null,
+    student_id: s.student_id, student: s.student, group_name: s.group_name,
+    ...(leave ? { leave_reason: leave.reason, leave_start: effective_date, leave_end: addDays(effective_date, leave.months * 30) } : {}) };
+});
+const plannedOrderOf = (id) => plannedOrders.find((o) => o.student_id === id && !o.applied_at);

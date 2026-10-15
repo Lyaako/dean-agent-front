@@ -3,11 +3,12 @@
    Куратор и староста — не роли, а надстройки (study_group.curator_id / headman_id). Загружается после chat.js. */
 
 const ROLES = {
-  dean_staff: { name: "Сотрудник деканата", login: "kuznetsova.ep", tabs: ["students", "groups", "schedule", "sheets", "works", "requests", "practice", "employees", "olap"] },
-  director: { name: "Директор института", login: "smirnov.av", tabs: ["olap", "students", "groups", "schedule", "sheets", "works", "practice", "employees"] },
-  teacher: { name: "Преподаватель", login: "", tabs: ["schedule", "sheets", "attendance", "mystudents", "myworks"] },
-  student: { name: "Студент", login: "", tabs: ["schedule", "grades", "myattendance", "myrequests", "mystudy"] },
-  admin: { name: "Администратор", login: "admin", tabs: ["users", "refs", "audit", "employees"] },
+  dean_staff: { name: "Сотрудник деканата", login: "kuznetsova.ep", tabs: ["students", "groups", "schedule", "sheets", "works", "requests", "practice", "employees", "olap", "audit", "approvals"] },
+  director: { name: "Директор института", login: "smirnov.av", tabs: ["olap", "students", "groups", "schedule", "sheets", "works", "requests", "practice", "employees", "audit", "approvals"] },
+  teacher: { name: "Преподаватель", login: "", tabs: ["schedule", "sheets", "attendance", "mystudents", "myworks", "olap", "approvals"] },
+  student: { name: "Студент", login: "", tabs: ["schedule", "grades", "myattendance", "myrequests", "mystudy", "approvals"] },
+  // Администратор — все вкладки, в рабочих данных права как у деканата
+  admin: { name: "Администратор", login: "admin", tabs: ["students", "groups", "schedule", "sheets", "works", "requests", "practice", "employees", "olap", "users", "refs", "audit", "approvals"] },
 };
 const ROLE_ORDER = ["dean_staff", "director", "teacher", "student", "admin"];   // порядок в списках и плитках
 const BASE_TABS = Object.fromEntries(TABS.map((t) => [t.id, t]));
@@ -23,6 +24,7 @@ const NEW_TABS = {
   users: { id: "users", title: "Пользователи", short: "Доступ", icon: "users" },
   refs: { id: "refs", title: "Справочники", short: "Списки", icon: "list" },
   audit: { id: "audit", title: "Журнал изменений", short: "Журнал", icon: "clock" },
+  approvals: { id: "approvals", title: "Согласование", short: "Согласов.", icon: "check" },
 };
 const isStaff = () => ["dean_staff", "director", "admin"].includes(ROLE);
 let ROLE = "dean_staff";
@@ -119,6 +121,7 @@ const examinerOf = (group, discipline, sem) => slots.find((s) => s.group_name ==
   ?? slots.find((s) => s.group_name === group && s.discipline === discipline)?.teacher
   ?? teachers[Math.floor(h01(`ex|${group}|${discipline}|${sem}`) * teachers.length)].full_name;
 const sheets = [];
+// issue_date — дата выдачи: дата экзамена не раньше неё и не позже чем через 366 дней
 const addSheet = (o) => sheets.push({ sheet_id: sheets.length + 1, sheet_number: `В-${String(1000 + sheets.length)}`, ...o });
 GROUPS.forEach((g) => {
   const roster = students.filter((s) => s.group_name === g.name && s.status !== "Отчислен");
@@ -128,10 +131,10 @@ GROUPS.forEach((g) => {
     const rs = results.filter((r) => r.group_name === g.name && r.discipline === discipline && r.semester === sem);
     if (!rs.length) return;
     const examiner = examinerOf(g.name, discipline, sem);
-    addSheet({ group_name: g.name, discipline, semester: sem, control_type, stage: "final", kind: "Основная", examiner, exam_date: "2026-06-" + String(15 + Math.floor(h01(discipline) * 12)).padStart(2, "0"), status: "Закрыта",
+    addSheet({ group_name: g.name, discipline, semester: sem, control_type, stage: "final", kind: "Основная", examiner, issue_date: "2026-06-01", exam_date: "2026-06-" + String(15 + Math.floor(h01(discipline) * 12)).padStart(2, "0"), status: "Закрыта",
       rows: rs.map((r) => ({ student_id: r.student_id, student: r.student, points: failedFirst(r) ? null : r.points, absent: failedFirst(r) && h01(`abs|${r.student_id}|${discipline}`) < 0.3 })) });
     const failed = rs.filter(failedFirst);
-    if (failed.length) addSheet({ group_name: g.name, discipline, semester: sem, control_type, stage: "final", kind: "Пересдача", examiner, exam_date: failed.every((r) => r.points != null) ? "2026-09-18" : null,
+    if (failed.length) addSheet({ group_name: g.name, discipline, semester: sem, control_type, stage: "final", kind: "Пересдача", examiner, issue_date: "2026-09-01", exam_date: failed.every((r) => r.points != null) ? "2026-09-18" : null,
       status: failed.every((r) => r.points != null) ? "Закрыта" : "Открыта", rows: failed.map((r) => ({ student_id: r.student_id, student: r.student, points: r.points, absent: false })) });
   });
   // Текущий семестр: модуль 1 сдан и закрыт, модуль 2 — открыт, баллы выставляет преподаватель
@@ -141,21 +144,22 @@ GROUPS.forEach((g) => {
     const control_type = CURRICULUM.find(([d, s]) => d === discipline && s === cur)?.[2] ?? "Экзамен";
     const examiner = examinerOf(g.name, discipline, cur);
     const active = roster.filter((s) => s.status === ACTIVE);
-    addSheet({ group_name: g.name, discipline, semester: cur, control_type, stage: "module_1", kind: "Основная", examiner, exam_date: "2026-10-0" + (1 + Math.floor(h01(discipline + g.name) * 8)), status: "Закрыта",
+    addSheet({ group_name: g.name, discipline, semester: cur, control_type, stage: "module_1", kind: "Основная", examiner, issue_date: "2026-09-01", exam_date: "2026-10-0" + (1 + Math.floor(h01(discipline + g.name) * 8)), status: "Закрыта",
       rows: active.map((s) => ({ student_id: s.student_id, student: s.student, points: modules.find((m) => m.student_id === s.student_id && m.discipline === discipline)?.points ?? null, absent: false })) });
-    addSheet({ group_name: g.name, discipline, semester: cur, control_type, stage: "module_2", kind: "Основная", examiner, exam_date: null, status: "Открыта",
+    addSheet({ group_name: g.name, discipline, semester: cur, control_type, stage: "module_2", kind: "Основная", examiner, issue_date: "2026-09-01", exam_date: null, status: "Открыта",
       rows: active.map((s) => ({ student_id: s.student_id, student: s.student, points: null, absent: false })) });
   });
 });
-const canEditSheet = (sh) => sh.status === "Открыта" && (ROLE === "teacher" ? sh.examiner === ME.full_name : ["dean_staff", "director"].includes(ROLE));
-const resultText = (sh, p, absent) => {
+const canEditSheet = (sh) => sh.status === "Открыта" && (ROLE === "teacher" ? sh.examiner === ME.full_name : ["dean_staff", "director", "admin"].includes(ROLE));
+const resultText = (sh, p, absent, na = false) => {
   if (absent) return ["Неявка", "bad"];
-  if (p == null || p === "") return ["—", ""];
+  // Пустые баллы без неявки — «не аттестован», если он выставлен или ведомость закрыта (fn_result_name: в итоговой — «Неудовлетворительно» / «Не зачтено»)
+  if (p == null || p === "") return sh.status !== "Закрыта" && !na ? ["—", ""] : sh.stage !== "final" ? ["Не аттестован", "bad"] : [isGraded(sh.control_type) ? "Неудовлетворительно" : "Не зачтено", "bad"];
   if (sh.stage !== "final") return +p >= 25 ? ["Аттестован", "ok"] : ["Не аттестован", "bad"];
   if (!isGraded(sh.control_type)) return +p >= 25 ? ["Зачтено", "ok"] : ["Не зачтено", "bad"];
   return [["Неудовлетворительно", "Неудовлетворительно", "Неудовлетворительно", "Удовлетворительно", "Хорошо", "Отлично"][mark(+p) ?? 0], mark(+p) === 5 ? "ok" : mark(+p) ? "info" : "bad"];
 };
-const filled = (sh) => sh.rows.filter((r) => r.points != null || r.absent).length;
+const filled = (sh) => sh.rows.filter((r) => r.points != null || r.absent || r.na).length;
 const SHEET_COLS = [
   { label: "Номер", field: "sheet_number", filter: "text" },
   { label: "Группа", field: "group_name", filter: "enum" },
@@ -181,56 +185,195 @@ PAGES.sheets = () => {
     tableTools("sheets", cols, all, rows.length),
     dataTable("sheets", cols, rows, all, { rowKey: (r) => r.sheet_id, onRow: openSheet })]);
 };
+// Вид результата в строке ведомости: баллы 25–54, «не аттестован» (баллов нет, не неявка) или неявка.
+// В открытой ведомости строка без баллов и без отметки — результат ещё не выставлен (в базе строки grade нет)
+const RES_MODES = [["points", "Баллы"], ["na", "Не аттестован"], ["absent", "Неявка"]];
+const modeOf = (sh, r) => (r.absent ? "absent" : r.points != null ? "points" : r.na || sh.status === "Закрыта" ? "na" : "points");
+const hasResult = (sh, r) => r.points != null || r.absent || !!r.na || sh.status === "Закрыта";
+const setMode = (r, mode) => Object.assign(r, { absent: mode === "absent", na: mode === "na", points: mode === "points" ? r.points : null });
+const ptsError = (p) => (p != null && (!Number.isInteger(p) || p < 25 || p > 54) ? "Баллы — от 25 до 54" : undefined);
+const resLabel = (sh, r) => { const [t] = resultText(sh, r.points, r.absent, r.na || sh.status === "Закрыта"); return r.points != null ? `${r.points} · ${t}` : t; };
+const sheetStaff = () => ["dean_staff", "director", "admin"].includes(ROLE);
+const sameStage = (a, b) => a.group_name === b.group_name && a.discipline === b.discipline && a.semester === b.semester && a.stage === b.stage;
+// Исправлять можно только последнюю попытку: если студент есть в более поздней ведомости этого этапа — исправляют там
+const laterSheet = (sh, id) => sheets.find((x) => x.sheet_id > sh.sheet_id && sameStage(x, sh) && x.status !== "Отменена" && x.rows.some((r) => r.student_id === id));
+// В пересдачу — обучающиеся без аттестации по этому этапу, ещё не внесённые в открытую ведомость
+const retakeCandidates = (sh) => sh.rows.filter((r) => r.points == null && isActive(r.student_id)
+  && !sheets.some((x) => x !== sh && sameStage(x, sh) && x.rows.some((y) => y.student_id === r.student_id && (y.points != null || x.status === "Открыта"))));
+// Поле баллов — в строке ведомости и в заявке на исправление. err: текст или ошибка с кодом; true — только подсветка
+const ptsInput = (r, attrs, err, busy) => `${err ? `<div class="form-field invalid">` : ""}<input class="text-input pts" type="number" min="25" max="54" step="1" inputmode="numeric" ${attrs}
+  value="${r.points ?? ""}" ${r.absent || r.na || busy ? "disabled" : ""}>${err ? `${err === true ? "" : `<small class="field-error" role="alert">${errHtml(err)}</small>`}</div>` : ""}`;
+
 function openSheet(sh) {
-  const edit = canEditSheet(sh);
-  const m = { label: `Ведомость ${sh.sheet_number}`, draft: sh.rows.map((r) => ({ ...r })), err: null, busy: false };
-  const dirty = () => m.draft.some((r, i) => r.points !== sh.rows[i].points || r.absent !== sh.rows[i].absent);
-  m.html = () => `<div class="dialog form-dialog sheet-dialog">
+  const edit = canEditSheet(sh), closed = sh.status === "Закрыта";
+  const canFix = closed && (sh.examiner === ME.full_name || sheetStaff()), retake = closed && sh.kind === "Основная" && sheetStaff() ? retakeCandidates(sh) : [];
+  // errs — ошибки у полей баллов по строкам; fe — ошибка базы с кодом (FORM_SIM), показывается у первой строки
+  const m = { label: `Ведомость ${sh.sheet_number}`, draft: sh.rows.map((r) => ({ ...r, na: !!r.na })), errs: {}, fe: null, busy: false };
+  const dirty = () => m.draft.some((r, i) => r.points !== sh.rows[i].points || r.absent !== sh.rows[i].absent || r.na !== !!sh.rows[i].na);
+  const validate = () => { m.errs = {}; m.draft.forEach((r, i) => { const e = ptsError(r.points); if (e) m.errs[i] = e; }); return !Object.keys(m.errs).length; };
+  // Пока баллы вне шкалы, оценки нет
+  const row = (r, i) => { const [t, k] = ptsError(r.points) ? ["—", ""] : resultText(sh, r.points, r.absent, r.na);
+    if (edit) return `<tr data-k="${r.student_id}"><td>${esc(r.student)}</td>
+      <td>${seg("res-mode", RES_MODES, modeOf(sh, r), `data-i="${i}" ${m.busy ? "disabled" : ""}`)}</td>
+      <td>${ptsInput(r, `data-pts="${i}" aria-label="Баллы: ${esc(r.student)}"`, m.errs[i] ?? (m.fe?.rows.includes(i) ? (m.fe.rows[0] === i ? m.fe.e : true) : null), m.busy)}</td>
+      <td>${k ? badge(t, k) : t}</td></tr>`;
+    const later = canFix && laterSheet(sh, r.student_id);
+    return `<tr data-k="${r.student_id}"><td>${esc(r.student)}</td><td>${r.points ?? "—"}</td><td>${r.absent ? "да" : "—"}</td><td>${k ? badge(t, k) : t}</td>
+      ${canFix ? `<td><button type="button" class="btn sm ghost" data-a="fix" data-i="${i}" ${later ? `disabled title="Исправлять нужно последнюю попытку — ведомость ${later.sheet_number}"` : `title="Запросить исправление"`} aria-label="Запросить исправление: ${esc(r.student)}">${icon("edit")}</button></td>` : ""}</tr>`; };
+  m.html = () => `<div class="dialog form-dialog sheet-dialog${edit ? " sheet-edit" : ""}">
     <div class="form-head"><div><h3>${esc(sh.discipline)}</h3><p>${sh.group_name} · ${sh.semester} семестр · ${STAGE_NAME[sh.stage]} · ${sh.kind.toLowerCase()} ведомость ${sh.sheet_number}</p></div>
       <button type="button" class="icon-btn" aria-label="Закрыть" data-a="close">${icon("x")}</button></div>
     <div class="form-body">
       <div class="sheet-meta">${badge(sh.status, sh.status === "Открыта" ? "warn" : "muted")}<span>${icon("users")}${esc(sh.examiner)}</span><span>${icon("calendar")}${sh.exam_date ? fmtDate(sh.exam_date) : "дата не назначена"}</span><span>${esc(sh.control_type)}</span></div>
       ${!edit && sh.status === "Открыта" && ROLE === "teacher" ? `<div class="form-note">Ведомость ведёт ${esc(sh.examiner)} — вы можете только посмотреть.</div>` : ""}
-      <table class="sheet-table"><thead><tr><th>Студент</th><th>Баллы</th><th>Неявка</th><th>Результат</th></tr></thead><tbody>
-      ${m.draft.map((r, i) => { const [t, k] = resultText(sh, r.points, r.absent);
-        return `<tr data-k="${r.student_id}"><td>${esc(r.student)}</td>
-          <td>${edit ? `<input class="text-input pts" type="number" min="0" max="54" inputmode="numeric" data-pts="${i}" value="${r.points ?? ""}" ${r.absent || m.busy ? "disabled" : ""} aria-label="Баллы: ${esc(r.student)}">` : r.points ?? "—"}</td>
-          <td>${edit ? `<input type="checkbox" data-abs="${i}" ${r.absent ? "checked" : ""} ${m.busy ? "disabled" : ""} aria-label="Неявка: ${esc(r.student)}">` : r.absent ? "да" : "—"}</td>
-          <td>${k ? badge(t, k) : t}</td></tr>`; }).join("")}</tbody></table>
-      ${m.err ? `<p class="form-error" role="alert">${esc(m.err)}</p>` : ""}
-      <p class="hint">${sh.stage === "final" ? "Шкала: 25–34 — удовлетворительно, 35–44 — хорошо, 45–54 — отлично." : "Меньше 25 баллов — «не аттестован»."}</p>
+      <div class="sheet-wrap"><table class="sheet-table"><thead><tr><th>Студент</th>${edit ? "<th>Результат</th><th>Баллы</th><th>Оценка</th>" : `<th>Баллы</th><th>Неявка</th><th>Результат</th>${canFix ? "<th></th>" : ""}`}</tr></thead>
+      <tbody>${m.draft.map(row).join("")}</tbody></table></div>
+      <p class="hint">25–34 — удовлетворительно, 35–44 — хорошо, 45–54 — отлично; ниже 25 баллов ставится «не аттестован».</p>
     </div>
-    <div class="actions">${["dean_staff", "director"].includes(ROLE) && sh.status === "Закрыта" ? `<button type="button" class="btn sm ghost" data-a="reopen">${icon("refresh")}Открыть заново</button>` : ""}
+    <div class="actions">${retake.length ? `<button type="button" class="btn sm ghost" data-a="retake">${icon("plus")}Создать ведомость пересдачи</button>` : ""}
       <span class="spacer"></span><button type="button" class="btn" data-a="close">${edit ? "Отменить" : "Закрыть"}</button>
-      ${edit && ["dean_staff", "director"].includes(ROLE) ? `<button type="button" class="btn" data-a="close-sheet" ${m.busy ? "disabled" : ""}>Закрыть ведомость</button>` : ""}
+      ${edit && sheetStaff() ? `<button type="button" class="btn" data-a="close-sheet" ${m.busy ? "disabled" : ""}>Закрыть ведомость</button>` : ""}
       ${edit ? `<button type="button" class="btn primary" data-a="save" ${m.busy || !dirty() ? "disabled" : ""}>${m.busy ? "Сохраняем…" : "Сохранить"}</button>` : ""}</div></div>`;
-  const save = async (closeIt) => {
-    if (m.draft.some((r) => r.points != null && (r.points < 0 || r.points > 54))) { m.err = "Баллы — от 0 до 54"; return render(); }
-    if (closeIt && m.draft.some((r) => r.points == null && !r.absent)) { m.err = "Чтобы закрыть ведомость, выставьте баллы или неявку всем студентам"; return render(); }
-    m.busy = true; m.err = null; render();
+  const store = () => { sh.rows = m.draft.map((r) => ({ ...r })); };
+  const save = async () => {
+    // Ошибка базы (FORM_SIM): баллы вне шкалы — у первых выставленных баллов
+    try { formSim({ "RW-12": "points" }); } catch (e) { m.fe = { e, rows: [Math.max(0, m.draft.findIndex((r) => r.points != null))] }; return render(); }
+    m.fe = null;
+    if (!validate()) return render();
+    m.busy = true; render();
     await wait(450);
-    const n = m.draft.filter((r, i) => r.points !== sh.rows[i].points || r.absent !== sh.rows[i].absent).length;
-    sh.rows = m.draft.map((r) => ({ ...r }));
-    if (closeIt) Object.assign(sh, { status: "Закрыта", exam_date: sh.exam_date ?? TODAY });
-    logAudit("Ведомость", "UPDATE", `${STAGE_NAME[sh.stage]} · ${sh.discipline} · ${sh.group_name}`, closeIt ? "Ведомость закрыта" : `Баллы: ${n} ${plural(n, "студент", "студента", "студентов")}`);
-    closeModal(m); toast(closeIt ? "Ведомость закрыта" : "Баллы сохранены");
+    const n = m.draft.filter((r, i) => r.points !== sh.rows[i].points || r.absent !== sh.rows[i].absent || r.na !== !!sh.rows[i].na).length;
+    store();
+    logAudit("Ведомость", "UPDATE", `${STAGE_NAME[sh.stage]} · ${sh.discipline} · ${sh.group_name}`, `Баллы: ${n} ${plural(n, "студент", "студента", "студентов")}`);
+    closeModal(m); toast("Баллы сохранены");
   };
   m.close = () => closeModal(m);
   m.click = (el) => {
     const a = el.dataset.a;
     if (a === "close") m.close();
-    else if (a === "save") save(false);
-    else if (a === "close-sheet") save(true);
-    else if (a === "reopen") { sh.status = "Открыта"; logAudit("Ведомость", "UPDATE", `${STAGE_NAME[sh.stage]} · ${sh.discipline} · ${sh.group_name}`, "Ведомость открыта заново"); closeModal(m); openSheet(sh); }
+    else if (a === "save") save();
+    else if (a === "res-mode") { const i = +el.dataset.i; setMode(m.draft[i], el.dataset.v); delete m.errs[i]; m.fe = null; render(); }
+    else if (a === "close-sheet") { m.fe = null; if (!validate()) return render(); closeSheetDialog(sh, m.draft, () => { store(); closeModal(m); }); }
+    else if (a === "fix") correctionDialog(sh, sh.rows[+el.dataset.i]);
+    else if (a === "retake") createRetake(sh, retake, m);
   };
   m.input = (el) => {
     if (el.dataset.pts == null) return;
-    const v = el.value.trim();
-    m.draft[+el.dataset.pts].points = v === "" ? null : Math.round(Number(v));
-    m.err = null; render();
+    const i = +el.dataset.pts, v = el.value.trim();
+    m.draft[i].points = v === "" ? null : Number(v);
+    delete m.errs[i]; m.fe = null; render();
   };
-  m.change = (el) => { if (el.dataset.abs != null) { const r = m.draft[+el.dataset.abs]; r.absent = el.checked; if (el.checked) r.points = null; render(); } };
+  // Ошибка у поля — когда ввод закончен, а не на каждой цифре
+  m.change = (el) => { if (el.dataset.pts == null) return; const i = +el.dataset.pts, e = ptsError(m.draft[i].points); if (e) { m.errs[i] = e; render(); } };
   return openModal(m);
+}
+
+/* ── Закрытие ведомости: дата экзамена и список студентов без результата. Закрывают деканат, директор, админ ── */
+function closeSheetDialog(sh, draft, done) {
+  // Дата экзамена — не раньше выдачи и не позже чем через 366 дней; ведомость закрывается сегодня, поэтому экзамен — не позже сегодня
+  const min = sh.issue_date, max = [addDays(sh.issue_date, 366), TODAY].sort()[0];
+  const missing = draft.filter((r) => !hasResult(sh, r));
+  const c = { label: "Закрыть ведомость", date: sh.exam_date && sh.exam_date >= min && sh.exam_date <= max ? sh.exam_date : max, err: null, listErr: null, busy: false };
+  c.html = () => `<div class="dialog form-dialog">
+    <div class="form-head"><div><h3>Закрыть ведомость</h3><p>${sh.sheet_number} · ${esc(sh.discipline)} · ${sh.group_name}</p></div>
+      <button type="button" class="icon-btn" aria-label="Закрыть" data-a="close">${icon("x")}</button></div>
+    <div class="form-body">
+      <div class="field form-field${c.err ? " invalid" : ""}"><label for="cs-date">Дата экзамена</label>
+        <input id="cs-date" class="text-input" type="date" min="${min}" max="${max}" value="${c.date}" data-cs-date ${c.busy ? "disabled" : ""}>
+        ${c.err ? `<small class="field-error" role="alert">${errHtml(c.err)}</small>` : `<small class="hint">С ${fmtDate(min)} по ${fmtDate(max)}: не раньше выдачи ведомости и не позже сегодняшнего дня</small>`}</div>
+      ${missing.length ? `<div class="form-note">Нет результата у ${missing.length} ${plural(missing.length, "студента", "студентов", "студентов")} — выставьте баллы, «не аттестован» или неявку:
+        <ul class="effects">${missing.map((r) => `<li>${esc(r.student)}</li>`).join("")}</ul></div>`
+        : `<div class="form-note">Результат есть у всех студентов. После закрытия результаты не меняются — только через заявку на исправление.</div>`}
+      ${c.listErr ? `<small class="field-error" role="alert">${errHtml(c.listErr)}</small>` : ""}
+    </div>
+    <div class="actions"><span class="spacer"></span><button type="button" class="btn" data-a="close">Отменить</button>
+      <button type="button" class="btn primary" data-a="cs-close" ${missing.length || !c.date || c.busy ? "disabled" : ""}>${c.busy ? "Закрываем…" : "Закрыть"}</button></div></div>`;
+  c.close = () => closeModal(c);
+  c.input = (el) => { if (el.dataset.csDate != null) { c.date = el.value; c.err = null; c.listErr = null; render(); } };
+  c.change = c.input;
+  c.click = async (el) => {
+    const a = el.dataset.a;
+    if (a === "close") return c.close();
+    if (a !== "cs-close") return;
+    c.err = null; c.listErr = null;
+    // Ошибки базы (FORM_SIM): даты — под датой, нет результата — под списком
+    try { formSim({ "RW-11": "exam_date", "RW-13": "rows" }); } catch (e) { if (e.code === "RW-11") c.err = e; else c.listErr = e; return render(); }
+    if (c.date < min || c.date > max) { c.err = `Дата экзамена — с ${fmtDate(min)} по ${fmtDate(max)}`; return render(); }
+    c.busy = true; render();
+    await wait(450);
+    done();
+    sh.rows.forEach((r) => { r.na = r.points == null && !r.absent; });
+    Object.assign(sh, { status: "Закрыта", exam_date: c.date, closed_date: TODAY });
+    logAudit("Ведомость", "UPDATE", `${STAGE_NAME[sh.stage]} · ${sh.discipline} · ${sh.group_name}`, "Ведомость закрыта");
+    closeModal(c); toast("Ведомость закрыта");
+  };
+  return openModal(c);
+}
+
+/* ── Заявка на исправление оценки в закрытой ведомости: решает директор (или заместитель) в «Согласовании» ── */
+function correctionDialog(sh, r) {
+  const f = { label: "Запросить исправление", v: { points: null, absent: false, na: false }, reason: "", errs: {}, busy: false };
+  setMode(f.v, modeOf(sh, r) === "points" ? "na" : "points");
+  const cur = resLabel(sh, r);
+  f.html = () => `<div class="dialog form-dialog">
+    <div class="form-head"><div><h3>Запросить исправление</h3><p>${esc(r.student)} · ${esc(sh.discipline)} · ведомость ${sh.sheet_number}</p></div>
+      <button type="button" class="icon-btn" aria-label="Закрыть" data-a="close">${icon("x")}</button></div>
+    <div class="form-body">
+      <div class="field"><span>Текущий результат</span><b class="cur-res">${esc(cur)}</b></div>
+      <div class="field form-field${f.errs.res ? " invalid" : ""}"><span>Новый результат</span>
+        <div class="fix-res">${seg("fix-mode", RES_MODES, modeOf(sh, f.v), f.busy ? "disabled" : "")}${ptsInput(f.v, `data-fix-pts aria-label="Новые баллы"`, f.errs.pts, f.busy)}</div>
+        ${f.errs.res ? `<small class="field-error" role="alert">${esc(f.errs.res)}</small>` : ""}</div>
+      <div class="field form-field${f.errs.reason ? " invalid" : ""}"><label for="fix-reason">Основание</label>
+        <textarea id="fix-reason" class="text-input textarea" rows="3" maxlength="2000" data-fix-reason ${f.busy ? "disabled" : ""} placeholder="Например: ошибка при переносе баллов из протокола экзамена">${esc(f.reason)}</textarea>
+        ${f.errs.reason ? `<small class="field-error" role="alert">${esc(f.errs.reason)}</small>` : `<small class="hint">От ${REASON_MIN} до 2000 символов. Заявку рассмотрит директор или заместитель директора</small>`}</div>
+    </div>
+    <div class="actions"><span class="spacer"></span><button type="button" class="btn" data-a="close">Отменить</button>
+      <button type="button" class="btn primary" data-a="fix-send" ${f.busy ? "disabled" : ""}>${f.busy ? "Отправляем…" : "Отправить директору"}</button></div></div>`;
+  f.close = () => closeModal(f);
+  f.input = (el) => {
+    if (el.dataset.fixPts != null) { const v = el.value.trim(); f.v.points = v === "" ? null : Number(v); delete f.errs.pts; delete f.errs.res; render(); }
+    else if (el.dataset.fixReason != null) { f.reason = el.value; delete f.errs.reason; render(); }
+  };
+  f.click = async (el) => {
+    const a = el.dataset.a;
+    if (a === "close") return f.close();
+    if (a === "fix-mode") { setMode(f.v, el.dataset.v); f.errs = {}; return render(); }
+    if (a !== "fix-send") return;
+    const reason = clip(f.reason), mode = modeOf(sh, f.v);
+    f.errs = {};
+    if (mode === "points" && f.v.points == null) f.errs.pts = "Введите баллы";
+    else if (ptsError(f.v.points)) f.errs.pts = ptsError(f.v.points);
+    else if (mode === modeOf(sh, r) && f.v.points === r.points) f.errs.res = "Новый результат совпадает с текущим";
+    if (reason.length < REASON_MIN) f.errs.reason = `Не короче ${REASON_MIN} символов`;
+    if (Object.keys(f.errs).length) return render();
+    f.busy = true; render();
+    await wait(450);
+    const next = { points: f.v.points, absent: f.v.absent }, after = resLabel(sh, { ...next, na: mode === "na" });
+    const before = { points: r.points, absent: r.absent };
+    PROPOSALS[uid()] = { status: "pending", kind: "Исправление оценки", decision_status: "Ждёт решения директора", decision_reason: null,
+      explanation: `Исправление оценки: ${r.student} · ${sh.discipline}`, table: `Ведомость ${sh.sheet_number} · ${sh.group_name}`, operation: "UPDATE",
+      rows: [{ label: "Результат", before: cur, after }], reason, author: ME.full_name, author_role: ROLE, created_at: `${TODAY} ${new Date().toTimeString().slice(0, 5)}`,
+      sheet_id: sh.sheet_id, student_id: r.student_id,
+      // Как в базе: при одобрении оценка должна быть той же, что при подаче заявки
+      apply() {
+        if (r.points !== before.points || r.absent !== before.absent) throw new Error("Оценка изменилась после подачи заявки — подайте заявку заново");
+        Object.assign(r, next, { na: next.points == null && !next.absent });
+      } };
+    logAudit("Заявка на исправление оценки", "INSERT", `${sh.sheet_number} · ${r.student}`, `${cur} → ${after}`);
+    closeModal(f); toast("Заявка отправлена директору");
+  };
+  return openModal(f);
+}
+
+/* ── Ведомость пересдачи: открытая, только со студентами без аттестации по этому этапу ── */
+function createRetake(sh, rows, m) {
+  addSheet({ group_name: sh.group_name, discipline: sh.discipline, semester: sh.semester, control_type: sh.control_type, stage: sh.stage, kind: "Пересдача",
+    examiner: sh.examiner, issue_date: TODAY, exam_date: null, status: "Открыта",
+    rows: rows.map((r) => ({ student_id: r.student_id, student: r.student, points: null, absent: false, na: false })) });
+  const ns = sheets[sheets.length - 1];
+  logAudit("Ведомость", "INSERT", `${STAGE_NAME[sh.stage]} · ${sh.discipline} · ${sh.group_name}`, `Пересдача ${ns.sheet_number}: ${rows.length} ${plural(rows.length, "студент", "студента", "студентов")}`);
+  closeModal(m); toast(`Создана ведомость пересдачи ${ns.sheet_number}`);
+  openSheet(ns);
 }
 
 /* ═════════ ПОСЕЩАЕМОСТЬ (attendance) ═════════ */
@@ -264,7 +407,7 @@ PAGES.attendance = () => {
       <button class="icon-btn soft" data-a="att-week" data-v="${next}" ${next > TERM_LAST ? "disabled" : ""} aria-label="Следующая неделя">${icon("right")}</button>
     </div>${todo ? `<span class="att-todo">${badge(`Не отмечено занятий: ${todo}`, "warn")}</span>` : ""}</div>`;
   const lesson = (l) => { const [t, k] = attStatus(l), future = l.lesson_date > TODAY;
-    return `<button type="button" class="lesson ${l.lesson_type === "Лекция" ? "lec" : "prac"}${future ? " future" : ""}" ${future ? "disabled" : `data-a="att-open" data-k="${esc(lessonKey(l))}"`}>
+    return `<button type="button" class="lesson ${l.lesson_type === "Лекция" ? "lec" : "prac"}${future ? " future" : ""}" ${future ? "disabled" : `data-a="att-lesson" data-k="${esc(lessonKey(l))}"`}>
       <div class="l-top">${badge(l.lesson_type, LESSON_KIND[l.lesson_type])}<span class="l-room">${icon("pin")}${esc(l.classroom)}</span></div>
       <b>${esc(l.discipline)}</b><small>${esc(l.group_name)}</small>${t ? `<span class="l-att ${k}">${k === "warn" ? icon("alert") : icon("check")}${t}</span>` : ""}</button>`; };
   const grid = `<section class="card week-card"><div class="week-grid"><div class="wg-h"></div>
@@ -351,8 +494,8 @@ PAGES.grades = () => {
   const s = ME, done = doneSemesters(groupOf(s.group_name).year), cur = s.course * 2 - 1;
   const mySheets = sheets.filter((sh) => sh.group_name === s.group_name && sh.semester === cur);
   const curDiscs = [...new Set(mySheets.map((sh) => sh.discipline))];
-  const ptsOf = (d, stage) => mySheets.find((sh) => sh.discipline === d && sh.stage === stage)?.rows.find((r) => r.student_id === s.student_id);
-  const cell = (r) => (!r ? "—" : r.absent ? badge("Неявка", "bad") : r.points == null ? `<span class="muted">ещё нет</span>` : r.points < 25 ? `<span class="neg">${r.points}</span>` : String(r.points));
+  const ptsOf = (d, stage) => { const sh = mySheets.find((x) => x.discipline === d && x.stage === stage); return sh && { sh, r: sh.rows.find((r) => r.student_id === s.student_id) }; };
+  const cell = (c) => (!c?.r ? "—" : c.r.absent ? badge("Неявка", "bad") : c.r.points == null ? (c.sh.status === "Закрыта" || c.r.na ? badge("Не аттестован", "bad") : `<span class="muted">ещё нет</span>`) : c.r.points < 25 ? `<span class="neg">${c.r.points}</span>` : String(c.r.points));
   const sems = Array.from({ length: done }, (_, i) => done - i);
   const pick = myGrades.sem === "cur" || !sems.includes(+myGrades.sem) ? "cur" : +myGrades.sem;
   const past = pick === "cur" ? [] : results.filter((r) => r.student_id === s.student_id && r.semester === pick);
@@ -419,6 +562,7 @@ function orderDoc() {
   m.click = (el) => { if (el.dataset.a === "close") m.close(); };
   m.change = (el) => { if (el.dataset.od) { m.v[el.dataset.od] = el.value; render(); } };
   m.submit = async () => {
+    m.v = { ...m.v, document: clip(m.v.document), purpose: clip(m.v.purpose) };
     m.busy = true; render(); await wait(450);
     const id = Math.max(...requests.map((r) => r.request_id)) + 1;
     requests.push({ request_id: id, student_id: ME.student_id, student: ME.student, group_name: ME.group_name, document: m.v.document, copies: +m.v.copies, purpose: m.v.purpose,
@@ -437,10 +581,13 @@ PAGES.mystudy = () => {
       ["Рецензент", esc(w.reviewer ?? "не назначается")], ["Приказ об утверждении темы", esc(w.order_number ?? "не требуется")]], badge(`${w.semester} семестр`, "info")) : empty("cap", "Курсовой или ВКР в этом году нет", "Тема появится, когда её утвердит кафедра"),
     p ? kvCard(p.practice, [["Организация", esc(p.organization)], ["Сроки", `${fmtDate(p.start_date)} — ${fmtDate(p.end_date)}`], ["Руководитель от вуза", esc(p.supervisor)],
       ["Руководитель от организации", esc(p.org_supervisor)], ["Приказ", esc(p.order_number)]], badge(p.end_date < TODAY ? "Пройдена" : "Предстоит", p.end_date < TODAY ? "ok" : "info")) : empty("briefcase", "Практики пока нет", "Направление на практику оформит деканат"),
-    kvCard("Стипендия", [["Сейчас", s.scholarships ? esc(s.scholarships) : "Не назначена"], ["Основа обучения", s.funding], ["Почему", s.scholarships ? "сессия сдана на «хорошо» и «отлично»" : s.funding === "Договор" ? "академическая стипендия — только на бюджете" : "нужно сдать сессию без троек и долгов"]]),
+    kvCard("Стипендия", [["Сейчас", s.scholarships ? esc(s.scholarships) : "Не назначена"], ...(s.scholarships ? [["Размер", `${fmtNum(s.scholarship_amount)} ₽ в месяц`]] : []), ["Основа обучения", s.funding], ["Почему", s.scholarships ? "сессия сдана на «хорошо» и «отлично»" : s.funding === "Договор" ? "академическая стипендия — только на бюджете" : "нужно сдать сессию без троек и долгов"]]),
     `<section class="card"><div class="table-head"><h2>Приказы обо мне</h2></div>${mv.length ? `<div class="miss-list">${mv.map((x) =>
       `<div class="miss-row"><b>${fmtDate(x.order_date)}</b><span>${esc(x.order_number)}</span><span>${esc(x.order_type)}</span></div>`).join("")}</div>` : `<p class="olap-foot">Приказов о вас за последний год не было.</p>`}</section>`]);
 };
+
+/* ═════════ СОГЛАСОВАНИЕ (у всех ролей; наполнение — отдельной задачей) ═════════ */
+PAGES.approvals = () => pageView("approvals", "Согласование", [`<section class="card empty-day">${icon("check")}<b>Раздел в разработке</b></section>`]);
 
 /* ═════════ АДМИНИСТРАТОР ═════════ */
 const users = [
@@ -576,7 +723,7 @@ reply = (raw) => {
 /* ═════════ ДЕЙСТВИЯ ═════════ */
 Object.assign(ACT, {
   "att-week": (el) => { att.date = el.dataset.v; render(); },
-  "att-open": (el) => openAttendance(schedule.find((x) => lessonKey(x) === el.dataset.k)),
+  "att-lesson": (el) => openAttendance(schedule.find((x) => lessonKey(x) === el.dataset.k)),
   "order-doc": () => orderDoc(),
   "ref-open": (el) => openRef(+el.dataset.i),
 });

@@ -295,6 +295,8 @@ function workflowDialog(def, s = null) {
     unsaved: { title: "Провести приказ?", text: "Форма приказа заполнена, но приказ ещё не проведён.", saveLabel: def.confirm },
     checks: (v) => ({ end: v.start && v.end && v.end < v.start ? "Окончание не может быть раньше начала" : undefined }),
     onSubmit: (v) => {
+      // Ошибки базы по приказу (FORM_SIM): дата — под датой вступления в силу (в академе — под началом), подписант — под «Подписал»
+      formSim({ "RW-07": def.fields.some((f) => f.name === "effective_date") ? "effective_date" : "start", "RW-08": "signed_by", ...(s ? { "RW-09": null } : {}) });
       const when = def.effective?.(v) || v.effective_date;
       if (when && when > TODAY) return { toast: `Приказ запланирован на ${fmtDate(when)}` };
       const res = def.apply(s, v) || s;
@@ -366,6 +368,7 @@ function openSlot(slot, initial = {}) {
     values: initial,
     checks: (v) => ({ valid_to: v.valid_from && v.valid_to && v.valid_to < v.valid_from ? "«Действует по» не может быть раньше «Действует с»" : undefined }),
     onSubmit: (v) => {
+      formSim({ "RW-10": "assignment_id" });
       const a = ASSIGNMENTS.find((x) => String(x.assignment_id) === v.assignment_id);
       const next = { ...(slot ?? { slot_id: Math.max(...slots.map((x) => x.slot_id)) + 1, parity: "every" }),
         assignment_id: a.assignment_id, group_name: a.group_name, discipline: a.discipline, lesson_type: a.lesson_type, teacher: a.teacher, subgroup: a.subgroup,

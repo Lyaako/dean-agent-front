@@ -229,7 +229,7 @@ function proposalDialog(pid) {
     html: () => {
       const st = { pending: ["Ждёт решения", "info"], approved: ["Применено", "ok"], rejected: ["Отклонено", "muted"] }[p.status];
       // Отклонение не окончательное: отклонённое изменение можно открыть снова и применить
-      const can = p.status === "pending" || p.status === "rejected", ok = m.reason.trim().length >= REASON_MIN;
+      const can = p.status === "pending" || p.status === "rejected", ok = clip(m.reason).length >= REASON_MIN;
       return `<div class="dialog proposal-dialog">
         <div class="form-head"><div><h3>${can ? "Применить изменения?" : "Изменение от агента"}</h3><p>${esc(p.explanation)}</p></div>
           <button type="button" class="icon-btn" aria-label="Закрыть" data-a="close">${icon("x")}</button></div>
@@ -256,7 +256,7 @@ function proposalDialog(pid) {
       await wait(600);
       try {
         if (a === "approve") { p.apply(); window.onProposalApplied?.(p); }
-        Object.assign(p, { status: a === "approve" ? "approved" : "rejected", decision_reason: m.reason.trim() });
+        Object.assign(p, { status: a === "approve" ? "approved" : "rejected", decision_reason: clip(m.reason) });
       } catch (e) { m.error = e.message; }
       m.busy = null; render();
     } };

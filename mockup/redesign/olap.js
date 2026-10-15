@@ -32,7 +32,8 @@ students.filter((s) => s.status === ACTIVE).forEach((s) => {
   curDisc(g).forEach((discipline) => {
     const h = h01(`${s.student_id}|m1|${discipline}`);
     const base = (s.avg_points ?? 40) - ((s.attendance_pct ?? 90) < 70 ? 9 : 0) - (isWeak(s) ? 4 : 0);
-    modules.push({ student_id: s.student_id, discipline, points: Math.max(0, Math.min(54, Math.round(base - 9 + h * 20))) });
+    const pts = Math.min(54, Math.round(base - 9 + h * 20));
+    modules.push({ student_id: s.student_id, discipline, points: pts < 25 ? null : pts });   // меньше 25 не ставится — null
   });
 });
 
@@ -67,14 +68,19 @@ const OPS = [
   ["retake", "Пересдачи", "Roll-up по попыткам", "Свёртка результатов по попытке сдачи: сессия → пересдача → комиссия. Видно, закрываются долги или копятся."],
   ["moves", "Движение контингента", "Roll-up по времени · Drill-down", "Свёртка приказов по времени: месяц → семестр → год. Нажатие на столбец раскрывает приказы периода."],
 ];
-const ACTIVE_GROUPS = () => GROUPS.filter((g) => doneSemesters(g.year) > 0);
-const courseOpts = () => [...new Set(GROUPS.map((g) => course(g.year)))].sort().map((c) => [c, `${c} курс`]);
+// Преподаватель видит только группы, у которых ведёт занятия (myGroups из roles.js).
+// Первая отрисовка (chat.js) идёт до загрузки roles.js — тогда ROLE ещё нет
+const olapTeacher = () => typeof ROLE !== "undefined" && ROLE === "teacher";
+const olapMine = (r) => !olapTeacher() || myGroups().includes(r.group_name ?? r.name);
+const OLAP_GROUPS = () => GROUPS.filter(olapMine);
+const ACTIVE_GROUPS = () => OLAP_GROUPS().filter((g) => doneSemesters(g.year) > 0);
+const courseOpts = () => [...new Set(OLAP_GROUPS().map((g) => course(g.year)))].sort().map((c) => [c, `${c} курс`]);
 const olapSelect = (label, key, opts, value, all) => `<label class="field"><span>${label}</span><select class="select" data-olap="${key}">${all ? `<option value="">${all}</option>` : ""}${opts.map(([v, l]) =>
   `<option value="${esc(v)}" ${String(v) === String(value) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>`;
 const olapNum = (label, key, value, suffix) => `<label class="field"><span>${label}</span><span class="num-in"><input class="text-input" type="number" min="0" max="100" data-olap="${key}" value="${esc(value)}"><i>${suffix}</i></span></label>`;
 const inCourse = (s) => !olap.course || String(s.course) === String(olap.course);
-const inGroup = (s) => !olap.group || s.group_name === olap.group;
-const groupOptsFor = () => GROUPS.filter((g) => !olap.course || String(course(g.year)) === String(olap.course)).map((g) => [g.name, g.name]);
+const inGroup = (s) => olapMine(s) && (!olap.group || s.group_name === olap.group);
+const groupOptsFor = () => OLAP_GROUPS().filter((g) => !olap.course || String(course(g.year)) === String(olap.course)).map((g) => [g.name, g.name]);
 
 // Плитки с ключевыми числами над срезом
 const tiles = (items) => `<div class="olap-tiles">${items.map(([label, value, note, kind = ""]) =>
@@ -87,7 +93,9 @@ const numCol = (label, field) => ({ label, field, filter: "num", className: "num
 
 /* ═════════ 1. Итоги сессии: Roll-up студент → группа → курс, Drill-down обратно ═════════ */
 // Последняя закрытая сессия группы — по её результатам и считаем
-const sessionRows = (filter = () => true) => results.filter((r) => { const g = groupOf(r.group_name); return r.semester === doneSemesters(g.year) && filter(r); });
+const sessionRows = (filter = () => true) => results.filter((r) => { const g = groupOf(r.group_name); return olapMine(r) && r.semester === doneSemesters(g.year) && filter(r); });
+// Карточка студента открывается на запись — у преподавателя строки не открываются, как в «Моих студентах»
+const olapOpenStudent = () => (olapTeacher() ? undefined : (r) => openStudent(studentById(r.student_id)));
 function sessionStats(rows) {
   const by = new Map();
   rows.forEach((r) => { if (!by.has(r.student_id)) by.set(r.student_id, []); by.get(r.student_id).push(r); });
@@ -114,7 +122,7 @@ function sessionView() {
     rows = courseOpts().map(([cc]) => ({ name: `${cc} курс`, c: cc, ...sessionStats(sessionRows((r) => r.course === cc)) })).filter((r) => r.students);
     cols = statCols("Курс"); title = "Roll-up до курсов · нажмите на курс, чтобы раскрыть группы"; onRow = (r) => { olap.path = [r.c]; render(); };
   } else if (!g) {
-    rows = GROUPS.filter((x) => course(x.year) === c).map((x) => ({ name: x.name, ...sessionStats(sessionRows((r) => r.group_name === x.name)) })).filter((r) => r.students);
+    rows = OLAP_GROUPS().filter((x) => course(x.year) === c).map((x) => ({ name: x.name, ...sessionStats(sessionRows((r) => r.group_name === x.name)) })).filter((r) => r.students);
     cols = statCols("Группа"); title = `Drill-down: группы ${c} курса · нажмите на группу, чтобы раскрыть дисциплины`; onRow = (r) => { olap.path = [c, r.name]; render(); };
   } else if (!d) {
     const ds = [...new Set(scope.map((r) => r.discipline))];
@@ -128,7 +136,7 @@ function sessionView() {
         filter: "enum", badge: true, render: (r) => (r.points == null ? badge("Долг", "bad") : badge(isGraded(r.control_type) ? ["", "", "", "Удовлетворительно", "Хорошо", "Отлично"][mark(r.points)] : "Зачтено", mark(r.points) === 5 ? "ok" : mark(r.points) === 3 ? "warn" : "info")) },
       { label: "Сдано", field: (r) => (r.points == null ? "Не сдано" : ["", "В сессию", "На пересдаче", "Комиссии"][r.attempt]), filter: "enum" }];
     title = `Студенты группы ${g} · ${d}`; key = (r) => r.student_id;
-    onRow = (r) => openStudent(studentById(r.student_id));
+    onRow = olapOpenStudent();
   }
   return [tiles([["Студентов в сессии", total.students], ["Абсолютная успеваемость", `${total.abs ?? "—"}%`, "сдали всё в сессию, без пересдач", total.abs >= 85 ? "ok" : total.abs >= 65 ? "" : "bad"],
       ["Качественная успеваемость", `${total.qual ?? "—"}%`, "только «хорошо» и «отлично»"], ["Долгов после сессии", total.debts, `отличников — ${total.excellent}`, total.debts ? "bad" : "ok"]]),
@@ -137,11 +145,14 @@ function sessionView() {
 
 /* ═════════ 2. Проблемные дисциплины: Pivot дисциплина × группа + Slice по семестру ═════════ */
 function heatView() {
-  const sems = [...new Set(results.map((r) => r.semester))].sort((a, b) => a - b);
+  const mineRs = results.filter(olapMine);
+  const sems = [...new Set(mineRs.map((r) => r.semester))].sort((a, b) => a - b);
+  // У преподавателя без групп с прошедшими сессиями сравнивать нечего
+  if (!sems.length) return [`<section class="card empty-day">${icon("chart")}<b>Нет данных</b>У ваших групп ещё не было сессий</section>`];
   // По умолчанию — самый поздний семестр из тех, что прошли больше всего групп: сравнение полнее
   const nGroups = (s) => ACTIVE_GROUPS().filter((g) => doneSemesters(g.year) >= s).length;
   const sem = +(olap.sem || sems.reduce((best, s) => (nGroups(s) >= nGroups(best) ? s : best), sems[0]));
-  const rs = results.filter((r) => r.semester === sem);
+  const rs = mineRs.filter((r) => r.semester === sem);
   const groups = [...new Set(rs.map((r) => r.group_name))].sort();
   const discs = [...new Set(rs.map((r) => r.discipline))];
   const cell = (rows) => (rows.length ? pctOf(rows.filter(failedFirst).length, rows.length) : null);
@@ -166,10 +177,10 @@ function riskView() {
   const mMin = +olap.modMin || 0, aMin = +olap.attMin || 0;
   const pool = students.filter((s) => s.status === ACTIVE && inCourse(s) && inGroup(s));
   const rows = pool.map((s) => {
-    const low = modules.filter((m) => m.student_id === s.student_id && m.points < mMin);
+    const low = modules.filter((m) => m.student_id === s.student_id && (m.points == null || m.points < mMin));
     const att = s.attendance_pct != null && s.attendance_pct < aMin;
     const score = (low.length ? 1 : 0) + (att ? 1 : 0) + (s.debts ? 1 : 0);
-    return { ...s, low: low.length, lowList: low.map((m) => `${m.discipline}: ${m.points}`).join(", "), att, score,
+    return { ...s, low: low.length, lowList: low.map((m) => `${m.discipline}: ${m.points ?? "не аттестован"}`).join(", "), att, score,
       risk: score >= 2 ? "Высокий" : score === 1 ? "Средний" : null };
   }).filter((r) => r.score).sort((a, b) => b.score - a.score || b.low - a.low);
   const cols = [{ label: "Студент", field: "student", filter: "text", bold: true }, { label: "Группа", field: "group_name", filter: "enum" },
@@ -186,7 +197,7 @@ function riskView() {
       ["Слабый модуль 1", n((r) => r.low), `меньше ${mMin} баллов хотя бы по одной дисциплине`], ["Низкая посещаемость", n((r) => r.att), `ниже ${aMin}%`],
       ["С долгами прошлых сессий", n((r) => r.debts)]]),
     dataTable("olap-risk", cols, applyTable("olap-risk", cols, rows), rows, { rowKey: (r) => r.student_id,
-      title: "Студенты, которым нужна помощь до сессии · Dice: обучающиеся × текущий семестр × пороги", onRow: (r) => openStudent(studentById(r.student_id)) })];
+      title: "Студенты, которым нужна помощь до сессии · Dice: обучающиеся × текущий семестр × пороги", onRow: olapOpenStudent() })];
 }
 
 /* ═════════ 4. Посещаемость и долги: Slice по курсу и группе ═════════ */
