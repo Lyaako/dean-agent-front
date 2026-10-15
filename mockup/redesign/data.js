@@ -407,10 +407,10 @@ const DIRECTOR = employees.find((e) => e.position === POSITIONS[1][0] && e.unit 
 const DEPUTY = employees.find((e) => e.position === POSITIONS[2][0] && e.unit === "Деканат");
 const plannedPick = (group) => students.find((s) => s.group_name === group && s.status === ACTIVE && !s.is_headman);
 const plannedOrders = [
-  { order_number: "171-с/26", order_type: "Перевод", student: plannedPick("ИДБ-24-11"), new_group: "ИДБ-24-12", signed_by: DIRECTOR, days: 12 },
-  { order_number: "172-с/26", order_type: "Академический отпуск", student: plannedPick("ИДБ-23-12"), signed_by: DEPUTY, days: 19,
+  { order_number: "171-с/26", code: "transfer", order_type: "Перевод", student: plannedPick("ИДБ-24-11"), new_group: "ИДБ-24-12", signed_by: DIRECTOR, days: 12 },
+  { order_number: "172-с/26", code: "leave", order_type: "Академический отпуск", student: plannedPick("ИДБ-23-12"), signed_by: DEPUTY, days: 19,
     leave: { reason: LEAVE_REASONS[1], months: 6 } },
-  { order_number: "173-с/26", order_type: "Перевод", student: plannedPick("ИДБ-23-11"), new_group: "ИДБ-23-12", signed_by: DIRECTOR, days: 26 },
+  { order_number: "173-с/26", code: "transfer", order_type: "Перевод", student: plannedPick("ИДБ-23-11"), new_group: "ИДБ-23-12", signed_by: DIRECTOR, days: 26 },
 ].map(({ student: s, signed_by, days, leave, ...o }, i) => {
   const effective_date = addDays(TODAY, days);
   return { order_id: i + 1, ...o, order_date: TODAY, effective_date, signed_by: signed_by.full_name, applied_at: null,

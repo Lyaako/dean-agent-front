@@ -306,7 +306,7 @@ function unsavedDialog({ onSave, onDiscard, saveLabel = "Сохранить", ti
 
 /* ═════════ ФОРМЫ (RecordDialog.tsx, WorkflowDialog.tsx, fields.tsx) ═════════
    Поле: { name, label, kind: text|textarea|int|decimal|date|time|bool|choice|relation, required, hint, wide,
-           options() → [{ value, label, sub }] (для choice и relation), filter(o, values), range: [min, max], locked } */
+           options() → [{ value, label, sub }] (для choice и relation), filter(o, values), range: [min, max], min/max (для date), locked } */
 function checkField(f, value) {
   if (f.kind === "bool") return undefined;
   const v = String(value ?? "").trim();
@@ -321,7 +321,7 @@ function checkField(f, value) {
   return undefined;
 }
 
-/* opts: { title, subtitle, note, fields, values, base, submitLabel, busyLabel, cleanDisabled, onSubmit(values) → { toast, flash },
+/* opts: { title, subtitle, note (текст или (m) → html), fields, values, base, submitLabel, busyLabel, cleanDisabled, onSubmit(values) → { toast, flash },
            onDelete, extra(m) → html, extraClick(el, m), checks(values), derive(changed, values), unsaved: { title, text, saveLabel } } */
 function formDialog(opts) {
   const base = opts.base ?? Object.fromEntries(opts.fields.map((f) => [f.name, f.kind === "bool" ? false : ""]));
@@ -374,7 +374,7 @@ function formDialog(opts) {
     return `<form class="dialog form-dialog" data-form novalidate>
       <div class="form-head"><div><h3>${esc(opts.title)}</h3>${opts.subtitle ? `<p>${esc(opts.subtitle)}</p>` : ""}</div>
         <button type="button" class="icon-btn" aria-label="Закрыть" data-a="close">${icon("x")}</button></div>
-      <div class="form-body">${opts.note ? `<div class="form-note" data-k="note">${esc(opts.note)}</div>` : ""}
+      <div class="form-body">${typeof opts.note === "function" ? opts.note(m) : opts.note ? `<div class="form-note" data-k="note">${esc(opts.note)}</div>` : ""}
         <div class="form-grid" data-k="grid">${grid}</div>${m.err ? `<p class="form-error" role="alert" data-k="err">${errHtml(m.err)}</p>` : ""}</div>
       <div class="actions">${opts.onDelete ? `<button type="button" class="btn sm danger" data-a="delete" ${dis ? "disabled" : ""}>${icon("trash")}Удалить</button>` : ""}
         ${opts.extra ? opts.extra(m) : ""}<span class="spacer"></span>
@@ -445,7 +445,7 @@ function fieldHtml(m, f, busy) {
     input = `<textarea id="${id}" class="text-input textarea" data-f="${f.name}" rows="3" ${dis ? "disabled" : ""}>${esc(v)}</textarea>`;
   } else {
     const type = { int: "number", decimal: "number", date: "date", time: "time" }[f.kind] ?? "text";
-    input = `<input id="${id}" class="text-input" type="${type}" data-f="${f.name}" value="${esc(v)}" ${f.kind === "decimal" ? 'step="0.01"' : f.kind === "int" ? 'step="1"' : ""} ${dis ? "disabled" : ""}>`;
+    input = `<input id="${id}" class="text-input" type="${type}" data-f="${f.name}" value="${esc(v)}" ${f.kind === "decimal" ? 'step="0.01"' : f.kind === "int" ? 'step="1"' : ""} ${f.min ? `min="${f.min}"` : ""} ${f.max ? `max="${f.max}"` : ""} ${dis ? "disabled" : ""}>`;
   }
   return `<div class="field form-field${f.kind === "textarea" || f.wide ? " wide" : ""}${err ? " invalid" : ""}" data-field="${f.name}">
     <label for="${id}">${esc(f.label)}${f.required ? `<i class="req" aria-label="обязательное">*</i>` : ""}</label>${input}

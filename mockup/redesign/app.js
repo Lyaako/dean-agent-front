@@ -194,6 +194,8 @@ const opt = {
   teachers: () => teachers.filter((e) => !e.dismissal_date).map((e) => ({ value: e.full_name, label: e.full_name, sub: join(e.position, e.unit) })),
   employees: () => employees.filter((e) => !e.dismissal_date).map((e) => ({ value: e.full_name, label: e.full_name, sub: join(e.position, e.unit) })),
   staff: () => deanStaff.map((e) => ({ value: e.full_name, label: e.full_name, sub: e.position })),
+  // Приказ подписывает работающий директор или заместитель директора института (DIRECTOR, DEPUTY — data.js)
+  signers: () => [DIRECTOR, DEPUTY].filter((e) => e && !e.dismissal_date).map((e) => ({ value: e.full_name, label: e.full_name, sub: e.position })),
   groups: () => GROUPS.map((g) => ({ value: g.name, label: g.name, sub: g.is_archived ? "в архиве" : undefined, row: g })),
   curricula: () => CURRICULA.map((c) => ({ value: String(c.curriculum_id), label: join(PROGRAM.spec, c.start_year), sub: join(PROGRAM.profile, PROGRAM.form) })),
   items: () => ITEMS.map((i) => ({ value: i.item_id, label: i.discipline, sub: join(`${i.semester} сем.`, KIND_NAME[i.kind], i.control_type, `${PROGRAM.spec}, ${i.start_year}`), row: i })),
@@ -217,19 +219,36 @@ const saved = (id, key, created) => ({ toast: created ? "Запись добав
 
 /* ═════════ СТУДЕНТЫ ═════════
    Напрямую у студента меняются только основа, общежитие и гражданство; группа и статус — приказами */
+// Запланированный приказ студента (order_student без отметки об исполнении): плашка и «Отменить приказ»
+const pendingNote = (s) => { const o = plannedOrderOf(s.student_id); if (!o) return "";
+  const canCancel = ["dean_staff", "director", "admin"].includes(ROLE) && o.code !== "enroll";
+  return `<div class="form-note order-note" data-k="pending">${badge("Запланирован", "warn")}<span class="order-text">приказ № ${esc(o.order_number)} «${esc(o.order_type)}» на ${fmtDate(o.effective_date)}${o.code === "enroll" ? ". Зачисление отменяется удалением студента" : ""}</span>
+    ${canCancel ? `<button type="button" class="btn sm ghost" data-a="cancel-order">Отменить приказ</button>` : ""}</div>`; };
+function cancelPlanned(s) {
+  const o = plannedOrderOf(s.student_id);
+  confirmDialog({ title: "Отменить приказ?", text: `Приказ № ${o.order_number} будет отменён для этого студента.`, confirm: "Отменить приказ", danger: true,
+    onConfirm: () => {
+      plannedOrders.splice(plannedOrders.indexOf(o), 1);
+      logAudit("Приказ", "DELETE", `Приказ № ${o.order_number} · ${s.student}`, `Приказ отменён: «${o.order_type}» на ${fmtDate(o.effective_date)}`);
+      toast("Приказ отменён"); render();   // окно подтверждения закрылось раньше — обновляем карточку студента
+    } });
+}
 function openStudent(s) {
-  formDialog(record({ row: s, title: s.student, note: "Группа и статус меняются приказом — кнопка «Приказ» внизу окна.",
+  formDialog(record({ row: s, title: s.student,
+    note: () => `<div class="form-note" data-k="note">Группа и статус меняются приказом — кнопка «Приказ» внизу окна.</div>${pendingNote(s)}`,
     fields: [rel("funding_type_id", "Основа обучения", opt.list(FUNDING), { required: true }),
       { name: "needs_dormitory", label: "Нуждается в общежитии", kind: "bool" },
       { name: "is_foreign", label: "Иностранный гражданин", kind: "bool" }],
     base: { funding_type_id: s.funding, needs_dormitory: s.needs_dormitory, is_foreign: s.is_foreign },
     onSubmit: (v) => { Object.assign(s, { funding: v.funding_type_id, funding_type_id: v.funding_type_id, needs_dormitory: v.needs_dormitory, is_foreign: v.is_foreign }); categorize(s); return saved("students", s.student_id); },
-    extra: (m) => { const actions = STUDENT_ACTIONS.filter((a) => !a.when || a.when(s.status));
-      return `<div class="menu-wrap"><button type="button" class="btn soft" data-a="orders" aria-haspopup="menu" aria-expanded="${!!m.menu}">${icon("file")}Приказ${icon("down")}</button>
+    extra: (m) => { const actions = STUDENT_ACTIONS.filter((a) => !a.when || a.when(s.status)), pending = !!plannedOrderOf(s.student_id);
+      // Как в базе: у студента не больше одного запланированного приказа
+      return `<div class="menu-wrap"><button type="button" class="btn soft" data-a="orders" aria-haspopup="menu" aria-expanded="${!!m.menu}" ${pending ? `disabled title="Сначала дождитесь исполнения или отмените приказ"` : ""}>${icon("file")}Приказ${icon("down")}</button>
         ${m.menu ? `<div class="menu up" role="menu">${actions.map((a) => `<button type="button" role="menuitem" class="menu-item" data-a="wf" data-wf="${a.name}"><span>${a.title}</span></button>`).join("")}</div>` : ""}</div>`; },
     extraClick: (el, m) => {
       const a = el.dataset?.a;
       if (a === "orders") { m.menu = !m.menu; render(); }
+      else if (a === "cancel-order") cancelPlanned(s);
       else if (a === "wf") { m.menu = false; render(); workflowDialog(STUDENT_ACTIONS.find((x) => x.name === el.dataset.wf), s); }
       else if (m.menu) { m.menu = false; render(); }
     } }));
@@ -238,30 +257,33 @@ function openStudent(s) {
 /* ── Приказы по студентам (pages/students/studentActions.ts) ── */
 const ORDER = [
   rel("order_number", "Номер приказа", null, { kind: "text", required: true }),
-  rel("signed_by", "Подписал", opt.employees, { required: true }),
-  { name: "effective_date", label: "Вступает в силу", kind: "date", hint: "Пусто — сегодня. Будущая дата — приказ будет запланирован" },
+  rel("signed_by", "Подписал", opt.signers, { required: true, hint: "Подписывает директор или заместитель" }),
+  // Задним числом приказ не оформляется; будущая дата — приказ запланирован (исполнится в этот день)
+  { name: "effective_date", label: "Вступает в силу", kind: "date", min: TODAY, hint: "Пусто — сегодня. Будущая дата — приказ будет запланирован" },
 ];
 const active = (st) => st === ACTIVE;
 const groupField = (name, label, more = {}) => rel(name, label, opt.groups, { filter: (o) => !o.row.is_archived, ...more });
 const STUDENT_ACTIONS = [
-  { name: "transfer_student", title: "Перевод в другую группу", confirm: "Перевести", when: active,
+  { name: "transfer_student", code: "transfer", title: "Перевод в другую группу", confirm: "Перевести", when: active,
     fields: [groupField("group_name", "Новая группа", { required: true }), ...ORDER],
     apply: (s, v) => moveStudent(s, v.group_name) },
-  { name: "grant_academic_leave", title: "Академический отпуск", confirm: "Оформить", when: active,
-    fields: [rel("reason", "Причина", opt.list(LEAVE_REASONS), { required: true }), { name: "start", label: "Начало", kind: "date", required: true },
+  { name: "grant_academic_leave", code: "leave", title: "Академический отпуск", confirm: "Оформить", when: active,
+    fields: [rel("reason", "Причина", opt.list(LEAVE_REASONS), { required: true }), { name: "start", label: "Начало", kind: "date", required: true,
+        // Как в базе: прошедшее начало допустимо — приказ вступает в силу сегодня, отпуск идёт с указанной даты
+        hint: "Будущая дата — приказ будет запланирован. Прошедшая — отпуск с этой даты, приказ вступит в силу сегодня" },
       { name: "end", label: "Окончание", kind: "date", required: true }, ...ORDER.filter((f) => f.name !== "effective_date")],
     effective: (v) => v.start, apply: (s) => setStatus(s, "Академический отпуск") },
-  { name: "return_from_leave", title: "Выход из академического отпуска", confirm: "Оформить", when: (st) => st === "Академический отпуск",
+  { name: "return_from_leave", code: "leave_return", title: "Выход из академического отпуска", confirm: "Оформить", when: (st) => st === "Академический отпуск",
     fields: [groupField("group_name", "Группа", { hint: "Пусто — прежняя группа" }), ...ORDER],
     apply: (s, v) => { if (v.group_name) moveStudent(s, v.group_name); setStatus(s, ACTIVE); } },
-  { name: "expel_student", title: "Отчисление", confirm: "Отчислить", when: (st) => st !== "Отчислен",
+  { name: "expel_student", code: "expel", title: "Отчисление", confirm: "Отчислить", when: (st) => st !== "Отчислен",
     fields: [{ name: "reason", label: "Основание", kind: "textarea", required: true }, ...ORDER],
     apply: (s) => setStatus(s, "Отчислен") },
-  { name: "reinstate_student", title: "Восстановление", confirm: "Восстановить", when: (st) => st === "Отчислен",
+  { name: "reinstate_student", code: "reinstate", title: "Восстановление", confirm: "Восстановить", when: (st) => st === "Отчислен",
     fields: [groupField("group_name", "Группа", { required: true }), ...ORDER],
     apply: (s, v) => { moveStudent(s, v.group_name); setStatus(s, ACTIVE); } },
 ];
-const ENROLL = { name: "enroll_student", title: "Зачисление студента", confirm: "Зачислить",
+const ENROLL = { name: "enroll_student", code: "enroll", title: "Зачисление студента", confirm: "Зачислить",
   fields: [
     { name: "last_name", label: "Фамилия", kind: "text", required: true }, { name: "first_name", label: "Имя", kind: "text", required: true },
     { name: "middle_name", label: "Отчество", kind: "text" },
@@ -270,11 +292,11 @@ const ENROLL = { name: "enroll_student", title: "Зачисление студе
     { name: "phone", label: "Телефон", kind: "text" }, groupField("group_name", "Группа", { required: true }),
     rel("funding", "Основа обучения", opt.list(FUNDING), { required: true }), { name: "record_book", label: "Номер зачётной книжки", kind: "text", required: true },
     ...ORDER],
-  apply: (_, v) => {
+  apply: (_, v, status = ACTIVE) => {
     if (students.some((s) => s.record_book_number === v.record_book.trim())) throw new Error("Зачётная книжка с таким номером уже есть");
     const g = GROUPS.find((x) => x.name === v.group_name);
     const s = { student_id: Math.max(...students.map((x) => x.student_id)) + 1, student: [v.last_name, v.first_name, v.middle_name].map((x) => x.trim()).filter(Boolean).join(" "),
-      record_book_number: v.record_book.trim(), group_name: g.name, course: course(g.year), status: ACTIVE, funding: v.funding, funding_type_id: v.funding,
+      record_book_number: v.record_book.trim(), group_name: g.name, course: course(g.year), status, funding: v.funding, funding_type_id: v.funding,
       attendance_pct: null, is_headman: false, is_foreign: false, needs_dormitory: false, results: 0, avg_points: null, min_mark: null };
     students.push(s);
     categorize(s);
@@ -297,12 +319,28 @@ function workflowDialog(def, s = null) {
   formDialog({ title: def.title, subtitle: s ? `${s.student} · ${s.group_name}` : "", fields: def.fields,
     submitLabel: def.confirm, busyLabel: "Проводим…",
     unsaved: { title: "Провести приказ?", text: "Форма приказа заполнена, но приказ ещё не проведён.", saveLabel: def.confirm },
-    checks: (v) => ({ end: v.start && v.end && v.end < v.start ? "Окончание не может быть раньше начала" : undefined }),
+    values: { signed_by: DIRECTOR?.full_name ?? "" },   // по умолчанию подписывает директор
+    checks: (v) => ({ end: v.start && v.end && v.end < v.start ? "Окончание не может быть раньше начала" : undefined,
+      effective_date: v.effective_date && v.effective_date < TODAY ? "Приказ не может вступить в силу задним числом"
+        : def.code === "enroll" && v.effective_date > addDays(TODAY, 365) ? "Зачисление — не позже чем через год" : undefined,
+      group_name: def.code === "transfer" && s && v.group_name === s.group_name ? "Студент уже учится в этой группе" : undefined }),
     onSubmit: (v) => {
       // Ошибки базы по приказу (FORM_SIM): дата — под датой вступления в силу (в академе — под началом), подписант — под «Подписал»
       formSim({ "RW-07": def.fields.some((f) => f.name === "effective_date") ? "effective_date" : "start", "RW-08": "signed_by", ...(s ? { "RW-09": null } : {}) });
-      const when = def.effective?.(v) || v.effective_date;
-      if (when && when > TODAY) return { toast: `Приказ запланирован на ${fmtDate(when)}` };
+      if (s && plannedOrderOf(s.student_id)) throw bErr("RW-09");
+      // Отпуск вступает в силу с начала (прошедшее начало — сегодня, как в базе); остальные — с даты вступления, пусто — сегодня
+      const when = def.effective?.(v) || v.effective_date || TODAY;
+      if (when > TODAY) {
+        // Будущая дата: приказ записывается сразу, а статус и группа поменяются в день вступления в силу.
+        // Зачисление с будущей датой сразу создаёт студента со статусом «Зачислен»
+        const st = def.code === "enroll" ? def.apply(null, v, "Зачислен") : s, type = orderTypeName(def.code);
+        plannedOrders.push({ order_id: Math.max(0, ...plannedOrders.map((o) => o.order_id)) + 1, code: def.code, order_number: v.order_number, order_type: type,
+          order_date: TODAY, effective_date: when, signed_by: v.signed_by, applied_at: null, student_id: st.student_id, student: st.student, group_name: st.group_name,
+          ...(v.group_name && def.code !== "enroll" ? { new_group: v.group_name } : {}),
+          ...(def.code === "leave" ? { leave_reason: v.reason, leave_start: v.start, leave_end: v.end } : {}) });
+        logAudit("Приказ", "INSERT", `Приказ № ${v.order_number} · ${st.student}`, `«${type}», запланирован на ${fmtDate(when)}`);
+        return { toast: `Приказ запланирован на ${fmtDate(when)}`, flash: { id: "students", key: st.student_id } };
+      }
       const res = def.apply(s, v) || s;
       return { toast: "Приказ проведён", flash: { id: "students", key: res.student_id } };
     } });
@@ -414,15 +452,15 @@ function openWork(w) {
 
 /* ═════════ ЗАЯВКИ НА СПРАВКИ ═════════ */
 function openRequest(r) {
-  formDialog(record({ row: r, title: r ? `Заявка № ${r.request_id}: ${r.student}` : "Новая заявка",
+  // Завершённая заявка («Выдана», «Отклонена» — is_final): только просмотр; статус в базе не меняется (trg_request_final)
+  const done = !!r && FINAL_STATUS.includes(r.status), lock = (f) => (done ? { ...f, locked: true } : f);
+  formDialog(record({ row: r, title: r ? `Заявка № ${r.request_id}: ${r.student}` : "Новая заявка", note: done ? "Заявка завершена — изменить её нельзя" : "",
     fields: [rel("student_id", "Студент-заявитель", opt.students, { required: true, locked: !!r }),
       rel("document_type_id", "Вид документа", opt.docTypes, { required: true }),
       { name: "copies", label: "Количество экземпляров", kind: "int", range: [1, 10] },
       { name: "purpose", label: "Куда требуется справка", kind: "text" },
-      // Как trg_request_final в базе: у завершённой заявки (is_final) статус не меняется
-      rel("request_status_id", "Статус заявки", opt.list(REQUEST_STATUSES), { required: true,
-        ...(r && FINAL_STATUS.includes(r.status) ? { locked: true, hint: "Заявка завершена — статус не меняется. Нужна справка — создайте новую заявку" } : {}) }),
-      rel("processed_by_id", "Исполнитель", opt.staff)],
+      rel("request_status_id", "Статус заявки", opt.list(REQUEST_STATUSES), { required: true }),
+      rel("processed_by_id", "Исполнитель", opt.staff)].map(lock),
     base: r ? { student_id: String(r.student_id), document_type_id: r.document, copies: String(r.copies), purpose: r.purpose ?? "", request_status_id: r.status, processed_by_id: r.processed_by ?? "" } : undefined,
     // Сотрудник взял заявку в работу — исполнителем становится он
     derive: (changed, v) => (changed === "request_status_id" && !v.processed_by_id ? { processed_by_id: ME.full_name } : {}),
@@ -434,7 +472,12 @@ function openRequest(r) {
       const id = Math.max(...requests.map((x) => x.request_id)) + 1;
       requests.push({ ...row, request_id: id, created_at: `${TODAY} ${new Date().toTimeString().slice(0, 5)}`, due_date: addDays(TODAY, doc[1]) });
       return saved("requests", id, true);
-    } }));   // удалять заявки сотрудник деканата не может — кнопки «Удалить» во фронте нет
+    },
+    // Удалять заявки могут деканат, директор и админ (вкладка есть только у них)
+    onDelete: r && ["dean_staff", "director", "admin"].includes(ROLE) && (() => {
+      requests.splice(requests.indexOf(r), 1);
+      logAudit("Заявка на справку", "DELETE", `Заявка № ${r.request_id}`, `${r.document}, ${r.student}`);
+    }) }));
 }
 
 /* ═════════ ПРАКТИКИ ═════════ */
