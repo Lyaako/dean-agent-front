@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Icon } from "../Icon";
 import { fieldHint, fieldLabel, type FieldSpec } from "../../api/schema";
 import { useLookup, type Option } from "./lookups";
@@ -63,7 +63,7 @@ export interface FieldProps {
   disabled?: boolean;
   filter?: (o: Option) => boolean;
   /** Ошибка проверки — показывается под полем */
-  error?: string;
+  error?: ReactNode;
 }
 
 // Допустимый диапазон числа из описания поля в БД: «Доля ставки (0.25–1.50)»

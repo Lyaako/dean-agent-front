@@ -126,8 +126,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/* ── Текст ошибки с кодом макета (RW-07 и т. п.), если он есть ── */
+export const CodedText = ({ text, code }: { text: string; code?: string }) =>
+  <>{text}{code && <> <span className="err-code">{code}</span></>}</>;
+
 /* ── Ошибка с идентификатором запроса (для диагностики) ── */
 // Код запроса не показываем в тексте — он в подсказке при наведении, для диагностики
-export const ErrorNote = ({ text, requestId }: { text: string; requestId?: string }) => (
-  <p className="form-error" role="alert" title={requestId ? `Код запроса: ${requestId}` : undefined}>{text}</p>
+export const ErrorNote = ({ text, requestId, code }: { text: string; requestId?: string; code?: string }) => (
+  <p className="form-error" role="alert" title={requestId ? `Код запроса: ${requestId}` : undefined}><CodedText text={text} code={code} /></p>
 );

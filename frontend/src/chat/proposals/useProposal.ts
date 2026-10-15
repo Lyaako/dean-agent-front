@@ -3,7 +3,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-quer
 import { createProposalAttempt, getAssignees, getProposal, getProposalEvents, sendProposalAttempt,
   type Proposal, type ProposalAttempt, type ProposalIntent } from "../../api/proposals";
 import { ApiError } from "../../api/client";
-import { errorText, requestIdOf } from "../../api/errors";
+import { errorCode, errorText, requestIdOf } from "../../api/errors";
 import { fieldLabel, useSchema, type FieldSpec } from "../../api/schema";
 
 export interface DiffRow { field: string; label: string; spec?: FieldSpec; before: unknown; after: unknown }
@@ -31,7 +31,7 @@ export function useProposal(id: string, onDecided?: (proposal: Proposal) => void
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const sending = useRef(false);
-  const [error, setError] = useState<{ text: string; requestId?: string } | null>(null);
+  const [error, setError] = useState<{ text: string; requestId?: string; code?: string } | null>(null);
   const p = q.data;
   const rows: DiffRow[] = useMemo(() => {
     if (!p) return [];
@@ -57,7 +57,7 @@ export function useProposal(id: string, onDecided?: (proposal: Proposal) => void
       if (e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 408) {
         qc.removeQueries({ queryKey: attemptKey, exact: true }); setAttempt(null);
       }
-      setError({ text: errorText(e), requestId: requestIdOf(e) });
+      setError({ text: errorText(e), requestId: requestIdOf(e), code: errorCode(e) });
       void q.refetch();
       void qc.invalidateQueries({ queryKey: ["proposals"] });
     } finally { sending.current = false; setBusy(false); }

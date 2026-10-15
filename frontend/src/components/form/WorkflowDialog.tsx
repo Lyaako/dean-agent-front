@@ -1,11 +1,11 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Modal, ErrorNote, UnsavedDialog, useToast } from "../ui";
+import { Modal, CodedText, ErrorNote, UnsavedDialog, useToast } from "../ui";
 import { Icon } from "../Icon";
 import { LookupSelect } from "./fields";
 import { newKey } from "../../api/client";
 import { runWorkflow, type Row } from "../../api/resources";
-import { errorText, requestIdOf } from "../../api/errors";
+import { errorCode, errorField, errorText, requestIdOf } from "../../api/errors";
 import { fmtDate } from "../../lib/format";
 import type { WfDef, WfField } from "../../pages/students/studentActions";
 
@@ -26,13 +26,13 @@ export function WorkflowDialog({ def, studentId, subtitle, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<unknown>(null);
 
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, ReactNode>>({});
   const [askUnsaved, setAskUnsaved] = useState(false);
   const dirty = Object.values(values).some((v) => v.trim() !== "");
 
   // Проверка до отправки: обязательные поля и порядок дат
   function validate() {
-    const e: Record<string, string> = {};
+    const e: Record<string, ReactNode> = {};
     for (const f of def.fields) if (f.required && !values[f.name]?.trim()) e[f.name] = "Заполните поле";
     if (values.start && values.end && values.end < values.start) e.end = "Окончание не может быть раньше начала";
     setErrors(e);
@@ -62,7 +62,10 @@ export function WorkflowDialog({ def, studentId, subtitle, onClose }: Props) {
       toast(res.status === "pending" ? `Приказ запланирован на ${fmtDate(res.effective_date)}` : "Приказ проведён");
       onClose();
     } catch (e2) {
-      setErr(e2);
+      // Ошибка правила базы с полем (details.field) — под этим полем, остальные — внизу формы
+      const field = errorField(e2, def.fields.map((f) => f.name));
+      if (field) setErrors((e) => ({ ...e, [field]: <CodedText text={errorText(e2)} code={errorCode(e2)} /> }));
+      else setErr(e2);
     } finally {
       pending.current = false;
       setBusy(false);
@@ -87,7 +90,7 @@ export function WorkflowDialog({ def, studentId, subtitle, onClose }: Props) {
           <div className="form-grid">
             {def.fields.map((f) => <WfInput key={f.name} f={f} value={values[f.name] ?? ""} onChange={set(f.name)} disabled={busy} error={errors[f.name]} />)}
           </div>
-          {!!err && <ErrorNote text={errorText(err)} requestId={requestIdOf(err)} />}
+          {!!err && <ErrorNote text={errorText(err)} requestId={requestIdOf(err)} code={errorCode(err)} />}
         </div>
         <div className="actions">
           <span className="spacer" />
@@ -102,7 +105,7 @@ export function WorkflowDialog({ def, studentId, subtitle, onClose }: Props) {
   );
 }
 
-function WfInput({ f, value, onChange, disabled, error }: { f: WfField; value: string; onChange: (v: string) => void; disabled: boolean; error?: string }) {
+function WfInput({ f, value, onChange, disabled, error }: { f: WfField; value: string; onChange: (v: string) => void; disabled: boolean; error?: ReactNode }) {
   const id = `wf-${f.name}`;
   let input;
   switch (f.kind) {

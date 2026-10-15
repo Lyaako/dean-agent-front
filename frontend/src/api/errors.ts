@@ -62,7 +62,77 @@ const BY_TABLE: Record<string, Record<string, string>> = {
   },
 };
 
+/* ── Коды ошибок макета (mockup/redesign/batch.js, ERRORS): этап и заголовок.
+   AG — подготовка агентом, RW — проверка строки, CH — изменения, пока окно открыто, AP — применение, UN — отмена, XX — неизвестное ── */
+export const ERROR_CODES: Record<string, string> = {
+  "AG-01": "Нет прав на это действие",
+  "AG-02": "Слишком много записей для одного пакета",
+  "AG-03": "Не удалось прочитать данные",
+  "AG-04": "Связь с агентом прервалась",
+  "RW-01": "Значение не проходит правила базы",
+  "RW-02": "Недопустимый переход",
+  "RW-03": "Запись закрыта для изменений",
+  "RW-04": "Нет доступа к записи",
+  "RW-05": "Запись удалена",
+  "RW-06": "Противоречие внутри пакета",
+  // Правила новой базы: в формах показываются под полем, к которому относятся
+  "RW-07": "Приказ не может вступить в силу задним числом",
+  "RW-08": "Подписать может только директор или заместитель института",
+  "RW-09": "У студента уже есть запланированный приказ",
+  "RW-10": "Дисциплина не из семестра этой группы",
+  "RW-11": "Даты ведомости не сходятся",
+  "RW-12": "Баллы — от 25 до 54",
+  "RW-13": "Не у всех студентов есть результат",
+  "CH-01": "Уже сделано",
+  "CH-02": "Конфликт: запись изменили по-другому",
+  "CH-03": "Запись удалили",
+  "CH-04": "Пакет устарел",
+  "CH-05": "Сессия истекла",
+  "AP-01": "Запись изменилась во время применения",
+  "AP-02": "Запись не прошла проверку базы данных",
+  "AP-03": "У вас больше нет прав на эти изменения",
+  "AP-04": "Сервер не смог применить изменения",
+  "AP-05": "Нет ответа от сервера",
+  "AP-06": "Пакет уже был применён",
+  "UN-01": "Запись изменили после применения — не отменяется",
+  "UN-02": "Срок отмены истёк",
+  "UN-03": "Изменение необратимо",
+  "XX-00": "Неизвестная ошибка",
+};
+
+// Коды бекенда (error.code, задача Б11) → коды макета (mockup/redesign/batch.js, BACKEND_CODES).
+// Коды без пары в макете (correction_later_attempt, correction_stale, correction_manager_missing) — сообщением бекенда, без кода
+export const BACKEND_CODES: Record<string, string> = {
+  order_past_date: "RW-07", effective_date_past: "RW-07", order_signer_invalid: "RW-08", order_pending_exists: "RW-09",
+  slot_semester_mismatch: "RW-10", sheet_dates_invalid: "RW-11", points_out_of_scale: "RW-12", sheet_incomplete: "RW-13",
+  sheet_closed: "RW-03", request_final: "RW-02", blank_text: "RW-01", batch_too_large: "AG-02",
+  stale_item: "CH-02", undo_changed: "UN-01", undo_unavailable: "UN-02",
+};
+
+// Поле из details.field, если в форме его нет под этим именем: подписант приходит и как signed_by_id,
+// а у академического отпуска нет «Вступает в силу» — дата приказа там «Начало»
+const FIELD_ALIASES: Record<string, string[]> = { signed_by_id: ["signed_by"], effective_date: ["start"] };
+
+/** Код макета для ошибки бекенда, если он согласован */
+export const errorCode = (e: unknown) => (e instanceof ApiError ? BACKEND_CODES[e.code] : undefined);
+
+/** Поле формы, под которым показать ошибку (из details.field), или undefined — тогда ошибка внизу формы */
+export function errorField(e: unknown, names: string[]): string | undefined {
+  if (!(e instanceof ApiError) || !errorCode(e)) return undefined;
+  const field = (e.details as { field?: unknown } | null | undefined)?.field;
+  if (typeof field !== "string") return undefined;
+  return [field, ...(FIELD_ALIASES[field] ?? [])].find((n) => names.includes(n));
+}
+
+/** Список из details.items (у sheet_incomplete — ФИО студентов без результата) */
+export function errorItems(e: unknown): string[] {
+  const items = e instanceof ApiError ? (e.details as { items?: unknown } | null | undefined)?.items : undefined;
+  return Array.isArray(items) ? items.map(String) : [];
+}
+
 export function errorText(e: unknown, table?: string): string {
+  const code = errorCode(e);
+  if (code) return ERROR_CODES[code];
   if (e instanceof ApiError) {
     const known = (table && BY_TABLE[table]?.[e.code]) || MESSAGES[e.code];
     if (known) return known;

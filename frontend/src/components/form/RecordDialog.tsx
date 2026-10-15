@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Modal, ConfirmDialog, ErrorNote, UnsavedDialog, useToast } from "../ui";
+import { Modal, CodedText, ConfirmDialog, ErrorNote, UnsavedDialog, useToast } from "../ui";
 import { Icon } from "../Icon";
 import { checkField, Field, fromInput, kindOf, rowToValues, type Values } from "./fields";
 import type { Option } from "./lookups";
 import { useCan, useSchema, type FieldSpec } from "../../api/schema";
 import { createRow, deleteRow, getRow, updateRow, type Key, type Row } from "../../api/resources";
-import { errorText, requestIdOf } from "../../api/errors";
+import { errorCode, errorField, errorText, requestIdOf } from "../../api/errors";
 
 // Настройка формы таблицы на конкретной вкладке
 export interface FormConfig {
@@ -103,7 +103,7 @@ export function RecordDialog({ table, recordKey, title, config, initial, onClose
   const pending = useRef(false);
   const [err, setErr] = useState<unknown>(null);
   const [partialSaved, setPartialSaved] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, ReactNode>>({});
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [askUnsaved, setAskUnsaved] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -116,7 +116,7 @@ export function RecordDialog({ table, recordKey, title, config, initial, onClose
 
   // Проверка до отправки: обязательные поля, числа и диапазоны, правила между полями
   function validate(): boolean {
-    const e: Record<string, string> = {};
+    const e: Record<string, ReactNode> = {};
     for (const [n, sp] of fields) {
       const m = checkField(n, sp, values[n] ?? "", isRequired(sp));
       if (m) e[n] = m;
@@ -171,7 +171,10 @@ export function RecordDialog({ table, recordKey, title, config, initial, onClose
       onSaved?.(saved, isNew);
       onClose();
     } catch (e2) {
-      setErr(e2);
+      // Ошибка правила базы с полем (details.field) — под этим полем, остальные — внизу формы
+      const field = errorField(e2, fields.map(([n]) => n));
+      if (field) setErrors((e) => ({ ...e, [field]: <CodedText text={errorText(e2, table)} code={errorCode(e2)} /> }));
+      else setErr(e2);
     } finally {
       pending.current = false;
       setBusy(false);
@@ -245,7 +248,7 @@ export function RecordDialog({ table, recordKey, title, config, initial, onClose
               </div>
             )}
 
-          {!!err && <ErrorNote text={`${partialSaved ? "ФИО уже сохранено. Реквизиты сотрудника не сохранены: " : ""}${errorText(err, table)}`} requestId={requestIdOf(err)} />}
+          {!!err && <ErrorNote text={`${partialSaved ? "ФИО уже сохранено. Реквизиты сотрудника не сохранены: " : ""}${errorText(err, table)}`} requestId={requestIdOf(err)} code={errorCode(err)} />}
         </div>
 
         {(deletable || extra || editable) && (
