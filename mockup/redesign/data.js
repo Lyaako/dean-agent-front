@@ -156,8 +156,14 @@ const isActive = (id) => studentById(id)?.status === ACTIVE;
 // v_debtors и v_expulsion_risk показывают только обучающихся
 const debtorsNow = () => debtors.filter((d) => isActive(d.student_id));
 const expulsion = [];
-// Виды стипендий (scholarship_type) и размер по умолчанию, руб. в месяц
-const SCHOLARSHIP_AMOUNT = { "Государственная академическая": 3500, "Повышенная государственная академическая": 12000 };
+// Виды стипендий — scholarship_type (03_seed.sql): название, размер по умолчанию (руб. в месяц), только для бюджета
+const SCHOLARSHIP_TYPES = [
+  { name: "Государственная академическая", amount: 3500, budget_only: true },
+  { name: "Повышенная государственная академическая", amount: 12000, budget_only: true },
+  { name: "Государственная социальная", amount: 5300, budget_only: true },
+  { name: "Именная стипендия индустриального партнёра", amount: 10000, budget_only: false },
+];
+const scholarshipAmount = (name) => SCHOLARSHIP_TYPES.find((t) => t.name === name)?.amount ?? null;
 // Категория и стипендия пересчитываются и после правок через чат
 function categorize(s) {
   s.debts = s.status === ACTIVE ? debtors.filter((d) => d.student_id === s.student_id).length : 0;
@@ -167,10 +173,10 @@ function categorize(s) {
     : !s.results ? "Ещё не сдавал сессию"
     : s.min_mark === 5 ? "Отличник" : s.min_mark === 4 ? "Хорошист" : s.min_mark === 3 ? "Есть тройки" : "Только зачёты";
   s.scholarships = s.funding === "Бюджет" && ["Отличник", "Хорошист"].includes(s.category)
-    ? (s.category === "Отличник" ? "Повышенная государственная академическая" : "Государственная академическая") : null;
+    ? (s.category === "Отличник" ? SCHOLARSHIP_TYPES[1].name : SCHOLARSHIP_TYPES[0].name) : null;
   // scholarship.amount — размер по приказу о назначении: фиксируется при назначении, показывается из назначения
   if (!s.scholarships) s.scholarship_amount = null;
-  else if (s.scholarships !== s.scholarship_type) s.scholarship_amount = SCHOLARSHIP_AMOUNT[s.scholarships];
+  else if (s.scholarships !== s.scholarship_type) s.scholarship_amount = scholarshipAmount(s.scholarships);
   s.scholarship_type = s.scholarships;
 }
 students.forEach((s) => {
@@ -199,7 +205,11 @@ const GROUP_NAMES = GROUPS.map((g) => g.name);
 /* ── Расписание на семестр по датам (v_schedule_calendar) ── */
 const PAIRS = [null, ["08:30", "10:00"], ["10:10", "11:40"], ["12:10", "13:40"], ["13:50", "15:20"], ["15:30", "17:00"], ["17:10", "18:40"]];
 const WEEKDAYS = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
-const HOLIDAYS = ["2026-11-04"];
+// holiday (03_seed.sql): дата и название; занятий в эти дни нет
+const HOLIDAY_NAMES = { "2026-02-23": "День защитника Отечества", "2026-03-09": "Международный женский день (перенос)", "2026-05-01": "Праздник Весны и Труда",
+  "2026-05-11": "День Победы (перенос)", "2026-06-12": "День России", "2026-11-04": "День народного единства",
+  ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`2027-01-0${i + 1}`, "Новогодние каникулы"])) };
+const HOLIDAYS = Object.keys(HOLIDAY_NAMES).sort();
 const TERM_NAME = "2026/27, осенний";               // academic_term 7 — текущий
 // Дисциплины текущего семестра по учебному плану; у практик, курсовых и ВКР занятий в сетке нет
 const curDisc = (g) => CURRICULUM.filter(([d, s]) => s === course(g.year) * 2 - 1 && !/практика|Курсовая работа|ВКР/.test(d)).map(([d]) => d);
@@ -259,9 +269,12 @@ const requests = Array.from({ length: 14 }, (_, i) => {
     purpose: pick(PURPOSES), status, created_at: `${iso(created)} ${String(int(8, 20)).padStart(2, "0")}:${String(int(0, 59)).padStart(2, "0")}`,
     due_date: iso(due), processed_by: status === "Новая" ? null : pick(deanStaff).full_name };
 }).sort((a, b) => a.due_date.localeCompare(b.due_date));
-const FINAL_STATUS = ["Готова к выдаче", "Выдана", "Отклонена"];
-const isOverdue = (r) => !!r.due_date && r.due_date < TODAY && !FINAL_STATUS.includes(r.status);
+// request_status (03_seed.sql): FINAL_STATUS — статусы с is_final = TRUE (завершают обработку заявки)
+const REQUEST_STATUSES = ["Новая", "В работе", "Готова к выдаче", "Выдана", "Отклонена"];
+const FINAL_STATUS = ["Выдана", "Отклонена"];
+// Просрочка — понятие макета (в базе её нет): срок подготовки прошёл, а справка ещё не готова
 const OVERDUE = { due_date: { to: addDays(TODAY, -1) }, status: ["Новая", "В работе"] };   // те же условия как фильтры по колонкам
+const isOverdue = (r) => !!r.due_date && r.due_date < TODAY && OVERDUE.status.includes(r.status);
 
 /* ── Практики (v_practice) ── */
 // Руководители практики от организаций — organization_contact из 03_seed.sql
@@ -359,15 +372,22 @@ slots.forEach((s) => {
   Object.assign(s, { assignment_id: a.assignment_id, valid_from: "", valid_to: "", term_id: TERM_NAME });
 });
 // Вид аудитории — код из справочника, фронт показывает его как есть
-const CLASSROOMS = [["А-101", 160, "lecture"], ["А-102", 140, "lecture"], ["Б-101", 120, "lecture"], ["Б-102", 100, "lecture"],
-  ["А-201", 24, "computer"], ["А-203", 24, "computer"], ["А-205", 20, "lab"], ["А-210", 20, "lab"],
-  ["Б-302", 30, "practice"], ["Б-304", 30, "practice"], ["В-202", 28, "practice"]];
+// classroom (03_seed.sql): [корпус-номер, мест, вид, есть проектор]
+const CLASSROOMS = [["А", "101", 160, "lecture", 1], ["А", "102", 140, "lecture", 1], ["Б", "101", 140, "lecture", 1], ["Б", "102", 100, "lecture", 1],
+  ...["201", "202", "203", "204", "205", "206", "207", "208"].map((n) => ["А", n, 28, "computer", 1]), ["А", "210", 28, "lab", 1],
+  ...["301", "302", "303", "304", "305", "306", "307", "308"].map((n, i) => ["Б", n, 30, "practice", i % 2]), ...["201", "202", "203", "204"].map((n) => ["В", n, 28, "practice", 0])]
+  .map(([b, n, c, k, pr]) => [`${b}-${n}`, c, k, !!pr]);
 const TERMS = [["2025/26, весенний", "2026-02-09", "2026-06-30"], [TERM_NAME, TERM_FIRST, TERM_LAST]];
 buildSchedule();
 
 const FUNDING = ["Бюджет", "Договор"];
-const REQUEST_STATUSES = ["Новая", "В работе", "Готова к выдаче", "Выдана", "Отклонена"];
-const LEAVE_REASONS = ["По медицинским показаниям", "Семейные обстоятельства", "Беременность и роды", "Уход за ребёнком", "Призыв на военную службу"];
+// leave_reason (03_seed.sql)
+const LEAVE_REASONS = ["Медицинские показания", "Семейные обстоятельства", "Призыв на военную службу", "Беременность и роды", "Уход за ребёнком до 3 лет", "Иные исключительные случаи"];
+// order_type (03_seed.sql): [code, название, суффикс номера]; процедуры и макет различают вид по коду
+const ORDER_TYPES = [["enroll", "Зачисление", "-с"], ["expel", "Отчисление", "-с"], ["transfer", "Перевод", "-с"], ["leave", "Академический отпуск", "-с"],
+  ["reinstate", "Восстановление", "-с"], ["scholarship", "Назначение стипендии", "-ст"], ["graduate", "Выпуск", "-с"],
+  ["leave_return", "Выход из академического отпуска", "-с"], ["practice", "Направление на практику", "-с"], ["thesis_topics", "Утверждение тем и руководителей ВКР", "-с"]];
+const orderTypeName = (code) => ORDER_TYPES.find(([c]) => c === code)?.[1] ?? code;
 const ORDERS = [["116-с/26", "О направлении на производственную практику", "2026-06-15"], ["145-с/26", "Об утверждении тем и руководителей ВКР", "2026-09-25"],
   ...[...new Set(practices.map((p) => p.order_number))].filter((n) => n !== "116-с/26").map((n) => [n, "О направлении на учебную практику", `20${n.slice(-2)}-06-15`])];
 // Люди без записи сотрудника — их можно оформить сотрудником

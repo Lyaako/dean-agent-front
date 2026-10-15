@@ -488,14 +488,18 @@ PAGES.myworks = () => {
 /* ═════════ СТУДЕНТ ═════════ */
 const kvCard = (title, items, extra = "") => `<section class="card me-card"><div class="table-head"><h2>${title}</h2>${extra}</div>
   <div class="kv-grid me-kv">${items.map(([l, v]) => `<div><small>${l}</small><b>${v}</b></div>`).join("")}</div></section>`;
-const markName = (r) => (r.points == null ? "Долг" : !isGraded(r.control_type) ? "Зачтено" : ["", "", "", "Удовлетворительно", "Хорошо", "Отлично"][mark(r.points)]);
+// Итог без баллов — как fn_result_name(…, final = TRUE) в v_performance и v_debtors: неявка, иначе «Неудовлетворительно» или «Не зачтено»
+const missResult = (r) => (debtors.find((d) => d.student_id === r.student_id && d.discipline === r.discipline && d.semester === r.semester)?.last_result === "Неявка" ? "Неявка"
+  : isGraded(r.control_type) ? "Неудовлетворительно" : "Не зачтено");
+const markName = (r) => (r.points == null ? missResult(r) : !isGraded(r.control_type) ? "Зачтено" : ["", "", "", "Удовлетворительно", "Хорошо", "Отлично"][mark(r.points)]);
 const myGrades = { sem: "cur" };
 PAGES.grades = () => {
   const s = ME, done = doneSemesters(groupOf(s.group_name).year), cur = s.course * 2 - 1;
   const mySheets = sheets.filter((sh) => sh.group_name === s.group_name && sh.semester === cur);
   const curDiscs = [...new Set(mySheets.map((sh) => sh.discipline))];
   const ptsOf = (d, stage) => { const sh = mySheets.find((x) => x.discipline === d && x.stage === stage); return sh && { sh, r: sh.rows.find((r) => r.student_id === s.student_id) }; };
-  const cell = (c) => (!c?.r ? "—" : c.r.absent ? badge("Неявка", "bad") : c.r.points == null ? (c.sh.status === "Закрыта" || c.r.na ? badge("Не аттестован", "bad") : `<span class="muted">ещё нет</span>`) : c.r.points < 25 ? `<span class="neg">${c.r.points}</span>` : String(c.r.points));
+  // Ячейки баллов — как fn_result_cell в v_performance: баллы, «н/а» (не аттестован) или «неявка»
+  const cell = (c) => (!c?.r ? "—" : c.r.absent ? `<span class="neg">неявка</span>` : c.r.points == null ? (c.sh.status === "Закрыта" || c.r.na ? `<span class="neg">н/а</span>` : `<span class="muted">ещё нет</span>`) : c.r.points < 25 ? `<span class="neg">${c.r.points}</span>` : String(c.r.points));
   const sems = Array.from({ length: done }, (_, i) => done - i);
   const pick = myGrades.sem === "cur" || !sems.includes(+myGrades.sem) ? "cur" : +myGrades.sem;
   const past = pick === "cur" ? [] : results.filter((r) => r.student_id === s.student_id && r.semester === pick);
@@ -504,7 +508,7 @@ PAGES.grades = () => {
     ? `<table class="sheet-table grades"><thead><tr><th>Дисциплина</th><th>Модуль 1</th><th>Модуль 2</th><th>Итог</th></tr></thead><tbody>${curDiscs.map((d) =>
         `<tr><td>${esc(d)}</td><td>${cell(ptsOf(d, "module_1"))}</td><td>${cell(ptsOf(d, "module_2"))}</td><td><span class="muted">в сессию</span></td></tr>`).join("")}</tbody></table>`
     : `<table class="sheet-table grades"><thead><tr><th>Дисциплина</th><th>Контроль</th><th>Баллы</th><th>Оценка</th><th>Сдано</th></tr></thead><tbody>${past.map((r) =>
-        `<tr><td>${esc(r.discipline)}</td><td>${esc(r.control_type)}</td><td>${r.points ?? "—"}</td><td>${badge(markName(r), r.points == null ? "bad" : mark(r.points) === 5 ? "ok" : mark(r.points) === 3 ? "warn" : "info")}</td>
+        `<tr><td>${esc(r.discipline)}</td><td>${esc(r.control_type)}</td><td>${r.points ?? `<span class="neg">${missResult(r) === "Неявка" ? "неявка" : "н/а"}</span>`}</td><td>${badge(markName(r), r.points == null ? "bad" : mark(r.points) === 5 ? "ok" : mark(r.points) === 3 ? "warn" : "info")}</td>
           <td>${r.points == null ? "—" : ["", "В сессию", "На пересдаче", "Комиссии"][attemptOf(r)]}</td></tr>`).join("")}</tbody></table>`;
   return pageView("grades", "Успеваемость", [
     tiles([["Средний балл", String(s.avg_points ?? "—").replace(".", ","), "по всем сданным"], ["Долги", s.debts, s.debts ? "нужно пересдать" : "долгов нет", s.debts ? "bad" : "ok"],
@@ -543,7 +547,7 @@ PAGES.myrequests = () => {
   const rows = applyTable("myrequests", MYREQ_COLS, all);
   return pageView("myrequests", "Справки", [
     tableTools("myrequests", MYREQ_COLS, all, rows.length, `<span class="spacer"></span><button class="btn sm primary" data-a="order-doc">${icon("plus")}Заказать справку</button>`),
-    all.length ? dataTable("myrequests", MYREQ_COLS, rows, all, { rowKey: (r) => r.request_id })
+    all.length ? dataTable("myrequests", MYREQ_COLS, rows, all, { rowKey: (r) => r.request_id, onRow: myRequestDialog })
       : `<div class="card empty-day">${icon("file")}<b>Заявок пока нет</b>Нажмите «Заказать справку» — деканат подготовит её в срок</div>`]);
 };
 function orderDoc() {
@@ -554,7 +558,7 @@ function orderDoc() {
     <div class="form-body"><div class="form-grid">
       <div class="field form-field wide"><label for="od-doc">Документ</label><select id="od-doc" class="select" data-od="document">${DOC_TYPES.map(([d, n]) => `<option ${d === m.v.document ? "selected" : ""}>${esc(d)}</option>`).join("")}</select>
         <small class="hint">Срок подготовки — ${days()} ${plural(days(), "день", "дня", "дней")}, будет готова к ${fmtDate(addDays(TODAY, days()))}</small></div>
-      <div class="field form-field"><label for="od-copies">Экземпляров</label><select id="od-copies" class="select" data-od="copies">${[1, 2, 3, 4, 5].map((n) => `<option ${String(n) === m.v.copies ? "selected" : ""}>${n}</option>`).join("")}</select></div>
+      <div class="field form-field"><label for="od-copies">Экземпляров</label><select id="od-copies" class="select" data-od="copies">${Array.from({ length: 10 }, (_, i) => i + 1).map((n) => `<option ${String(n) === m.v.copies ? "selected" : ""}>${n}</option>`).join("")}</select></div>
       <div class="field form-field"><label for="od-purpose">Куда</label><select id="od-purpose" class="select" data-od="purpose">${PURPOSES.map((p) => `<option ${p === m.v.purpose ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>
     </div></div>
     <div class="actions"><span class="spacer"></span><button type="button" class="btn" data-a="close">Отменить</button><button class="btn primary" ${m.busy ? "disabled" : ""}>${m.busy ? "Отправляем…" : "Заказать"}</button></div></form>`;
@@ -571,6 +575,88 @@ function orderDoc() {
     closeModal(m); toast(`Заявка № ${id} отправлена в деканат`);
   };
   return openModal(m);
+}
+// Своя заявка: «Новую» студент может изменить (экземпляры и «куда»), остальные — только посмотреть. Отменить и удалить нельзя
+function myRequestDialog(r) {
+  const edit = r.status === "Новая";
+  const m = { label: edit ? "Изменить заявку" : `Заявка № ${r.request_id}`, v: { copies: String(r.copies), purpose: r.purpose }, busy: false, err: null };
+  const dirty = () => +m.v.copies !== r.copies || m.v.purpose !== r.purpose;
+  const copies = Array.from({ length: 10 }, (_, i) => i + 1);   // как в базе: 1–10
+  m.html = () => `<form class="dialog form-dialog order-dialog" data-order novalidate>
+    <div class="form-head"><div><h3>${edit ? "Изменить заявку" : `Заявка № ${r.request_id}`}</h3><p>${edit ? `Заявка № ${r.request_id} · пока деканат не взял её в работу` : `${esc(r.document)} · подана ${fmtDate(r.created_at)}`}</p></div>
+      <button type="button" class="icon-btn" aria-label="Закрыть" data-a="close">${icon("x")}</button></div>
+    <div class="form-body">${edit ? `<div class="form-grid">
+      <div class="field form-field wide"><label>Документ</label><b class="cur-res">${esc(r.document)}</b><small class="hint">Готова к ${fmtDate(r.due_date)}</small></div>
+      <div class="field form-field"><label for="mr-copies">Экземпляров</label><select id="mr-copies" class="select" data-mr="copies" ${m.busy ? "disabled" : ""}>${copies.map((n) => `<option ${String(n) === m.v.copies ? "selected" : ""}>${n}</option>`).join("")}</select></div>
+      <div class="field form-field"><label for="mr-purpose">Куда</label><select id="mr-purpose" class="select" data-mr="purpose" ${m.busy ? "disabled" : ""}>${[...new Set([...PURPOSES, r.purpose])].map((x) => `<option ${x === m.v.purpose ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
+    </div>` : `<div class="kv-grid">${[["Документ", esc(r.document)], ["Экземпляров", r.copies], ["Куда", esc(r.purpose)], ["Статус", badge(r.status, STATUS_KIND[r.status])],
+      ["Готова к", fmtDate(r.due_date)], ["Обрабатывает", esc(r.processed_by ?? "—")]].map(([l, v]) => `<div><small>${l}</small><b>${v}</b></div>`).join("")}</div>
+      <div class="form-note">Деканат уже ${r.status === "В работе" ? "готовит" : "обработал"} заявку — изменить её нельзя. Если нужна другая справка, закажите новую.</div>`}
+      ${m.err ? `<p class="form-error" role="alert">${esc(m.err)}</p>` : ""}</div>
+    <div class="actions"><span class="spacer"></span><button type="button" class="btn" data-a="close">Закрыть</button>
+      ${edit ? `<button class="btn primary" ${m.busy || !dirty() ? "disabled" : ""}>${m.busy ? "Сохраняем…" : "Сохранить"}</button>` : ""}</div></form>`;
+  m.close = () => closeModal(m);
+  m.click = (el) => { if (el.dataset.a === "close") m.close(); };
+  m.change = (el) => { if (el.dataset.mr) { m.v[el.dataset.mr] = el.value; m.err = null; render(); } };
+  m.submit = async () => {
+    if (!edit || !dirty()) return;
+    m.busy = true; render(); await wait(450);
+    // Пока окно было открыто, деканат мог взять заявку в работу
+    if (r.status !== "Новая") { m.busy = false; m.err = "Деканат уже взял заявку в работу — изменить её нельзя."; return render(); }
+    const changes = [+m.v.copies !== r.copies && `Экземпляров: ${r.copies} → ${m.v.copies}`, m.v.purpose !== r.purpose && `Куда: ${r.purpose} → ${m.v.purpose}`].filter(Boolean).join("; ");
+    Object.assign(r, { copies: +m.v.copies, purpose: clip(m.v.purpose) });
+    logAudit("Заявка на справку", "UPDATE", `Заявка № ${r.request_id}`, changes);
+    closeModal(m); toast(`Заявка № ${r.request_id} изменена`);
+  };
+  return openModal(m);
+}
+/* ── Заказ справки через чат: агент уточняет документ, экземпляры и «куда», затем готовит предложение.
+   Применяет его деканат («Согласование»), сам студент только смотрит ── */
+const DOC_DRAFTS = new Map();   // чат → { document, copies, purpose, ask }
+// Слова в просьбе → название из справочников DOC_TYPES и PURPOSES
+const DOC_WORDS = [[/об\s+обучени|обучени/, "Справка об обучении"], [/академическ/, "Академическая справка"], [/для\s+воен/, "Справка для военного комиссариата"],
+  [/стипенди/, "Справка о размере стипендии"], [/выписк/, "Выписка из приказа"]];
+const PURPOSE_WORDS = [[/(^|\s)в\s+воен/, "В военный комиссариат"], [/банк/, "В банк"], [/требовани/, "По месту требования"], [/налогов/, "В налоговую инспекцию"],
+  [/родител/, "По месту работы родителей"], [/общежит/, "Для оформления общежития"], [/поликлиник/, "В поликлинику"], [/перевод/, "Для перевода в другой вуз"],
+  [/соц(иальн|защит)/, "В органы социальной защиты"]];
+const NUM_WORDS = { один: 1, одну: 1, одна: 1, два: 2, две: 2, три: 3, четыре: 4, пять: 5, шесть: 6, семь: 7, восемь: 8, девять: 9, десять: 10 };
+function docParse(s, d) {
+  const out = {}, num = s.match(/\b(\d{1,2})\b/)?.[1], word = Object.keys(NUM_WORDS).find((w) => new RegExp(`(^|\\s)${w}(\\s|$)`).test(s));
+  // Короткий ответ на вопрос агента: номер из списка или число экземпляров
+  if (d?.ask === "document" && num && DOC_TYPES[+num - 1]) out.document = DOC_TYPES[+num - 1][0];
+  else if (d?.ask === "purpose" && num && PURPOSES[+num - 1]) out.purpose = PURPOSES[+num - 1];
+  else if (d?.ask === "copies" && (num || word)) out.copies = num ? +num : NUM_WORDS[word];
+  else if (/(экз|копи|шт)/.test(s) && (num || word)) out.copies = num ? +num : NUM_WORDS[word];
+  if (!out.document) { const hit = DOC_WORDS.find(([re]) => re.test(s)); if (hit) out.document = hit[1]; }
+  // На вопрос «куда» короткий ответ «военкомат» — это место, а не вид справки
+  if (!out.purpose) { const hit = PURPOSE_WORDS.find(([re]) => re.test(s)) ?? (d?.ask === "purpose" && /воен/.test(s) ? [null, "В военный комиссариат"] : null); if (hit) out.purpose = hit[1]; }
+  return out;
+}
+function docOrderReply(raw, s) {
+  const key = chat.activeId, d = DOC_DRAFTS.get(key) ?? { document: null, copies: null, purpose: null, ask: null, first: clip(raw) };
+  if (/(отмен|не надо|передума|не нужн)/.test(s)) { DOC_DRAFTS.delete(key); return { html: P("Хорошо, заявку на справку не оформляю.") }; }
+  const got = docParse(s, d);
+  Object.assign(d, got);
+  const bad = d.copies != null && !(d.copies >= 1 && d.copies <= 10);
+  if (bad) d.copies = null;
+  const have = [d.document && `<b>${esc(d.document)}</b>`, d.copies && `${d.copies} экз.`, d.purpose && `«${esc(d.purpose)}»`].filter(Boolean).join(", ");
+  const pre = have ? P(`Оформляю заявку: ${have}${have.endsWith(".") ? "" : "."}`) : "";
+  const list = (items) => `<ol>${items.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>`;
+  if (!d.document) { d.ask = "document"; DOC_DRAFTS.set(key, d); return { html: pre + P("Какую справку заказать? Напишите название или номер:") + list(DOC_TYPES.map(([x]) => x)) }; }
+  if (!d.copies) { d.ask = "copies"; DOC_DRAFTS.set(key, d); return { html: pre + P(bad ? "Экземпляров можно заказать от 1 до 10. Сколько нужно?" : "Сколько экземпляров нужно? От 1 до 10.") }; }
+  if (!d.purpose) { d.ask = "purpose"; DOC_DRAFTS.set(key, d); return { html: pre + P("Куда нужна справка? Напишите или выберите номер:") + list(PURPOSES) }; }
+  DOC_DRAFTS.delete(key);
+  const days = DOC_TYPES.find(([x]) => x === d.document)[1], st = ME;
+  return { tool: "propose_sql_change", html: P(`Подготовил заявку: <b>${esc(d.document)}</b>, ${d.copies} экз., «${esc(d.purpose)}». Её подтвердит деканат — после этого справка будет готова за ${days} ${plural(days, "день", "дня", "дней")}.`),
+    proposal: { kind: "Заявка студента", decision_status: "Ждёт подтверждения деканата", explanation: `Заявка на справку: ${d.document}, ${d.copies} экз.`, table: "Заявка на справку", operation: "INSERT",
+      rows: [{ label: "Документ", before: null, after: d.document }, { label: "Экземпляров", before: null, after: d.copies }, { label: "Куда", before: null, after: d.purpose }],
+      reason: `Запрос студента: «${d.first}»`, author: st.full_name, author_role: ROLE, created_at: `${TODAY} ${new Date().toTimeString().slice(0, 5)}`,
+      // Применяет деканат: заявка появляется у студента во вкладке «Справки» со статусом «Новая»
+      apply() {
+        const id = Math.max(...requests.map((r) => r.request_id)) + 1;
+        requests.push({ request_id: id, student_id: st.student_id, student: st.student, group_name: st.group_name, document: d.document, copies: d.copies, purpose: d.purpose,
+          status: "Новая", created_at: `${TODAY} ${new Date().toTimeString().slice(0, 5)}`, due_date: addDays(TODAY, days), processed_by: null });
+      } } };
 }
 PAGES.mystudy = () => {
   const s = ME, w = works.find((x) => x.student_id === s.student_id), p = practices.find((x) => x.student_id === s.student_id);
@@ -610,56 +696,179 @@ PAGES.users = () => {
     tableTools("users", USER_COLS, users, rows.length),
     dataTable("users", USER_COLS, rows, users, { rowKey: (r) => r.user_id, onRow: openUser })]);
 };
+// Пользователь: только просмотр. Роль и доступ задаются учётной записью в базе; админ может только сбросить пароль
 function openUser(u) {
-  const m = { label: u.login, v: { role: u.role, active: u.active }, busy: false };
-  m.html = () => `<form class="dialog form-dialog" data-user novalidate>
+  const m = { label: u.login };
+  m.html = () => `<div class="dialog form-dialog">
     <div class="form-head"><div><h3>${esc(u.login)}</h3><p>${esc(u.person)}</p></div><button type="button" class="icon-btn" aria-label="Закрыть" data-a="close">${icon("x")}</button></div>
-    <div class="form-body"><div class="form-grid">
-      <div class="field form-field"><label for="u-role">Роль</label><select id="u-role" class="select" data-u="role" ${u.role === "student" ? "disabled" : ""}>${ROLE_ORDER.filter((r) => r !== "student" || u.role === "student").map((r) => `<option value="${r}" ${r === m.v.role ? "selected" : ""}>${ROLES[r].name}</option>`).join("")}</select>
-        ${u.role === "student" ? `<small class="hint">Роль студента задаётся записью студента</small>` : ""}</div>
-      <label class="check form-check"><input type="checkbox" data-u="active" ${m.v.active ? "checked" : ""}><span>Доступ разрешён</span></label>
-    </div><div><button type="button" class="btn sm ghost" data-a="reset-pw">${icon("refresh")}Сбросить пароль</button></div></div>
-    <div class="actions"><span class="spacer"></span><button type="button" class="btn" data-a="close">Отменить</button><button class="btn primary" ${m.busy ? "disabled" : ""}>${m.busy ? "Сохраняем…" : "Сохранить"}</button></div></form>`;
+    <div class="form-body"><div class="kv-grid">
+      <div><small>Роль</small><b>${badge(ROLES[u.role].name, { admin: "bad", director: "warn", dean_staff: "info", teacher: "ok", student: "muted" }[u.role])}</b></div>
+      <div><small>Доступ</small><b>${badge(u.active ? "Активен" : "Отключён", u.active ? "ok" : "muted")}</b></div>
+      <div><small>Последний вход</small><b>${u.last ? fmtDate(u.last) : "—"}</b></div></div>
+      <div class="form-note">Роль и доступ задаются учётной записью в базе и здесь не меняются.</div></div>
+    <div class="actions"><button type="button" class="btn sm ghost" data-a="reset-pw">${icon("refresh")}Сбросить пароль</button>
+      <span class="spacer"></span><button type="button" class="btn" data-a="close">Закрыть</button></div></div>`;
   m.close = () => closeModal(m);
   m.click = (el) => {
     if (el.dataset.a === "close") m.close();
-    if (el.dataset.a === "reset-pw") { logAudit("Пользователь", "UPDATE", u.login, "Пароль сброшен"); toast("Временный пароль отправлен на почту пользователя"); }
-  };
-  m.change = (el) => { if (el.dataset.u) m.v[el.dataset.u] = el.type === "checkbox" ? el.checked : el.value; };
-  m.submit = async () => {
-    const ch = [m.v.role !== u.role && `Роль: ${ROLES[u.role].name} → ${ROLES[m.v.role].name}`, m.v.active !== u.active && `Доступ: ${u.active ? "разрешён" : "запрещён"} → ${m.v.active ? "разрешён" : "запрещён"}`].filter(Boolean);
-    if (!ch.length) return closeModal(m);
-    m.busy = true; render(); await wait(400);
-    Object.assign(u, m.v); logAudit("Пользователь", "UPDATE", u.login, ch.join("; "));
-    closeModal(m); toast("Пользователь сохранён");
+    if (el.dataset.a === "reset-pw") confirmDialog({ title: "Сбросить пароль?", text: `${u.login} не сможет войти со старым паролем. Новый временный пароль нужно будет передать пользователю.`,
+      confirm: "Сбросить", onConfirm: () => { logAudit("Пользователь", "UPDATE", u.login, "Пароль сброшен"); tempPasswordDialog(u); } });
   };
   return openModal(m);
 }
-// Справочники: название, значения и (где есть) пояснение
+// Временный пароль: 12 символов, есть строчные, заглавные и цифры; похожие символы (0/O, 1/l/I) не используются
+function tempPassword() {
+  const sets = ["abcdefghijkmnpqrstuvwxyz", "ABCDEFGHJKLMNPQRSTUVWXYZ", "23456789"], all = sets.join(""), r = crypto.getRandomValues(new Uint32Array(12));
+  const chars = [...r].map((x, i) => (i < 3 ? sets[i] : all)[x % (i < 3 ? sets[i] : all).length]);
+  for (let i = chars.length - 1; i > 0; i--) { const j = r[i] % (i + 1); [chars[i], chars[j]] = [chars[j], chars[i]]; }
+  return chars.join("");
+}
+function tempPasswordDialog(u) {
+  const pw = tempPassword(), m = { label: "Временный пароль" };
+  m.html = () => `<div class="dialog form-dialog">
+    <div class="form-head"><div><h3>Временный пароль</h3><p>${esc(u.login)} · ${esc(u.person)}</p></div><button type="button" class="icon-btn" aria-label="Закрыть" data-a="close">${icon("x")}</button></div>
+    <div class="form-body"><div class="pw-box"><code>${esc(pw)}</code><button type="button" class="btn sm soft" data-a="pw-copy">${icon("copy")}Скопировать</button></div>
+      <div class="form-note">Пользователь сменит пароль при первом входе. После закрытия окна пароль больше не показывается.</div></div>
+    <div class="actions"><span class="spacer"></span><button type="button" class="btn primary" data-a="close">Готово</button></div></div>`;
+  m.close = () => closeModal(m);
+  m.click = async (el) => {
+    if (el.dataset.a === "close") m.close();
+    if (el.dataset.a === "pw-copy") { try { await navigator.clipboard.writeText(pw); toast("Пароль скопирован"); } catch { toast("Не удалось скопировать — выделите пароль вручную", true); } }
+  };
+  return openModal(m);
+}
+
+/* ── Состояние сервисов агента (у админа — кнопка «Сервисы» в шапке) ── */
+function openServices() {
+  const m = { label: "Сервисы" };
+  m.html = () => `<div class="dialog form-dialog ref-dialog">
+    <div class="form-head"><div><h3>Сервисы</h3><p>Состояние сервисов агента</p></div><button type="button" class="icon-btn" aria-label="Закрыть" data-a="close">${icon("x")}</button></div>
+    <div class="form-body"><div class="ref-list">${SERVICES.map(([id, name]) => `<div class="ref-row"><b>${name}</b>${serviceDown(id) ? badge("недоступен", "bad") : badge("работает", "ok")}</div>`).join("")}</div>
+      ${serviceDown("model") ? `<div class="form-note">Пока модель недоступна, чат у всех пользователей не отправляет сообщения. Таблицы и формы работают.</div>` : ""}</div>
+    <div class="actions"><span class="spacer"></span><button type="button" class="btn" data-a="close">Закрыть</button></div></div>`;
+  m.close = () => closeModal(m);
+  m.click = (el) => { if (el.dataset.a === "close") m.close(); };
+  return openModal(m);
+}
+
+/* ── Справочники. Как в базе: деканат и админ пополняют и правят разрешённые справочники, но не удаляют —
+   на значения ссылаются данные. В базе ссылки по id, в макете — строкой, поэтому при правке значение меняется и в данных ── */
+const roomCheck = (n) => (!/^[А-ЯA-Z]{1,3}-\d{1,4}[а-я]?$/.test(n) ? "Корпус и номер через дефис, например В-310" : undefined);
+const ROOM_KIND = { lecture: "лекционная", computer: "компьютерный класс", lab: "лаборатория", practice: "для практик" };
+const swapIn = (list, field, from, to) => list.forEach((x) => { if (x[field] === from) x[field] = to; });
+const replaceAt = (arr, from, to) => { const i = arr.indexOf(from); if (i >= 0) arr[i] = to; };
 const REFS = [
-  ["Виды справок", "document_type", () => DOC_TYPES.map(([d, n]) => [d, `${n} ${plural(n, "день", "дня", "дней")} на подготовку`])],
-  ["Статусы заявок", "request_status", () => REQUEST_STATUSES.map((s) => [s, FINAL_STATUS.includes(s) ? "завершающий" : ""])],
+  ["Виды справок", "document_type", () => DOC_TYPES.map(([d, n]) => [d, `${n} ${plural(n, "день", "дня", "дней")} на подготовку`]), {
+    names: () => DOC_TYPES.map(([d]) => d),
+    fields: [{ name: "name", label: "Название" }, { name: "days", label: "Дней на подготовку", type: "number", def: "3", min: 1 }],
+    add: (v) => DOC_TYPES.push([v.name, +v.days]),
+    rename: (i, to) => { const from = DOC_TYPES[i][0]; DOC_TYPES[i][0] = to; swapIn(requests, "document", from, to); } }],
+  ["Статусы заявок", "request_status", () => REQUEST_STATUSES.map((s) => [s, FINAL_STATUS.includes(s) ? "завершающий" : ""]), {
+    names: () => REQUEST_STATUSES,
+    fields: [{ name: "name", label: "Название", hint: "Новый статус — не завершающий" }],
+    add: (v) => { REQUEST_STATUSES.push(v.name); STATUS_KIND[v.name] = "info"; },
+    rename: (i, to) => { const from = REQUEST_STATUSES[i]; REQUEST_STATUSES[i] = to; replaceAt(FINAL_STATUS, from, to); STATUS_KIND[to] = STATUS_KIND[from]; swapIn(requests, "status", from, to); } }],
   ["Основы обучения", "funding_type", () => FUNDING.map((f) => [f, ""])],
-  ["Причины академического отпуска", "leave_reason", () => LEAVE_REASONS.map((r) => [r, ""])],
-  ["Виды приказов", "order_type", () => MOVE_TYPES.map(([, n]) => [n, ""])],
-  ["Виды стипендий", "scholarship_type", () => [["Государственная академическая", "оценки «хорошо» и «отлично»"], ["Повышенная государственная академическая", "только «отлично»"], ["Социальная", "по документам"]]],
-  ["Шкала баллов", "score_band", () => [["0–24", "неудовлетворительно / не аттестован"], ["25–34", "удовлетворительно"], ["35–44", "хорошо"], ["45–54", "отлично"]]],
+  ["Причины академического отпуска", "leave_reason", () => LEAVE_REASONS.map((r) => [r, ""]), {
+    names: () => LEAVE_REASONS,
+    fields: [{ name: "name", label: "Название" }],
+    add: (v) => LEAVE_REASONS.push(v.name),
+    rename: (i, to) => { const from = LEAVE_REASONS[i]; LEAVE_REASONS[i] = to; swapIn(plannedOrders, "leave_reason", from, to); } }],
+  ["Виды приказов", "order_type", () => ORDER_TYPES.map(([c, n, x]) => [n, `код ${c} · суффикс ${x}`]), {
+    names: () => ORDER_TYPES.map(([, n]) => n),
+    fields: [{ name: "name", label: "Название" }, { name: "code", label: "Код", hint: "латиницей, например graduate" }, { name: "suffix", label: "Суффикс номера", def: "-с" }],
+    check: (v) => ({ code: !/^[a-z][a-z_]{1,29}$/.test(v.code) ? "Латинские строчные буквы и «_», от 2 до 30 символов" : ORDER_TYPES.some(([c]) => c === v.code) ? "Такой код уже есть" : undefined, suffix: !/^-[а-яa-z]{1,9}$/.test(v.suffix) ? "Дефис и буквы, например -с" : undefined }),
+    add: (v) => ORDER_TYPES.push([v.code, v.name, v.suffix]),
+    // Код не меняется — по нему процедуры узнают вид приказа; меняется название (и в данных макета, где оно записано строкой)
+    rename: (i, to) => { const [code] = ORDER_TYPES[i]; ORDER_TYPES[i][1] = to; if (MOVE_NAME[code]) { MOVE_NAME[code] = to; MOVE_TYPES.find(([c]) => c === code)[1] = to; }
+      moves.forEach((x) => { if (x.type === code) x.order_type = to; }); } }],
+  ["Виды стипендий", "scholarship_type", () => SCHOLARSHIP_TYPES.map((t) => [t.name, `${fmtNum(t.amount)} ₽ в месяц${t.budget_only ? " · только бюджет" : ""}`]), {
+    names: () => SCHOLARSHIP_TYPES.map((t) => t.name),
+    fields: [{ name: "name", label: "Название" }, { name: "amount", label: "Размер, ₽ в месяц", type: "number", min: 0 },
+      { name: "budget_only", label: "Кому", type: "select", options: [["yes", "Только бюджет"], ["no", "Бюджет и договор"]], def: "yes" }],
+    add: (v) => SCHOLARSHIP_TYPES.push({ name: v.name, amount: +v.amount, budget_only: v.budget_only === "yes" }),
+    rename: (i, to) => { const from = SCHOLARSHIP_TYPES[i].name; SCHOLARSHIP_TYPES[i].name = to; swapIn(students, "scholarships", from, to); swapIn(students, "scholarship_type", from, to); } }],
+  ["Шкала баллов", "score_band", () => [["25–34", "удовлетворительно"], ["35–44", "хорошо"], ["45–54", "отлично"]]],
   ["Время пар", "pair_time", () => PAIRS.slice(1).map(([a, b], i) => [`${i + 1} пара`, `${a}–${b}`])],
-  ["Аудитории", "classroom", () => CLASSROOMS.map(([n, c, k]) => [n, `${c} мест · ${{ lecture: "лекционная", computer: "компьютерный класс", lab: "лаборатория", practice: "для практик" }[k]}`])],
-  ["Праздничные дни", "holiday", () => HOLIDAYS.map((d) => [fmtDate(d), "занятий нет"])],
+  ["Аудитории", "classroom", () => CLASSROOMS.map(([n, c, k, pr]) => [n, `${c} мест · ${ROOM_KIND[k]}${pr ? " · проектор" : ""}`]), {
+    names: () => CLASSROOMS.map(([n]) => n),
+    fields: [{ name: "name", label: "Аудитория", hint: "корпус-номер, например В-310" }, { name: "capacity", label: "Мест", type: "number", min: 1 },
+      { name: "kind", label: "Вид", type: "select", options: Object.entries(ROOM_KIND), def: "practice" },
+      { name: "projector", label: "Проектор", type: "select", options: [["no", "Нет"], ["yes", "Есть"]], def: "no" }],
+    check: (v) => ({ name: roomCheck(v.name) }), checkEdit: (to) => roomCheck(to),
+    add: (v) => CLASSROOMS.push([v.name, +v.capacity, v.kind, v.projector === "yes"]),
+    rename: (i, to) => { const from = CLASSROOMS[i][0]; CLASSROOMS[i][0] = to; swapIn(slots, "classroom", from, to); buildSchedule(); } }],
+  ["Праздничные дни", "holiday", () => HOLIDAYS.map((d) => [fmtDate(d), HOLIDAY_NAMES[d] ?? "занятий нет"]), {
+    // Значение праздника — дата; в строке меняется название
+    names: () => HOLIDAYS.map((d) => HOLIDAY_NAMES[d] ?? ""), unique: () => HOLIDAYS, editField: "название",
+    fields: [{ name: "date", label: "Дата", type: "date" }, { name: "name", label: "Название" }],
+    check: (v) => ({ date: HOLIDAYS.includes(v.date) ? "Этот день уже праздничный" : undefined }),
+    add: (v) => { HOLIDAYS.push(v.date); HOLIDAYS.sort(); HOLIDAY_NAMES[v.date] = v.name; buildSchedule(); },
+    rename: (i, to) => { HOLIDAY_NAMES[HOLIDAYS[i]] = to; } }],
   ["Должности", "position", () => POSITIONS.filter(Boolean).map(([n, c]) => [n, CATEGORY_NAME[c]])],
 ];
 PAGES.refs = () => pageView("refs", "Справочники", [`<div class="ref-grid">${REFS.map(([name, table, vals], i) => { const v = vals();
   return `<button type="button" class="card ref-card" data-a="ref-open" data-i="${i}" style="--i:${i}"><div><b>${name}</b><small>${table}</small></div>
     <span class="ref-n">${v.length}</span><p>${v.slice(0, 3).map(([x]) => esc(x)).join(" · ")}${v.length > 3 ? " …" : ""}</p></button>`; }).join("")}</div>`]);
 function openRef(i) {
-  const [name, table, vals] = REFS[i];
-  const m = { label: name, add: "" };
+  const [name, table, vals, ed] = REFS[i];
+  const blank = () => Object.fromEntries((ed?.fields ?? []).map((f) => [f.name, f.def ?? ""]));
+  const m = { label: name, edit: null, editVal: "", adding: false, addV: blank(), errs: {} };
+  const taken = (v, except) => (ed.unique?.() ?? ed.names()).some((x, k) => k !== except && x.toLowerCase() === v.toLowerCase());
+  const errSmall = (k) => (m.errs[k] ? `<small class="field-error" role="alert">${esc(m.errs[k])}</small>` : "");
+  const row = ([v, n], k) => (m.edit === k
+    ? `<form class="ref-row ref-editing" data-ref-edit><div class="ref-edit-in${m.errs.edit ? " form-field invalid" : ""}"><input class="text-input" data-re value="${esc(m.editVal)}" aria-label="${ed.editField ? "Новое название" : "Новое значение"}">${errSmall("edit")}</div>
+        <span class="ref-side"><button type="submit" class="icon-btn" aria-label="Сохранить">${icon("check")}</button><button type="button" class="icon-btn" data-a="re-cancel" aria-label="Отменить">${icon("x")}</button></span></form>`
+    : `<div class="ref-row"><b>${esc(v)}</b><span class="ref-side">${n ? `<small>${esc(n)}</small>` : ""}${ed ? `<button type="button" class="icon-btn" data-a="re-edit" data-k="${k}" aria-label="Изменить «${esc(v)}»" title="Изменить">${icon("edit")}</button>` : ""}</span></div>`);
+  const input = (f) => f.type === "select"
+    ? `<select id="ra-${f.name}" class="select" data-ra="${f.name}">${f.options.map(([v, l]) => `<option value="${v}" ${m.addV[f.name] === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`
+    : `<input id="ra-${f.name}" class="text-input" type="${f.type ?? "text"}" ${f.min != null ? `min="${f.min}"` : ""} data-ra="${f.name}" value="${esc(m.addV[f.name])}">`;
   m.html = () => `<div class="dialog form-dialog ref-dialog">
     <div class="form-head"><div><h3>${name}</h3><p>Таблица ${table} · ${vals().length} ${plural(vals().length, "значение", "значения", "значений")}</p></div><button type="button" class="icon-btn" aria-label="Закрыть" data-a="close">${icon("x")}</button></div>
-    <div class="form-body"><div class="ref-list">${vals().map(([v, n]) => `<div class="ref-row"><b>${esc(v)}</b>${n ? `<small>${esc(n)}</small>` : ""}</div>`).join("")}</div></div></div>`;
+    <div class="form-body">${ed ? "" : `<div class="form-note">Только просмотр — значения задаёт база</div>`}
+      <div class="ref-list">${vals().map(row).join("")}</div>
+      ${ed && m.adding ? `<form class="ref-add" data-ref-add novalidate><div class="form-grid">${ed.fields.map((f) => `<div class="field form-field${m.errs[f.name] ? " invalid" : ""}"><label for="ra-${f.name}">${f.label}</label>${input(f)}
+          ${m.errs[f.name] ? errSmall(f.name) : f.hint ? `<small class="hint">${esc(f.hint)}</small>` : ""}</div>`).join("")}</div>
+        <div class="ref-add-actions"><button type="button" class="btn sm" data-a="ra-cancel">Отменить</button><button class="btn sm primary">Добавить</button></div></form>`
+      : ed ? `<div><button type="button" class="btn sm ghost" data-a="ra-open">${icon("plus")}Добавить значение</button></div>` : ""}</div></div>`;
   m.close = () => closeModal(m);
-  m.click = (el) => { if (el.dataset.a === "close") m.close(); };
+  m.click = (el) => {
+    const a = el.dataset.a;
+    if (a === "close") m.close();
+    else if (a === "re-edit") { const k = +el.dataset.k; Object.assign(m, { edit: k, editVal: ed.names()[k], errs: {} }); render(); $(`[data-k="${m.key}"] [data-re]`)?.focus(); }
+    else if (a === "re-cancel") { m.edit = null; m.errs = {}; render(); }
+    else if (a === "ra-open") { Object.assign(m, { adding: true, addV: blank(), errs: {} }); render(); $(`[data-k="${m.key}"] [data-ra]`)?.focus(); }
+    else if (a === "ra-cancel") { m.adding = false; m.errs = {}; render(); }
+  };
+  m.input = (el) => {
+    if (el.dataset.re != null) { m.editVal = el.value; delete m.errs.edit; render(); }
+    else if (el.dataset.ra) { m.addV[el.dataset.ra] = el.value; delete m.errs[el.dataset.ra]; render(); }
+  };
+  m.change = m.input;
+  m.submit = (e) => {
+    if (e.target.dataset.refEdit != null) {
+      const k = m.edit, from = ed.names()[k], to = clip(m.editVal);
+      m.errs = { edit: !to ? "Заполните поле" : to.length > 150 ? "Не длиннее 150 символов" : !ed.editField && taken(to, k) ? "Такое значение уже есть" : ed.checkEdit?.(to) };
+      if (m.errs.edit) return render();
+      if (to !== from) { ed.rename(k, to); logAudit("Справочник", "UPDATE", `${table} · ${to}`, `${ed.editField ? "Название" : "Значение"}: ${from || "—"} → ${to}`); toast("Значение изменено"); }
+      m.edit = null; m.errs = {}; return render();
+    }
+    if (e.target.dataset.refAdd != null) {
+      const v = Object.fromEntries(Object.entries(m.addV).map(([k, x]) => [k, clip(x)]));
+      const errs = {};
+      ed.fields.forEach((f) => {
+        if (!v[f.name]) errs[f.name] = "Заполните поле";
+        else if (f.type === "number" && !(Number.isInteger(+v[f.name]) && +v[f.name] >= f.min)) errs[f.name] = f.min ? `Целое число от ${f.min}` : "Целое число, не меньше 0";
+      });
+      if (!errs.name && v.name && !ed.unique && taken(v.name)) errs.name = "Такое значение уже есть";
+      Object.entries(ed.check?.(v) ?? {}).forEach(([k, x]) => { if (x && !errs[k]) errs[k] = x; });
+      m.errs = Object.fromEntries(Object.entries(errs).filter(([, x]) => x));
+      if (Object.keys(m.errs).length) return render();
+      ed.add(v);
+      logAudit("Справочник", "INSERT", `${table} · ${v.name}`, ed.fields.filter((f) => f.name !== "name").map((f) => `${f.label}: ${f.type === "select" ? Object.fromEntries(f.options)[v[f.name]] : v[f.name]}`).join("; ") || "Новое значение");
+      m.adding = false; m.errs = {}; toast("Значение добавлено"); return render();
+    }
+  };
   return openModal(m);
 }
 const AUDIT_COLS = [
@@ -684,6 +893,11 @@ const replyBase = reply;
 reply = (raw) => {
   const s = norm(raw);
   if (ROLE === "student") {
+    // Заказ справки: начать («закажи справку…») или продолжить начатый разговор, если ответ похож на уточнение
+    const draft = DOC_DRAFTS.get(chat.activeId);
+    if (/справк/.test(s) && /(закаж|заказ|оформ|нужн|сделай|хочу|получ)/.test(s)) return docOrderReply(raw, s);
+    if (draft && (/(отмен|не надо|передума|не нужн)/.test(s) || Object.keys(docParse(s, draft)).length)) return docOrderReply(raw, s);
+    if (draft) DOC_DRAFTS.delete(chat.activeId);
     if (CHANGE_WORDS.test(s) && !/справк/.test(s)) return { html: P("Изменять данные через чат может только сотрудник деканата или преподаватель. Я могу подсказать ваше расписание, оценки, долги и статус справок.") + `<p class="hint">Код ${codeTag("AG-01")} — нет прав на это действие</p>` };
     if (/справк|заявк/.test(s)) { const rs = requests.filter((r) => r.student_id === ME.student_id);
       return q(rs.length ? P("Ваши заявки на справки:") + mdTable(["№", "Документ", "Статус", "Готова к"], rs.map((r) => [r.request_id, esc(r.document), r.status, fmtDate(r.due_date)])) : P("Заявок на справки у вас нет. Заказать справку можно во вкладке «Справки».")); }
@@ -726,6 +940,7 @@ Object.assign(ACT, {
   "att-lesson": (el) => openAttendance(schedule.find((x) => lessonKey(x) === el.dataset.k)),
   "order-doc": () => orderDoc(),
   "ref-open": (el) => openRef(+el.dataset.i),
+  services: () => openServices(),
 });
 // Выпадающие списки на страницах ролей
 document.addEventListener("change", (e) => {

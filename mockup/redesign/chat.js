@@ -9,6 +9,12 @@ const ATT = {};            // вложения: id → { id, file, name, thumb, 
 const PROPOSALS = {};      // предложения агента: id → { status, explanation, reason, table, operation, rows, effects, apply }
 const ATTACH_TYPES = [".pdf", ".docx", ".txt"];
 const MAX_FILE_BYTES = 10_000_000, MAX_COUNT = 5, MAX_TOTAL = 20_000_000;
+// Сервисы агента. В макете они не падают сами — чтобы посмотреть вид сбоя, в консоли браузера: SERVICES_SIM = "model"
+// (несколько через запятую: model, search, files, orders); пусто — всё работает
+const SERVICES = [["model", "Модель"], ["search", "Поиск по нормативам"], ["files", "Обработка файлов"], ["orders", "Исполнитель приказов"]];
+let servicesSim = "";
+Object.defineProperty(window, "SERVICES_SIM", { get: () => servicesSim, set: (v) => { servicesSim = String(v ?? ""); render(); } });
+const serviceDown = (id) => servicesSim.split(/[\s,]+/).includes(id);
 const TOOL_STATUS = { query_deanery: "Ищу в базе деканата…", propose_sql_change: "Готовлю изменение…" };
 const activeChat = () => chat.chats.find((c) => c.id === chat.activeId) ?? null;
 const draftKey = () => chat.activeId ?? "new";
@@ -37,6 +43,7 @@ function chatHtml() {
         <div class="composer">
           ${items.length ? `<div class="thumbs${items.every((i) => leaving.has(i.id)) ? " out" : ""}" data-k="thumbs">${items.map(composerThumb).join("")}</div>` : ""}
           ${chat.notice ? `<small class="form-error attach-hint" data-k="notice">${esc(chat.notice)}</small>` : ""}
+          ${serviceDown("model") ? `<div class="form-note agent-down" role="status" data-k="down">Агент сейчас недоступен. Таблицы и формы работают</div>` : ""}
           <form class="input-row" data-chat-form data-k="form">
             <input type="file" id="fileInput" accept="${ATTACH_TYPES.join(",")}" multiple hidden>
             <button type="button" class="icon-btn" title="Прикрепить файлы" aria-label="Прикрепить файлы" data-a="attach">${icon("clip")}</button>
@@ -65,7 +72,7 @@ function messageHtml(m) {
     ${(m.proposals ?? []).map((pid) => { const p = PROPOSALS[pid], d = p.status !== "pending" ? p.status : null;
       if (p.batch) return batchCard(pid);   // много записей — сводка (batch.js)
       return `<div class="proposal-card">${icon("sparkle")}<div><b>${esc(p.explanation)}</b><small>${esc(p.table)} · ${p.operation === "INSERT" ? "новая запись" : `полей: ${p.rows.length}`}</small></div>
-        ${d ? badge(d === "approved" ? "Применено" : "Отклонено", d === "approved" ? "ok" : "muted") : ""}
+        ${d ? badge(d === "approved" ? "Применено" : "Отклонено", d === "approved" ? "ok" : "muted") : p.decision_status ? badge(p.decision_status, "info") : ""}
         <button class="btn sm soft go" data-a="proposal" data-id="${pid}">${d ? "Открыть" : "Посмотреть изменение"}${icon("arrow")}</button></div>`; }).join("")}
     ${copyBtn(m.id)}</div></div>`;
 }
@@ -86,7 +93,7 @@ function chatListHtml() {
 // Можно отправить текст, вложения или и то и другое; файлы с ошибкой надо убрать или повторить
 function canSend() {
   const items = draftItems(), text = chat.texts[draftKey()] ?? "";
-  return (!!text.trim() || items.length > 0) && !items.some((i) => i.status === "error") && !chat.busyId && !chat.queued;
+  return (!!text.trim() || items.length > 0) && !items.some((i) => i.status === "error") && !chat.busyId && !chat.queued && !serviceDown("model");
 }
 const pendingFiles = () => draftItems().some((i) => i.status === "uploading" || i.status === "processing");
 function submitChat() {
@@ -227,9 +234,10 @@ function proposalDialog(pid) {
   const p = PROPOSALS[pid];
   const m = { label: "Изменение от агента", outsideClose: false, reason: "", busy: null, error: null,
     html: () => {
-      const st = { pending: ["Ждёт решения", "info"], approved: ["Применено", "ok"], rejected: ["Отклонено", "muted"] }[p.status];
-      // Отклонение не окончательное: отклонённое изменение можно открыть снова и применить
-      const can = p.status === "pending" || p.status === "rejected", ok = clip(m.reason).length >= REASON_MIN;
+      const st = { pending: [p.decision_status ?? "Ждёт решения", "info"], approved: ["Применено", "ok"], rejected: ["Отклонено", "muted"] }[p.status];
+      // Отклонение не окончательное: отклонённое изменение можно открыть снова и применить.
+      // Заявку студента применяет деканат — сам студент только смотрит
+      const can = (p.status === "pending" || p.status === "rejected") && ROLE !== "student", ok = clip(m.reason).length >= REASON_MIN;
       return `<div class="dialog proposal-dialog">
         <div class="form-head"><div><h3>${can ? "Применить изменения?" : "Изменение от агента"}</h3><p>${esc(p.explanation)}</p></div>
           <button type="button" class="icon-btn" aria-label="Закрыть" data-a="close">${icon("x")}</button></div>
@@ -322,6 +330,9 @@ function proposeChange(raw, s, g) {
     const to = /отклон/.test(s) ? "Отклонена" : /выдан/.test(s) ? "Выдана" : /готов/.test(s) ? "Готова к выдаче" : /работ/.test(s) ? "В работе" : /нов/.test(s) ? "Новая" : null;
     if (!to) return q(P(`Какой статус поставить заявке <b>№ ${r.request_id}</b>? Сейчас — «${esc(r.status)}». Можно: ${REQUEST_STATUSES.filter((x) => x !== r.status).map((x) => `«${x}»`).join(", ")}.`));
     if (r.status === to) return q(P(`Заявка <b>№ ${r.request_id}</b> уже в статусе «${esc(to)}» — менять нечего.`));
+    // Как trg_request_final в базе: выданную или отклонённую заявку нельзя вернуть в работу
+    if (FINAL_STATUS.includes(r.status)) return q(P(`Заявка <b>№ ${r.request_id}</b> уже завершена («${esc(r.status)}») — её статус менять нельзя. Если справка снова нужна, оформите новую заявку.`)
+      + `<p class="hint">Код ${codeTag("RW-02")} — недопустимый переход</p>`);
     const rows = [{ label: "Статус", before: r.status, after: to }];
     if (!r.processed_by) rows.push({ label: "Исполнитель", before: null, after: ME.full_name });
     return { tool: "propose_sql_change", html: P(`Подготовил изменение заявки № ${r.request_id} (${esc(r.document)}, ${esc(shortName(r.student))}). Проверьте его и примените.`),
@@ -388,7 +399,7 @@ function studentReply(st) {
     + mdTable(["Зачётка", "ФИО", "Группа", "Категория"], st.map((r) => [r.record_book_number, esc(r.student), r.group_name, esc(r.category)])));
 }
 function scholarshipReply(s) {
-  const all = students.filter((x) => x.scholarships), top = all.filter((x) => x.scholarships.startsWith("Повышенная"));
+  const all = students.filter((x) => x.scholarships), top = all.filter((x) => x.scholarships === SCHOLARSHIP_TYPES[1].name);
   const hi = /повыш/.test(s) && top.length > 0, rows = hi ? top : all;
   const note = /повыш/.test(s) && !top.length ? "Повышенную стипендию сейчас не получает никто — отличников нет. " : "";
   return q(P(`${note}${hi ? "Повышенную стипендию" : "Стипендию"} получают <b>${rows.length}</b> ${plural(rows.length, "студент", "студента", "студентов")}:`)
@@ -464,7 +475,7 @@ const ACT = {
   // вкладки
   enroll: () => workflowDialog(ENROLL),
   "add-groups": () => openGroup(null), "add-works": () => openWork(null), "add-requests": () => openRequest(null),
-  "add-practice": () => openPractice(null), "add-employees": () => openEmployee(null), "add-schedule": () => openSlot(null, { term_id: TERM_NAME }),
+  "add-practice": () => openPractice(null), "add-schedule": () => openSlot(null, { term_id: TERM_NAME }),
   group: (el) => openGroup(GROUPS.find((g) => g.group_id === +el.dataset.id)),
   "group-students": (el) => goTab("students", { group_name: el.dataset.v }),
   "group-schedule": (el) => { Object.assign(sched, { view: "week", by: "group", who: el.dataset.v }); goTab("schedule"); },

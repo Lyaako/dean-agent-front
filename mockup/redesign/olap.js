@@ -38,17 +38,18 @@ students.filter((s) => s.status === ACTIVE).forEach((s) => {
 });
 
 // Приказы за последние 12 месяцев: отчисления и академы — у студентов с таким статусом, остальное — выборочно у обучающихся
-const MOVE_TYPES = [["expel", "Отчисление"], ["leave", "Академический отпуск"], ["return", "Выход из академа"], ["restore", "Восстановление"], ["transfer", "Перевод в другую группу"]];
+// Движение контингента — виды приказов из order_type (коды базы), названия — из справочника
+const MOVE_TYPES = ["expel", "leave", "leave_return", "reinstate", "transfer"].map((c) => [c, orderTypeName(c)]);
 const MOVE_NAME = Object.fromEntries(MOVE_TYPES);
 const MONTH_SHORT = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
 const MONTHS12 = Array.from({ length: 12 }, (_, i) => { const d = D(TODAY); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 11 + i); return d.toISOString().slice(0, 7); });
 // Отчисления копятся после сессий (февраль, июль), академы — в начале семестров
-const PEAKS = { expel: ["02", "03", "07", "09"], leave: ["09", "10", "02"], return: ["09", "02"], restore: ["09", "02"], transfer: ["09", "02", "10"] };
+const PEAKS = { expel: ["02", "03", "07", "09"], leave: ["09", "10", "02"], leave_return: ["09", "02"], reinstate: ["09", "02"], transfer: ["09", "02", "10"] };
 const moves = [];
 students.forEach((s) => {
   const h = h01(`move|${s.student_id}`);
   const type = s.status === "Отчислен" ? "expel" : s.status === "Академический отпуск" ? "leave"
-    : h < 0.07 ? "restore" : h < 0.14 ? "transfer" : h < 0.2 ? "return" : h < 0.27 ? "leave" : h > 0.9 ? "expel" : null;
+    : h < 0.07 ? "reinstate" : h < 0.14 ? "transfer" : h < 0.2 ? "leave_return" : h < 0.27 ? "leave" : h > 0.9 ? "expel" : null;
   if (!type) return;
   const h2 = h01(`when|${s.student_id}`), peaks = MONTHS12.filter((m) => PEAKS[type].includes(m.slice(5)));
   const month = h2 < 0.7 && peaks.length ? peaks[Math.floor(h2 / 0.7 * peaks.length)] : MONTHS12[Math.floor(h2 * 12)];
@@ -274,11 +275,11 @@ function movesView() {
   const n = (t) => ms.filter((m) => m.type === t).length;
   const list = pick ? ms.filter((m) => keyOf(m.order_date.slice(0, 7)) === pick) : ms;
   const cols = [{ label: "Дата", field: "order_date", filter: "date" }, { label: "Приказ", field: "order_number", filter: "text" },
-    { label: "Вид", field: "order_type", filter: "enum", badge: true, render: (r) => badge(r.order_type, { expel: "bad", leave: "warn", return: "info", restore: "ok", transfer: "muted" }[r.type]) },
+    { label: "Вид", field: "order_type", filter: "enum", badge: true, render: (r) => badge(r.order_type, { expel: "bad", leave: "warn", leave_return: "info", reinstate: "ok", transfer: "muted" }[r.type]) },
     { label: "Студент", field: "student", filter: "text", bold: true }, { label: "Группа", field: "group_name", filter: "enum" }];
   return [`<div class="olap-filters">${olapSelect("Курс", "course", courseOpts(), olap.course, "Все")}${olapSelect("Группа", "group", groupOptsFor(), olap.group, "Все")}
       <label class="field"><span>Roll-up по времени</span>${seg("olap-period", [["month", "Месяцы"], ["term", "Семестры"], ["year", "Год"]], olap.period)}</label></div>`,
-    tiles([["Отчислено", n("expel"), "за 12 месяцев", n("expel") ? "bad" : ""], ["Ушли в академ", n("leave"), `вернулись — ${n("return")}`], ["Восстановлено", n("restore"), "", "ok"], ["Переведено", n("transfer"), "в другую группу"]]),
+    tiles([["Отчислено", n("expel"), "за 12 месяцев", n("expel") ? "bad" : ""], ["Ушли в академ", n("leave"), `вернулись — ${n("leave_return")}`], ["Восстановлено", n("reinstate"), "", "ok"], ["Переведено", n("transfer"), "в другую группу"]]),
     `<section class="card"><div class="table-head"><h2>Приказы по студентам</h2>${legend}</div>${bars}</section>`,
     dataTable("olap-moves", cols, applyTable("olap-moves", cols, list), list, { rowKey: (r) => r.order_number,
       title: pick ? `Drill-down: ${labelOf(pick)} · ${list.length} ${plural(list.length, "приказ", "приказа", "приказов")}` : "Все приказы за 12 месяцев · нажмите на столбец, чтобы раскрыть период" })];

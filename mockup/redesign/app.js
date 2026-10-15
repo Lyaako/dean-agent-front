@@ -73,7 +73,11 @@ const shellHtml = () => `<div class="app" id="app">
 </div>`;
 
 let meOpen = false;
-const meHtml = () => `<div class="when"><b>${WD_FULL[D(TODAY).getUTCDay()]}, ${human(TODAY)}</b></div>
+// У админа в шапке на месте даты — состояние сервисов агента (SERVICES в chat.js); ROLE появляется после загрузки roles.js
+const isAdminNow = () => typeof ROLE !== "undefined" && ROLE === "admin";
+const servicesBtn = () => `<button type="button" class="btn sm ghost svc-btn" data-a="services" title="Состояние сервисов" aria-label="Сервисы: ${SERVICES.some(([id]) => serviceDown(id)) ? "есть недоступные" : "всё работает"}">
+  <span class="badge ${SERVICES.some(([id]) => serviceDown(id)) ? "warn" : "ok"}"><span class="svc-label">Сервисы</span></span></button>`;
+const meHtml = () => `${isAdminNow() ? servicesBtn() : `<div class="when"><b>${WD_FULL[D(TODAY).getUTCDay()]}, ${human(TODAY)}</b></div>`}
   <button class="avatar t${tone(ME.full_name)} avatar-btn" data-a="me" title="${esc(`${ME.full_name} — ${ROLE_NAME}`)}" aria-haspopup="menu" aria-expanded="${meOpen}">${initials(ME.full_name)}</button>
   ${meOpen ? `<div class="menu" role="menu"><div class="menu-head"><b>${esc(ME.full_name)}</b><small>${ROLE_NAME} · ${esc(myLogin())}</small></div>
     <button role="menuitem" class="menu-item" data-a="account">${icon("users")}<span>Личный кабинет</span></button>
@@ -155,7 +159,7 @@ const REQUEST_COLS = [
   { label: "Создана", field: "created_at", filter: "date", text: (r) => fmtDateTime(r.created_at) },
   { label: "Срок", field: "due_date", filter: "date",
     render: (r) => (isOverdue(r) ? `<span class="late" title="Просрочена">${fmtDate(r.due_date)}</span>`
-      : r.due_date === TODAY && !FINAL_STATUS.includes(r.status) ? `<span class="soon" title="Срок сегодня">${fmtDate(r.due_date)}</span>` : fmtDate(r.due_date)) },
+      : r.due_date === TODAY && OVERDUE.status.includes(r.status) ? `<span class="soon" title="Срок сегодня">${fmtDate(r.due_date)}</span>` : fmtDate(r.due_date)) },
   { label: "Исполнитель", field: (r) => r.processed_by || null, filter: "enum" },
 ];
 const PRACTICE_COLS = [
@@ -415,7 +419,10 @@ function openRequest(r) {
       rel("document_type_id", "Вид документа", opt.docTypes, { required: true }),
       { name: "copies", label: "Количество экземпляров", kind: "int", range: [1, 10] },
       { name: "purpose", label: "Куда требуется справка", kind: "text" },
-      rel("request_status_id", "Статус заявки", opt.list(REQUEST_STATUSES), { required: true }), rel("processed_by_id", "Исполнитель", opt.staff)],
+      // Как trg_request_final в базе: у завершённой заявки (is_final) статус не меняется
+      rel("request_status_id", "Статус заявки", opt.list(REQUEST_STATUSES), { required: true,
+        ...(r && FINAL_STATUS.includes(r.status) ? { locked: true, hint: "Заявка завершена — статус не меняется. Нужна справка — создайте новую заявку" } : {}) }),
+      rel("processed_by_id", "Исполнитель", opt.staff)],
     base: r ? { student_id: String(r.student_id), document_type_id: r.document, copies: String(r.copies), purpose: r.purpose ?? "", request_status_id: r.status, processed_by_id: r.processed_by ?? "" } : undefined,
     // Сотрудник взял заявку в работу — исполнителем становится он
     derive: (changed, v) => (changed === "request_status_id" && !v.processed_by_id ? { processed_by_id: ME.full_name } : {}),
@@ -457,30 +464,33 @@ function openPractice(p) {
 
 /* ═════════ СОТРУДНИКИ ═════════
    У созданного сотрудника человек не меняется — правится только его ФИО */
+// Сотрудник: меняется только ФИО; остальные реквизиты ведёт отдел кадров. Создания и удаления в интерфейсе нет
+const lockedField = (f) => ({ ...f, locked: true, required: false });
 function openEmployee(e) {
-  const person = e ? [{ name: "last_name", label: "Фамилия", kind: "text", required: true }, { name: "first_name", label: "Имя", kind: "text", required: true },
-    { name: "middle_name", label: "Отчество", kind: "text", hint: "может отсутствовать" }] : [rel("person_id", "Человек", opt.people, { required: true })];
-  formDialog(record({ row: e, title: e ? e.full_name : "Новый сотрудник",
-    fields: [...person, { name: "personnel_number", label: "Табельный номер", kind: "text", required: true },
-      rel("position_id", "Должность", opt.positions, { required: true }),
-      { name: "employment_rate", label: "Доля ставки", kind: "decimal", range: [0.25, 1.5], hint: "0.25–1.50" },
-      { name: "hire_date", label: "Дата приёма на работу", kind: "date", required: true }, { name: "dismissal_date", label: "Дата увольнения", kind: "date", hint: "пусто — работает" }],
-    base: e ? { last_name: e.last_name, first_name: e.first_name, middle_name: e.middle_name ?? "", personnel_number: e.personnel_number, position_id: e.position,
-      employment_rate: String(e.employment_rate), hire_date: e.hire_date, dismissal_date: e.dismissal_date ?? "" } : undefined,
-    checks: (v) => ({ dismissal_date: v.dismissal_date && v.hire_date && v.dismissal_date < v.hire_date ? "Дата увольнения не может быть раньше даты приёма" : undefined }),
+  formDialog(record({ row: e, title: e.full_name, note: "Реквизиты ведёт отдел кадров",
+    fields: [{ name: "last_name", label: "Фамилия", kind: "text", required: true }, { name: "first_name", label: "Имя", kind: "text", required: true },
+      { name: "middle_name", label: "Отчество", kind: "text", hint: "может отсутствовать" },
+      lockedField({ name: "personnel_number", label: "Табельный номер", kind: "text" }),
+      lockedField(rel("position_id", "Должность", opt.positions)),
+      lockedField({ name: "employment_rate", label: "Доля ставки", kind: "decimal" }),
+      lockedField({ name: "hire_date", label: "Дата приёма на работу", kind: "date" }), lockedField({ name: "dismissal_date", label: "Дата увольнения", kind: "date", hint: "пусто — работает" })],
+    base: { last_name: e.last_name, first_name: e.first_name, middle_name: e.middle_name ?? "", personnel_number: e.personnel_number, position_id: e.position,
+      employment_rate: String(e.employment_rate), hire_date: e.hire_date, dismissal_date: e.dismissal_date ?? "" },
     onSubmit: (v) => {
-      if (employees.some((x) => x !== e && x.personnel_number === v.personnel_number.trim())) throw new Error("Сотрудник с таким табельным номером уже есть");
-      const pos = POSITIONS.find((x) => x && x[0] === v.position_id);
-      const names = e ? [v.last_name, v.first_name, v.middle_name].map((x) => x.trim()) : v.person_id.split(" ");
-      const row = { last_name: names[0], first_name: names[1], middle_name: names[2] || null, full_name: names.filter(Boolean).join(" "), personnel_number: v.personnel_number.trim(),
-        position: pos[0], position_id: pos[0], category: pos[1], employment_rate: v.employment_rate === "" ? 1 : +String(v.employment_rate).replace(",", "."), hire_date: v.hire_date, dismissal_date: v.dismissal_date || null };
-      if (e) { Object.assign(e, row); return saved("employees", e.employee_id); }
-      const id = Math.max(...employees.map((x) => x.employee_id)) + 1;
-      employees.push({ ...row, employee_id: id, unit: pos[1] === "teaching" ? "ИС" : "Деканат" });
-      PEOPLE.splice(PEOPLE.findIndex((p) => fio(p) === v.person_id), 1);
-      return saved("employees", id, true);
-    },
-    onDelete: e && (() => employees.splice(employees.indexOf(e), 1)) }));
+      const before = e.full_name, names = [v.last_name, v.first_name, v.middle_name];
+      Object.assign(e, { last_name: names[0], first_name: names[1], middle_name: names[2] || null, full_name: names.filter(Boolean).join(" ") });
+      renamePerson(before, e.full_name);
+      logAudit("Сотрудник", "UPDATE", e.full_name, `ФИО: ${before} → ${e.full_name}`);
+      return saved("employees", e.employee_id);
+    } }));
+}
+// В базе связи — по id, и новое ФИО видно везде сразу; в макете ФИО хранится строкой, поэтому заменяем его во всех данных
+function renamePerson(from, to) {
+  if (from === to) return;
+  const swap = (list, fields) => list.forEach((x) => fields.forEach((f) => { if (x[f] === from) x[f] = to; }));
+  swap(slots, ["teacher"]); swap(ASSIGNMENTS, ["teacher"]); swap(sheets, ["examiner"]); swap(works, ["supervisor", "reviewer"]); swap(practices, ["supervisor"]);
+  swap(requests, ["processed_by"]); swap(GROUPS, ["curator"]); swap(users, ["person"]); swap(plannedOrders, ["signed_by"]);
+  buildSchedule();
 }
 
 /* ═════════ СТРАНИЦЫ ═════════ */
@@ -496,7 +506,7 @@ PAGES.students = () => tablePage("students", "Студенты", STUDENT_COLS, s
 PAGES.works = () => tablePage("works", "Курсовые и ВКР", WORK_COLS, works, { key: (r) => r.work_id, open: openWork });
 PAGES.requests = () => tablePage("requests", "Заявки на справки", REQUEST_COLS, requests, { key: (r) => r.request_id, open: openRequest });
 PAGES.practice = () => tablePage("practice", "Практики", PRACTICE_COLS, practices, { key: (r) => r.placement_id, open: openPractice });
-PAGES.employees = () => tablePage("employees", "Сотрудники", EMPLOYEE_COLS, employees, { key: (r) => r.employee_id, open: openEmployee });
+PAGES.employees = () => tablePage("employees", "Сотрудники", EMPLOYEE_COLS, employees, { key: (r) => r.employee_id, open: openEmployee, add: false });
 
 let groupsView = "cards";
 PAGES.groups = () => {

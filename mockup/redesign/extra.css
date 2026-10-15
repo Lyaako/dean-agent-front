@@ -497,7 +497,7 @@ button.lesson { width: 100%; border: 0; text-align: left; font: inherit; color: 
 .sc-bar i { display: block; min-height: 3px; border-radius: 4px; }
 .sc-v { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .sc-l { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
-.mv-expel { background: var(--rose); } .mv-leave { background: var(--orchid); } .mv-return { background: var(--sky); } .mv-restore { background: var(--mint); } .mv-transfer { background: var(--indigo); }
+.mv-expel { background: var(--rose); } .mv-leave { background: var(--orchid); } .mv-leave_return { background: var(--sky); } .mv-reinstate { background: var(--mint); } .mv-transfer { background: var(--indigo); }
 
 /* Заголовок страницы компактнее: 34 px вместо 58, без лишних отступов — таблица ближе к верху */
 .page-head { padding-top: 4px; }
@@ -591,6 +591,23 @@ body {
 .ref-row:last-child { border-bottom: 0; }
 .ref-row b { font-weight: 500; }
 .ref-row small { color: var(--muted); }
+/* Справочник: правка в строке и добавление значения */
+.ref-row { align-items: center; }
+.ref-side { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.ref-row .icon-btn { width: 32px; height: 32px; }
+.ref-row .icon-btn .ic { width: 16px; height: 16px; }
+.ref-editing { flex-wrap: nowrap; padding: 6px 0; }
+.ref-edit-in { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.ref-edit-in .text-input { height: 38px; width: 100%; background-color: var(--surface); }
+.ref-add { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 16px; background: var(--fill); }
+.ref-add .text-input, .ref-add .select { background-color: var(--surface); }
+.ref-add-actions { display: flex; justify-content: flex-end; gap: 8px; }
+/* Временный пароль и кнопка «Сервисы» в шапке */
+.pw-box { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-radius: 16px; background: var(--fill); }
+.pw-box code { font: 600 18px/1.3 ui-monospace, monospace; letter-spacing: .06em; color: var(--ink); word-break: break-all; }
+.svc-btn { padding: 0 6px; }
+.svc-btn .badge { pointer-events: none; }
+@media (max-width: 1100px) { .svc-label { display: none; } .svc-btn .badge { padding: 0 8px; } }   /* узко — только точка, как дата скрывается */
 
 /* Переключатель (seg): белая подложка с тенью, как у поиска — на любом фоне выглядит одинаково;
    выбранный вариант — голубая «таблетка». Рамка фокуса — только с клавиатуры и внутри кнопки */
