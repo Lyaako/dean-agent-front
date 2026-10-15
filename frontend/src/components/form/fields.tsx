@@ -4,6 +4,7 @@ import { fieldHint, fieldLabel, type FieldSpec } from "../../api/schema";
 import { useLookup, type Option } from "./lookups";
 import { norm } from "../../lib/format";
 import type { Row } from "../../api/resources";
+import { errorText } from "../../api/errors";
 
 export type Kind = "int" | "decimal" | "text" | "textarea" | "date" | "time" | "datetime" | "bool" | "choice" | "relation";
 
@@ -230,7 +231,7 @@ export function LookupSelect({ id, table, column, value, onChange, disabled, req
       )}
       {open && !disabled && (
         <div className="lookup-list" ref={list} role="listbox" style={pos}>
-          {error ? <div className="lookup-empty">Не удалось загрузить список</div>
+          {error ? <div className="lookup-empty" role="alert">{errorText(error)}</div>
             : isLoading ? <div className="lookup-empty">Загрузка…</div>
             : !shown.length ? <div className="lookup-empty">Ничего не найдено</div>
             : shown.map((o, i) => (

@@ -66,13 +66,13 @@ export function ConfirmDialog({ title, text, confirm, danger, busy, error, onCon
   onConfirm: () => void; onCancel: () => void;
 }) {
   return (
-    <Modal onClose={onCancel} label={title}>
+    <Modal onClose={() => { if (!busy) onCancel(); }} label={title}>
       <div className="dialog confirm">
         <span className={`dialog-ico${danger ? " danger" : ""}`}><Icon name={danger ? "trash" : "sparkle"} /></span>
         <div><h3>{title}</h3>{text && <p>{text}</p>}</div>
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="actions">
-          <button className="btn" onClick={onCancel}>Отменить</button>
+          <button type="button" className="btn" onClick={onCancel} disabled={busy}>Отменить</button>
           <button className={`btn ${danger ? "danger" : "primary"}`} onClick={onConfirm} disabled={busy} autoFocus>{busy ? "Подождите…" : confirm}</button>
         </div>
       </div>

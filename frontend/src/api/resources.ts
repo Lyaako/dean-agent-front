@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { api, newKey } from "./client";
+import { api, ApiError, newKey } from "./client";
 
 export type Row = Record<string, unknown>;
 export type Params = Record<string, string | number | boolean | null | undefined>;
@@ -16,6 +16,7 @@ export async function fetchAll(name: string, params: Params = {}): Promise<Row[]
     const page = await api<Page>(`/resources/${name}`, { query: { ...params, limit: PAGE, offset: i * PAGE } });
     out.push(...page.items);
     if (!page.has_more) break;
+    if (i === MAX_PAGES - 1) throw new ApiError(413, "resource_too_large", "Таблица содержит больше 20 000 строк — уточните выборку");
   }
   return out;
 }
@@ -46,5 +47,5 @@ export const deleteRow = (table: string, key: Key) =>
   api<Row>(`/resources/${table}`, { method: "DELETE", query: keyQuery(key) });
 
 // Предметные команды (приказы и т. п.) — всегда с ключом идемпотентности
-export const runWorkflow = <T = Row>(name: string, body: Row, idempotencyKey = newKey()) =>
+export const runWorkflow = <T = Row>(name: string, body: Row, idempotencyKey: string = newKey()) =>
   api<T>(`/workflows/${name}`, { method: "POST", json: body, headers: { "Idempotency-Key": idempotencyKey } });

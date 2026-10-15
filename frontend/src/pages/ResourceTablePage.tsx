@@ -38,6 +38,7 @@ export function ResourceTablePage({ id, title, view, table, keyField, cols, form
   const filtered = useMemo(() => applyTable(state, cols, rows), [state, cols, rows]);
   const [open, setOpen] = useState<{ row: Row | null } | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const dialogRow = open?.row ? rows.find((r) => r[keyField] === open.row?.[keyField]) ?? open.row : null;
 
   return (
     <Page title={title}>
@@ -53,7 +54,7 @@ export function ResourceTablePage({ id, title, view, table, keyField, cols, form
         <RecordDialog table={table} config={form} initial={initial}
           recordKey={open.row ? { [keyField]: open.row[keyField] } : null}
           title={open.row ? rowTitle(open.row) : newTitle}
-          extra={open.row && dialogExtra ? dialogExtra(open.row) : undefined}
+          extra={dialogRow && dialogExtra ? dialogExtra(dialogRow) : undefined}
           onClose={() => setOpen(null)}
           onSaved={(saved) => { setFlash(null); requestAnimationFrame(() => setFlash(String(saved[keyField]))); }} />
       )}

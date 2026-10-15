@@ -17,6 +17,7 @@ export function useVisibleTabs(): TabDef[] {
 }
 
 export function Shell() {
+  const { me } = useAuth();
   const [scrolled, setScrolled] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   return (
@@ -26,7 +27,7 @@ export function Shell() {
           <span className="orb logo-orb" aria-hidden="true" />
           <b>Деканат</b>
         </div>
-        <ChatBar open={chatOpen} setOpen={setChatOpen} />
+        <ChatBar key={me?.user_id} open={chatOpen} setOpen={setChatOpen} />
         <Me />
       </header>
       <div className={`scrim${chatOpen ? " show" : ""}`} onClick={() => setChatOpen(false)} />

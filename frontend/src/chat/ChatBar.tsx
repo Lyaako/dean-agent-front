@@ -6,8 +6,9 @@ import { anyModalOpen, ConfirmDialog } from "../components/ui";
 import { ATTACH_TYPES } from "../api/files";
 import { useChat } from "./useChat";
 import { useAttachments } from "./attachments/useAttachments";
-import { ComposerThumbs, FileViewer, MessageThumbs, type ViewTarget } from "./attachments/Thumbs";
+import { ComposerThumbs, ContextDetails, FileViewer, MessageThumbs, type ViewTarget } from "./attachments/Thumbs";
 import { ProposalDialog } from "./proposals/ProposalDialog";
+import { ProposalQueue } from "./proposals/ProposalQueue";
 import { TABLE_NAME } from "./proposals/useProposal";
 import type { ChatMessage, ChatSummary } from "./store/ChatStore";
 
@@ -18,11 +19,12 @@ export function ChatBar({ open, setOpen }: { open: boolean; setOpen: (v: boolean
   const draftKey = c.chat?.id ?? "new";
   const att = useAttachments({ maxCount: c.attachments.maxCount, maxTotal: c.attachments.maxTotal }, draftKey);
   const [texts, setTexts] = useState<Record<string, string>>({});
+  const textVersions = useRef<Record<string, number>>({});
   const text = texts[draftKey] ?? "";
-  const setText = (v: string) => setTexts((t) => ({ ...t, [draftKey]: v }));
+  const setText = (v: string) => { textVersions.current[draftKey] = (textVersions.current[draftKey] ?? 0) + 1; setTexts((t) => ({ ...t, [draftKey]: v })); };
   const [queued, setQueued] = useState(false);
   const [view, setView] = useState<ViewTarget | null>(null);
-  const [proposal, setProposal] = useState<{ id: string; msgId: string } | null>(null);
+  const [proposal, setProposal] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState(true);
   const input = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -59,12 +61,17 @@ export function ChatBar({ open, setOpen }: { open: boolean; setOpen: (v: boolean
   const canSend = (!!text.trim() || att.items.length > 0) && !att.hasErrors && !c.anyBusy && !queued;
 
   function send() {
-    const files = att.take();
+    const files = att.ready();
+    if (!files) return;
     const msg = text.trim();
     if (!msg && !files.length) return;
-    c.send(msg, files);
-    setText("");
-    requestAnimationFrame(grow);
+    const version = textVersions.current[draftKey] ?? 0;
+    const submittedIds = att.items.map((item) => item.id);
+    c.send(msg, files, () => {
+      submittedIds.forEach(att.remove);
+      if ((textVersions.current[draftKey] ?? 0) === version) setTexts((t) => ({ ...t, [draftKey]: "" }));
+      requestAnimationFrame(grow);
+    });
   }
 
   function submit(e?: FormEvent) {
@@ -90,6 +97,7 @@ export function ChatBar({ open, setOpen }: { open: boolean; setOpen: (v: boolean
           <button type="button" className="icon-btn" aria-label="Список чатов" aria-pressed={listOpen} onClick={() => setListOpen(!listOpen)}><Icon name="sidebar" /></button>
           <span className="orb" />
           <div className="who"><b>Агент деканата</b><small>{c.chat?.title ?? "Новый чат"}</small></div>
+          <ProposalQueue onOpen={setProposal} />
         </div>
 
         <div className="chat-body">
@@ -98,10 +106,10 @@ export function ChatBar({ open, setOpen }: { open: boolean; setOpen: (v: boolean
           <div className="chat-pane">
             <div className="messages" ref={box} aria-live="polite">
               <div className="thread">
-                {!c.messages.length && <div className="hello"><span className="orb xl" /><h2>Чем помочь?</h2></div>}
+                {!c.messages.length && <div className="hello"><span className="orb xl" /><h2>{c.loading ? "Загружаю чаты…" : "Чем помочь?"}</h2></div>}
                 {c.messages.map((m) => (
                   <Message key={m.id} m={m} onOpenFile={(a) => setView({ name: a.filename, meta: a })}
-                    onProposal={(id) => setProposal({ id, msgId: m.id })} />
+                    onProposal={setProposal} />
                 ))}
                 {c.busy && (
                   <div className="msg agent">
@@ -117,6 +125,8 @@ export function ChatBar({ open, setOpen }: { open: boolean; setOpen: (v: boolean
                 <ComposerThumbs items={att.items} onRemove={att.remove} onRetry={att.retry} onOpen={(f) => setView({ name: f.name, file: f })} />
               )}
               {att.notice && <small className="form-error attach-hint">{att.notice}</small>}
+              {att.items.length > 0 && !c.attachments.agentReads && <small className="form-error attach-hint">Агент сейчас не готов принять вложения. При отправке файлы останутся в черновике.</small>}
+              {c.notice && <div className="form-error attach-hint" role="alert">{c.notice} <button type="button" className="btn sm soft" onClick={c.retry}>{c.disconnected ? "Восстановить соединение" : "Повторить загрузку"}</button></div>}
               <form className="input-row" onSubmit={submit}>
                 <input ref={fileInput} type="file" accept={ATTACH_TYPES.join(",")} multiple hidden
                   onChange={(e) => { if (e.target.files) att.add(e.target.files); e.target.value = ""; }} />
@@ -125,7 +135,7 @@ export function ChatBar({ open, setOpen }: { open: boolean; setOpen: (v: boolean
                   onChange={(e) => { setText(e.target.value); grow(); }}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }} />
                 {c.busy
-                  ? <button type="button" className="icon-btn send" title="Остановить" aria-label="Остановить" onClick={c.stop}><Icon name="stop" /></button>
+                  ? <button type="button" className="icon-btn send" title={c.stopping ? "Останавливаю агента…" : !c.canStop ? "Восстанавливаю идентификатор запуска…" : "Остановить"} aria-label="Остановить" disabled={!c.canStop || c.stopping} onClick={c.stop}><Icon name="stop" /></button>
                   : queued
                     ? <button type="button" className="icon-btn send" title="Отправим, когда файлы загрузятся" aria-label="Ждём загрузку файлов" onClick={() => setQueued(false)}><span className="spinner sm" /></button>
                     : <button type="submit" className="icon-btn send" title="Отправить" aria-label="Отправить" disabled={!canSend}><Icon name="up" /></button>}
@@ -136,7 +146,7 @@ export function ChatBar({ open, setOpen }: { open: boolean; setOpen: (v: boolean
         </div>
       </section>
       {view && <FileViewer target={view} onClose={() => setView(null)} />}
-      {proposal && <ProposalDialog id={proposal.id} onClose={() => setProposal(null)} onDecided={(s) => c.markDecision(proposal.msgId, proposal.id, s)} />}
+      {proposal && <ProposalDialog id={proposal} onClose={() => setProposal(null)} onDecided={() => { void c.refreshCurrent(); }} />}
     </div>
   );
 }
@@ -182,6 +192,7 @@ function Message({ m, onOpenFile, onProposal }: { m: ChatMessage; onOpenFile: (a
       <div className="msg agent error">
         <span className="dialog-ico danger sm"><Icon name="alert" /></span>
         <div className="body"><p>{m.text}</p>{m.requestId && <small className="req-id">Код запроса: {m.requestId}</small>}
+          <ContextDetails context={m.attachment_context} />
           <CopyButton text={m.requestId ? `${m.text} (код запроса: ${m.requestId})` : m.text} /></div>
       </div>
     );
@@ -193,13 +204,14 @@ function Message({ m, onOpenFile, onProposal }: { m: ChatMessage; onOpenFile: (a
         <div className="md">
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ table: ({ children }) => <div className="mini"><table>{children}</table></div> }}>{m.text}</ReactMarkdown>
         </div>
+        <ContextDetails context={m.attachment_context} />
         {m.proposals?.map((p) => {
           const d = m.decisions?.[p.id];
           return (
             <div key={p.id} className="proposal-card">
               <Icon name="sparkle" />
               <div><b>{p.explanation || "Агент предлагает изменение"}</b><small>{TABLE_NAME[p.preview.table] ?? p.preview.table} · {p.preview.operation === "INSERT" ? "новая запись" : `полей: ${p.preview.changed_columns.length}`}</small></div>
-              {d ? <span className={`badge ${d === "approved" ? "ok" : "muted"}`}>{d === "approved" ? "Применено" : "Отклонено"}</span> : null}
+              {d ? <span className={`badge ${d === "approved" ? "ok" : "muted"}`}>{d === "approved" ? "Подтверждено" : "Отклонено"}</span> : null}
               <button className="btn sm soft go" onClick={() => onProposal(p.id)}>{d ? "Открыть" : "Посмотреть изменение"}<Icon name="arrow" /></button>
             </div>
           );
@@ -220,6 +232,7 @@ function ChatList({ chats, activeId, onOpen, onRename, onRemove, onNew }: {
   chats: ChatSummary[]; activeId?: string; onOpen: (id: string) => void; onRename: (id: string, t: string) => void; onRemove: (id: string) => void; onNew: () => void;
 }) {
   const [editing, setEditing] = useState<{ id: string; title: string } | null>(null);
+  const cancelRename = useRef(false);
   const [removing, setRemoving] = useState<ChatSummary | null>(null);
   const groups = ["Сегодня", "Вчера", "Ранее"].map((g) => [g, chats.filter((c) => dayGroup(c.updatedAt) === g)] as const).filter(([, l]) => l.length);
   return (
@@ -230,14 +243,14 @@ function ChatList({ chats, activeId, onOpen, onRename, onRemove, onNew }: {
         <div key={g} className="cl-group">
           <small className="ff-l">{g}</small>
           {list.map((c) => editing?.id === c.id ? (
-            <form key={c.id} className="cl-item editing" onSubmit={(e) => { e.preventDefault(); onRename(c.id, editing.title); setEditing(null); }}>
-              <input className="ff-in" autoFocus value={editing.title} onChange={(e) => setEditing({ id: c.id, title: e.target.value })}
-                onBlur={() => { onRename(c.id, editing.title); setEditing(null); }} onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setEditing(null); } }} />
+            <form key={c.id} className="cl-item editing" onSubmit={(e) => { e.preventDefault(); e.currentTarget.querySelector("input")?.blur(); }}>
+              <input className="ff-in" autoFocus maxLength={255} value={editing.title} onChange={(e) => setEditing({ id: c.id, title: e.target.value })}
+                onBlur={() => { if (!cancelRename.current) onRename(c.id, editing.title); setEditing(null); }} onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); cancelRename.current = true; setEditing(null); } }} />
             </form>
           ) : (
             <div key={c.id} className={`cl-item${c.id === activeId ? " active" : ""}`}>
               <button type="button" className="cl-open" onClick={() => onOpen(c.id)} title={c.title}><Icon name="message" /><span>{c.title}</span></button>
-              <button type="button" className="cl-act" aria-label="Переименовать" onClick={() => setEditing({ id: c.id, title: c.title })}><Icon name="edit" /></button>
+              <button type="button" className="cl-act" aria-label="Переименовать" onClick={() => { cancelRename.current = false; setEditing({ id: c.id, title: c.title }); }}><Icon name="edit" /></button>
               <button type="button" className="cl-act" aria-label="Удалить" onClick={() => setRemoving(c)}><Icon name="trash" /></button>
             </div>
           ))}

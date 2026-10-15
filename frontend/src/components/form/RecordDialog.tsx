@@ -100,7 +100,9 @@ export function RecordDialog({ table, recordKey, title, config, initial, onClose
   const dirty = (isNew ? fields.some(([n]) => values[n] !== base[n] && values[n] !== "" && values[n] !== false) : changed.length > 0) || lChanged.length > 0;
 
   const [busy, setBusy] = useState(false);
+  const pending = useRef(false);
   const [err, setErr] = useState<unknown>(null);
+  const [partialSaved, setPartialSaved] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [askUnsaved, setAskUnsaved] = useState(false);
@@ -132,15 +134,24 @@ export function RecordDialog({ table, recordKey, title, config, initial, onClose
 
   async function save(e?: FormEvent) {
     e?.preventDefault();
+    if (pending.current || (!editable && !linkedEditable) || row.error || linkedRow.error || (!isNew && !row.data)) return;
     setAskUnsaved(false);
     if (!validate()) return;
+    pending.current = true;
     setBusy(true);
     setErr(null);
     try {
-      if (linked && lChanged.length) {
+      if (linked && linkedEditable && lChanged.length) {
         const patch: Row = {};
         for (const [n, sp] of lChanged) patch[n] = fromInput(lValues[n], kindOf(n, sp), sp);
-        await updateRow(linked.table, linkedKey!, patch);
+        const savedPerson = await updateRow(linked.table, linkedKey!, patch);
+        const savedValues = rowToValues(savedPerson, linkedFields);
+        setLValues(savedValues);
+        setLBase(savedValues);
+        setPartialSaved(true);
+        qc.setQueryData(["row", linked.table, linkedKey], savedPerson);
+        qc.invalidateQueries({ queryKey: ["res"] });
+        qc.invalidateQueries({ queryKey: ["lookup"] });
       }
       let saved: Row = row.data ?? {};
       if (isNew) {
@@ -150,7 +161,7 @@ export function RecordDialog({ table, recordKey, title, config, initial, onClose
           if (v !== null) payload[n] = v;
         }
         saved = await createRow(table, payload);
-      } else if (changed.length) {
+      } else if (editable && changed.length) {
         const payload: Row = {};
         for (const [n, sp] of changed) payload[n] = fromInput(values[n], kindOf(n, sp), sp);
         saved = await updateRow(table, recordKey!, payload);
@@ -162,11 +173,14 @@ export function RecordDialog({ table, recordKey, title, config, initial, onClose
     } catch (e2) {
       setErr(e2);
     } finally {
+      pending.current = false;
       setBusy(false);
     }
   }
 
   async function remove() {
+    if (pending.current || !deletable) return;
+    pending.current = true;
     setBusy(true);
     setErr(null);
     try {
@@ -178,12 +192,13 @@ export function RecordDialog({ table, recordKey, title, config, initial, onClose
       setErr(e2);
       setConfirmDelete(false);
     } finally {
+      pending.current = false;
       setBusy(false);
     }
   }
 
   // Закрыть крестиком или Esc: если есть несохранённые изменения — спросить
-  const requestClose = () => { if (dirty && !busy) setAskUnsaved(true); else onClose(); };
+  const requestClose = () => { if (pending.current) return; if (dirty) setAskUnsaved(true); else onClose(); };
 
   const loading = !spec || (!isNew && (row.isLoading || (!!linkedKey && linkedRow.isLoading)));
   const setField = (n: string, v: string | boolean) => {
@@ -211,7 +226,7 @@ export function RecordDialog({ table, recordKey, title, config, initial, onClose
           {!schema ? <div className="skel" style={{ height: 120 }} />
             : !spec ? <p className="form-error">Таблица «{table}» недоступна для вашей роли</p>
             : loading ? <div className="form-grid">{Array.from({ length: 4 }, (_, i) => <div key={i} className="skel" style={{ height: 64 }} />)}</div>
-            : row.error ? <ErrorNote text={errorText(row.error, table)} requestId={requestIdOf(row.error)} />
+            : row.error || linkedRow.error ? <ErrorNote text={errorText(row.error || linkedRow.error, table)} requestId={requestIdOf(row.error || linkedRow.error)} />
             : !isNew && !row.data ? <p className="form-error">Запись не найдена — возможно, её уже удалили</p>
             : (
               <div className="form-grid">
@@ -230,7 +245,7 @@ export function RecordDialog({ table, recordKey, title, config, initial, onClose
               </div>
             )}
 
-          {!!err && <ErrorNote text={errorText(err, table)} requestId={requestIdOf(err)} />}
+          {!!err && <ErrorNote text={`${partialSaved ? "ФИО уже сохранено. Реквизиты сотрудника не сохранены: " : ""}${errorText(err, table)}`} requestId={requestIdOf(err)} />}
         </div>
 
         {(deletable || extra || editable) && (

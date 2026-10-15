@@ -26,13 +26,14 @@ export function TableTools<R>({ state, set, cols, rows, count, children }: Props
   // Клик мимо выпадающего списка закрывает его, клик мимо панели — всю панель
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => {
+    // После действия по кнопке: mousedown сдвигает кнопки ниже открытой панели до click.
+    const onClick = (e: MouseEvent) => {
       const t = e.target as Element;
       if (dd != null && !t.closest(".ff-dd")) setDd(null);
       if (!panelRef.current?.contains(t) && !btnRef.current?.contains(t)) { setOpen(false); setDd(null); }
     };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
   }, [open, dd]);
 
   const setF = (i: number, v: FilterValue | undefined) =>

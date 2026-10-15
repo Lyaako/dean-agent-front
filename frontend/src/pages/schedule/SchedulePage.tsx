@@ -22,6 +22,7 @@ const byField = (by: By) => BY.find(([v]) => v === by)![2];
 
 // Состояние вкладки сохраняется между переключениями, как в макете
 const saved = { view: "table" as "table" | "week", date: todayIso(), by: "group" as By, who: "" };
+export const clearScheduleState = () => Object.assign(saved, { view: "table", date: todayIso(), by: "group", who: "" });
 
 const SORT = "lesson_date,pair_number,group_name";
 
@@ -145,4 +146,3 @@ export function SchedulePage() {
     </Page>
   );
 }
-

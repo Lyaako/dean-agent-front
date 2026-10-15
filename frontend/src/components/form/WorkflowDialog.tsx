@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Modal, ErrorNote, UnsavedDialog, useToast } from "../ui";
 import { Icon } from "../Icon";
@@ -16,11 +16,12 @@ interface Props {
   onClose: () => void;
 }
 
-// Форма приказа: один ключ идемпотентности на открытие окна — повторное нажатие не создаст второй приказ
+// Повтор неизменённой попытки сохраняет ключ; исправленная форма получает новый.
 export function WorkflowDialog({ def, studentId, subtitle, onClose }: Props) {
   const qc = useQueryClient();
   const toast = useToast();
-  const idemKey = useMemo(newKey, []);
+  const attempt = useRef<{ body: string; key: string } | null>(null);
+  const pending = useRef(false);
   const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<unknown>(null);
@@ -40,8 +41,10 @@ export function WorkflowDialog({ def, studentId, subtitle, onClose }: Props) {
 
   async function submit(e?: FormEvent) {
     e?.preventDefault();
+    if (pending.current) return;
     setAskUnsaved(false);
     if (!validate()) return;
+    pending.current = true;
     setBusy(true);
     setErr(null);
     try {
@@ -50,7 +53,9 @@ export function WorkflowDialog({ def, studentId, subtitle, onClose }: Props) {
         const v = values[f.name]?.trim();
         if (v) body[f.name] = f.kind === "employee" ? Number(v) : v;
       }
-      const res = await runWorkflow<Row>(def.name, body, idemKey);
+      const serialized = JSON.stringify(body);
+      if (attempt.current?.body !== serialized) attempt.current = { body: serialized, key: newKey() };
+      const res = await runWorkflow<Row>(def.name, body, attempt.current.key);
       qc.invalidateQueries({ queryKey: ["res"] });
       qc.invalidateQueries({ queryKey: ["lookup"] });
       qc.invalidateQueries({ queryKey: ["row"] });
@@ -59,11 +64,12 @@ export function WorkflowDialog({ def, studentId, subtitle, onClose }: Props) {
     } catch (e2) {
       setErr(e2);
     } finally {
+      pending.current = false;
       setBusy(false);
     }
   }
 
-  const requestClose = () => { if (dirty && !busy) setAskUnsaved(true); else onClose(); };
+  const requestClose = () => { if (pending.current) return; if (dirty) setAskUnsaved(true); else onClose(); };
 
   const set = (n: string) => (v: string) => {
     setErrors((e) => { const { [n]: _, ...rest } = e; return rest; });
