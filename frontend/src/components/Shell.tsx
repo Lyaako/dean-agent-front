@@ -7,6 +7,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { ROLE_NAME } from "../api/auth";
 import { human, initials, tone, todayIso } from "../lib/format";
 import { ChatBar } from "../chat/ChatBar";
+import { AccountDialog } from "../auth/AccountDialog";
 
 const WD_FULL = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
 
@@ -42,6 +43,7 @@ export function Shell() {
 function Me() {
   const { me, role, fullName, logout } = useAuth();
   const [open, setOpen] = useState(false);
+  const [account, setAccount] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -61,11 +63,15 @@ function Me() {
       {open && (
         <div className="menu" role="menu">
           <div className="menu-head"><b>{name}</b><small>{role ? ROLE_NAME[role] : ""} · {me?.login}</small></div>
+          <button role="menuitem" className="menu-item" onClick={() => { setOpen(false); setAccount(true); }}>
+            <Icon name="users" /><span>Личный кабинет</span>
+          </button>
           <button role="menuitem" className="menu-item" onClick={() => { setOpen(false); logout(); }}>
             <Icon name="logout" /><span>Выйти</span>
           </button>
         </div>
       )}
+      {account && <AccountDialog onClose={() => setAccount(false)} />}
     </div>
   );
 }

@@ -11,7 +11,16 @@ export default defineConfig(({ mode, command }) => {
     server: {
       port: 5173,
       strictPort: true,
-      proxy: target ? { "/api": { target, changeOrigin: true } } : undefined,
+      // Бэкенд сверяет Origin с DEANERY_ORIGIN, поэтому прокси выдаёт запрос за свой
+      proxy: target
+        ? {
+            "/api": {
+              target,
+              changeOrigin: true,
+              headers: { origin: new URL(target).origin },
+            },
+          }
+        : undefined,
     },
   };
 });

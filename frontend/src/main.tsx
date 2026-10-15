@@ -5,8 +5,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "./styles/styles.css";
 import "./styles/app.css";
 import "./styles/extra.css";
+import "./lib/theme";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
 import { LoginPage } from "./auth/LoginPage";
+import { MustChangeDialog } from "./auth/AccountDialog";
 import { ToastProvider } from "./components/ui";
 import { Shell } from "./components/Shell";
 import { StudentsPage } from "./pages/students/StudentsPage";
@@ -21,9 +23,11 @@ import { OlapPage } from "./pages/OlapPage";
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
 
 function App() {
-  const { status } = useAuth();
+  const { status, mustChange } = useAuth();
   if (status === "loading") return <div className="splash"><span className="orb xl" /></div>;
   if (status === "anon") return <LoginPage />;
+  // Пароль сброшен администратором: поверх экрана входа — окно смены, дальше не пускаем
+  if (mustChange) return <><LoginPage /><MustChangeDialog /></>;
   return (
     <Routes>
       <Route element={<Shell />}>

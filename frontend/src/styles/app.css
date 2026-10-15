@@ -299,7 +299,7 @@ th.sortable:hover { color: var(--ink); }
 /* Таблицы помещаются в ширину страницы: текст в ячейках переносится вместо прокрутки вбок */
 .table-wrap table.fixed { table-layout: fixed; }   /* ширины задаёт colgroup — колонки не прыгают */
 .table-wrap th, .table-wrap td { white-space: normal; }
-.table-wrap th { vertical-align: bottom; }   /* заголовок переносится по словам, только если не хватает места */
+.table-wrap th { vertical-align: middle; }   /* если какой-то заголовок в две строки — остальные встают по середине его высоты */
 .table-wrap .sort-ic { position: absolute; margin-left: 3px; }
 .table-wrap th.sortable { position: relative; }
 .table-wrap tbody tr { animation: none; }   /* строки не «въезжают» заново при сортировке и фильтрах */

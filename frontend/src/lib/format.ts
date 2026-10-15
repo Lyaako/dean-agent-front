@@ -1,5 +1,5 @@
 // Даты в API — ISO-строки «YYYY-MM-DD» (или с временем); считаем их в UTC, чтобы не сдвигались поясом
-const D = (s: string) => new Date(s.slice(0, 10) + "T00:00:00Z");
+export const D = (s: string) => new Date(s.slice(0, 10) + "T00:00:00Z");
 export const iso = (d: Date) => d.toISOString().slice(0, 10);
 export const addDays = (s: string, n: number) => { const d = D(s); d.setUTCDate(d.getUTCDate() + n); return iso(d); };
 export const mondayOf = (s: string) => addDays(s, -((D(s).getUTCDay() + 6) % 7));

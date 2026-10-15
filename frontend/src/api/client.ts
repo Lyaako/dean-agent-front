@@ -19,6 +19,7 @@ export class ApiError extends Error {
 let accessToken: string | null = null;
 let refreshing: Promise<boolean> | null = null;
 let onExpired: (() => void) | null = null;
+let onPasswordRequired: (() => void) | null = null;
 let revision = 0;
 
 export const session = {
@@ -42,6 +43,8 @@ export const session = {
     try { return !!localStorage.getItem(CSRF_KEY); } catch { return false; }
   },
   onExpired(fn: () => void) { onExpired = fn; },
+  /** Бэкенд требует сменить пароль (сброс администратором) — показать окно смены */
+  onPasswordRequired(fn: () => void) { onPasswordRequired = fn; },
 };
 
 if (typeof window !== "undefined") window.addEventListener("storage", (event) => {
@@ -146,7 +149,11 @@ export async function apiRaw(path: string, opts: RequestOptions = {}, retried = 
     session.clear();
     onExpired?.();
   }
-  if (!res.ok) throw await readError(res);
+  if (!res.ok) {
+    const error = await readError(res);
+    if (error.code === "password_change_required") onPasswordRequired?.();
+    throw error;
+  }
   return res;
 }
 
