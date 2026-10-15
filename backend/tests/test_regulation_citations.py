@@ -222,7 +222,12 @@ def test_real_multiconnection_withdrawal_serializes_final_answer(withdraw_first)
 
     dsn = os.environ["TEST_DATABASE_DSN"]
     settings = AgentSettings()
-    operator = KnowledgeSettings(database_file=Path(".local/p11-knowledge-operator.json"))
+    operator = KnowledgeSettings(database_file=Path(os.environ.get('P11_OPERATOR_DATABASE_FILE', '.local/p11-knowledge-operator.json')))
+    from psycopg.conninfo import conninfo_to_dict
+    target=conninfo_to_dict(dsn)
+    for config in (settings,operator):
+        actual=json.loads(config.database_file.read_text(encoding='utf-8'))
+        assert all(str(actual[key])==str(target[key]) for key in ('host','port','dbname')), 'Race connections must target the same isolated database'
     item, worker = norm(), uuid4()
     sessions, tokens, run = [], {}, None
     try:
@@ -521,7 +526,7 @@ def test_calibrate_exact_final_tools_and_system():
         response.raise_for_status()
         usage = response.json()["usage"]
     result = {"model": settings.model, "provider": settings.base_url, "loaded_context_length": settings.context_window,
-              "tool_count": 13, "prompt_fingerprint": static_fingerprint(captured[0], settings.context_window, settings.base_url),
+              "tool_count": len(TOOL_NAMES), "prompt_fingerprint": static_fingerprint(captured[0], settings.context_window, settings.base_url),
               "usage": usage, "configured_static_tokens": usage["prompt_tokens"]+256, "static_margin": 256,
               "static_utf8_bytes": len(encode(static_payload(captured[0], settings.context_window, settings.base_url)).encode()),
               "output_limits": {k: v for k, v in captured[0].items() if k in {"max_tokens", "max_completion_tokens"}},

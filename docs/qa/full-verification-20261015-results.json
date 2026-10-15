@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-15",
+  "schema_head": "0056_read_boundaries",
+  "scope": "Post-upgrade backend, real model, HTTP/SQL and visible browser on an isolated synthetic environment",
+  "model": {"id": "qwen_qwen3.5-9b", "quantization": "Q4_K_M", "context_window": 20480, "parallel": 1, "temperature": 0.6, "reasoning_effort": "none", "max_tokens": 1536, "calibrated_static_tokens": 4483},
+  "retrieval": {"embedding": "BAAI/BGE-M3 dense+sparse", "index": "Qdrant 1.15.5"},
+  "platform": ["Windows 11", "Python 3.13", "Docker Desktop Linux", "PostgreSQL 17", "LM Studio", "RTX 4060 Laptop 8GB", "16GB RAM", "Tesseract rus+eng"],
+  "final_regression": {"passed": 489, "skipped": 7, "subtests_passed": 372, "warnings": 1, "seconds": 187.39},
+  "separate_linux_parser": {"passed": 12, "seconds": 19.86},
+  "separate_real_operator_races": {"passed": 2, "seconds": 2.55},
+  "transient_observation": {"case": "reindex claim returned no job in first post-fix full run", "initial_failures": 1, "subsequent_targeted_passes": 110, "final_full_run_passed": true, "root_cause_established": false},
+  "http": {"roles": 5, "resource_read_checks": 285, "olap_checks": 65, "olap_modes": 13, "protected_originals_hash_checked": 3},
+  "read_burst": {"requests": 50, "concurrent_roles": 5, "errors": 0, "elapsed_seconds": 2.02, "p95_seconds": 0.178, "max_seconds": 0.194, "production_load_test": false},
+  "native_browser_model": {
+    "roles": ["admin", "director", "dean_staff", "teacher", "student"],
+    "positive_tool_names": ["describe_resources", "query_deanery", "get_olap_report", "prepare_record_change", "propose_sql_change", "prepare_batch_changes", "prepare_workflow", "prepare_scholarship_assignment", "prepare_scholarship_termination", "prepare_scholarship_cancellation", "prepare_scheduled_order_cancellation", "prepare_grade_correction", "search_regulations", "read_attachment_text"],
+    "workflow_types_approved_by_click": ["enroll_student", "transfer_student", "expel_student", "reinstate_student", "grant_academic_leave", "return_from_leave"],
+    "future_return": "scheduled; current status unchanged until effective date",
+    "legacy_olap_modes": 8,
+    "visible_sections": 8,
+    "attachments": ["TXT", "DOCX", "25-page PDF with Russian OCR page 25"],
+    "canonical_attachment_citations_verified": 3,
+    "dedicated_test_chat_deleted_by_click": true,
+    "dedicated_test_request_deleted_by_click": true,
+    "other_proof_chats_preserved": 21
+  },
+  "backend_fixes_verified": ["Batch preview compatibility in HTTP/history/SSE", "Reserve multi-file attachment chunks and permit bounded rereads of known chunks"],
+  "deployed_main": {"http": 200, "readiness_all_eight_components_ready": true, "schema_migration_required_for_these_fixes": false},
+  "frontend_changed": false,
+  "new_frontend_accepted": false,
+  "remaining": ["Old UI lacks batch selection, undo and new feature screens", "Markdown citation navigation omits Bearer", "Readonly employee card uses write fields", "Old UI omits prepared proposal card after context limit; queue recovery works", "Model may need explicit retry and may explain rejected fields/dates incorrectly", "Unexplained one-off reindex test failure", "Actual reassignment was not submitted by click", "Not all manual-form field combinations were clicked", "No production load or universal natural-language guarantee"],
+  "evidence": "Full private evidence retained locally; no credentials, working data or screenshots are published"
+}

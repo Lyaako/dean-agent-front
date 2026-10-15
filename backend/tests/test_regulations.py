@@ -53,6 +53,7 @@ class RegulationTests(DatabaseHttpCase):
     def work(self, uploaded, indexer=None):
         worker = uuid4()
         claim = self.sql('claim_knowledge_job', worker)
+        self.assertIsNotNone(claim,self.db.execute("SELECT status,attempts,available_at,clock_timestamp() AS checked_at FROM agent_backend.job WHERE kind='knowledge'").fetchall())
         self.assertEqual(claim['version']['version_id'], uploaded['version_id'])
         def call(name, *args):
             return self.sql(name, claim['job_id'], worker, *args)
