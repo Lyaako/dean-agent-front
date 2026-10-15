@@ -8,6 +8,7 @@ from uuid import UUID
 import psycopg
 
 from backend import chats
+from backend.presentation import preview_contract
 
 
 def read_batch(run_id: UUID, token: str, after: int):
@@ -16,7 +17,7 @@ def read_batch(run_id: UUID, token: str, after: int):
 
 
 def frame(event: dict) -> str:
-    return f"id: {event['sequence']}\nevent: {event['event']}\ndata: {json.dumps(event['data'], ensure_ascii=False, separators=(',', ':'))}\n\n"
+    return f"id: {event['sequence']}\nevent: {event['event']}\ndata: {json.dumps(preview_contract(event['data']), ensure_ascii=False, separators=(',', ':'))}\n\n"
 
 
 async def events(run_id: UUID, token: str, after: int):

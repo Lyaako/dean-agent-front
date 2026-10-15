@@ -26,11 +26,12 @@ from backend.service_status import database_status, dependency_status, log_event
 from backend.knowledge_config import KnowledgeSettings
 from backend.file_parser import AttachmentError
 from backend.agent_config import AgentSettings
+from backend.presentation import ApiJSONResponse
 from backend.contracts import (ChatRequest, ChatTitle, EmptyRequest, Job, Me,
                                ManualGradeCorrectionRequest, ProposalAssignmentRequest, ProposalDecisionRequest, ProposalSubmitRequest)
 
 
-app = FastAPI(title="Деканат: агент и данные")
+app = FastAPI(title="Деканат: агент и данные",default_response_class=ApiJSONResponse)
 COOKIE = "deanery_refresh"
 _attempts: dict[tuple[str, str], deque[float]] = defaultdict(deque)
 _attempt_lock = Lock()
