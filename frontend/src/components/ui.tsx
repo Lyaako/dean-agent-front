@@ -7,14 +7,14 @@ export const Badge = ({ kind = "", children }: { kind?: string; children: ReactN
   <span className={`badge ${kind}`}>{children}</span>;
 
 /* ── Сегментированный переключатель ── */
-export function Seg<T extends string>({ value, options, onChange, dark }: {
-  value: T; options: [T, string, IconName?][]; onChange: (v: T) => void; dark?: boolean;
+export function Seg<T extends string>({ value, options, onChange, dark, disabled, label }: {
+  value: T; options: [T, string, IconName?][]; onChange: (v: T) => void; dark?: boolean; disabled?: boolean; label?: string;
 }) {
   const i = Math.max(0, options.findIndex(([v]) => v === value));
   return (
-    <div className={`seg${dark ? " dark" : ""}`} role="group" style={{ ["--n" as string]: options.length, ["--i" as string]: i }}>
+    <div className={`seg${dark ? " dark" : ""}`} role="group" aria-label={label} style={{ ["--n" as string]: options.length, ["--i" as string]: i }}>
       {options.map(([v, l, ic]) => (
-        <button key={v} type="button" aria-pressed={v === value} onClick={() => onChange(v)}>
+        <button key={v} type="button" aria-pressed={v === value} disabled={disabled} onClick={() => onChange(v)}>
           {ic && <Icon name={ic} />}<span>{l}</span>
         </button>
       ))}

@@ -19,6 +19,8 @@ import { RequestsPage } from "./pages/RequestsPage";
 import { PracticePage } from "./pages/PracticePage";
 import { EmployeesPage } from "./pages/EmployeesPage";
 import { OlapPage } from "./pages/OlapPage";
+import { SheetsPage } from "./pages/sheets/SheetsPage";
+import { AttendancePage } from "./pages/attendance/AttendancePage";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
 
@@ -34,6 +36,8 @@ function App() {
         <Route path="/students" element={<StudentsPage />} />
         <Route path="/groups" element={<GroupsPage />} />
         <Route path="/schedule" element={<SchedulePage />} />
+        <Route path="/sheets" element={<SheetsPage />} />
+        <Route path="/attendance" element={<AttendancePage />} />
         <Route path="/works" element={<WorksPage />} />
         <Route path="/requests" element={<RequestsPage />} />
         <Route path="/practice" element={<PracticePage />} />

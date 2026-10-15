@@ -14,7 +14,8 @@ const WD_FULL = ["Воскресенье", "Понедельник", "Вторн
 // Вкладки, которые роль может читать
 export function useVisibleTabs(): TabDef[] {
   const { data: schema } = useSchema();
-  return TABS.filter((t) => !t.view || !schema || schema[t.view]);
+  const { role } = useAuth();
+  return TABS.filter((t) => (!t.view || !schema || schema[t.view]) && (!t.roles || (role && t.roles.includes(role))));
 }
 
 export function Shell() {
