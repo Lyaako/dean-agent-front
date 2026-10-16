@@ -1,6 +1,7 @@
 """Transactional workflow and delayed-order checks on real PostgreSQL."""
 
 from datetime import timedelta
+from urllib.parse import quote
 from uuid import uuid4
 
 import psycopg
@@ -119,6 +120,34 @@ class WorkflowTests(DatabaseHttpCase):
         self.db.execute('RESET ROLE')
         self.assertEqual(self.db.execute('SELECT status FROM agent_backend.job WHERE id=%s',(future['job_id'],)).fetchone()['status'],'cancelled')
         self.db.execute('SET LOCAL ROLE backend_api')
+
+    def test_cancel_accepts_a_real_order_number_with_slash(self):
+        enrolled=self.call('enroll_student',self.enroll_body()|{'effective_date':''})
+        number=f"WF-{uuid4().hex[:6]}-с/26"
+        future=self.call('transfer_student',self.order_fields()|{'order_number':number,'student_id':enrolled['student_id'],
+            'group_name':self.other['name'],'effective_date':(self.today+timedelta(days=10)).isoformat()})
+        path=f"/api/v1/orders/{quote(number,safe='')}/students/{enrolled['student_id']}/cancel"
+        query='?student_id='+str(enrolled['student_id'])
+        self.assertEqual([r['order_number'] for r in self.client.get('/api/v1/resources/v_pending_orders'+query,
+            headers=self.headers).json()['items']],[number])
+        key=str(uuid4())
+        cancelled=self.client.post(path,headers=self.headers|{'Idempotency-Key':key})
+        self.assertEqual(cancelled.status_code,200,cancelled.text)
+        self.assertEqual(cancelled.json()['order_number'],number)
+        self.assertEqual(self.client.post(path,headers=self.headers|{'Idempotency-Key':key}).json(),cancelled.json())
+        for view in ('v_pending_orders','v_student_orders'):
+            rows=self.client.get(f'/api/v1/resources/{view}'+query,headers=self.headers).json()['items']
+            self.assertNotIn(number,[r['order_number'] for r in rows])
+        self.db.execute('RESET ROLE')
+        self.assertEqual(self.db.execute('SELECT status FROM agent_backend.job WHERE id=%s',(future['job_id'],)).fetchone()['status'],'cancelled')
+        self.db.execute('SET LOCAL ROLE backend_api')
+        enroll_number=f"WF-{uuid4().hex[:6]}-с/26"
+        planned=self.call('enroll_student',self.enroll_body()|{'order_number':enroll_number,
+            'effective_date':(self.today+timedelta(days=10)).isoformat()})
+        refused=self.client.post(f"/api/v1/orders/{quote(enroll_number,safe='')}/students/{planned['student_id']}/cancel",
+            headers=self.headers|{'Idempotency-Key':str(uuid4())})
+        self.assertEqual(refused.status_code,409,refused.text)
+        self.assertEqual(refused.json()['error']['code'],'order_cancel_enrollment')
 
     def test_role_scope_and_strict_fields(self):
         body = self.enroll_body()

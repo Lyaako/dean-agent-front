@@ -170,8 +170,14 @@ class ProposalDecisionRequest(ApiModel):
 
 class ProposalAssignmentRequest(ApiModel):
     assignee_user_id: Annotated[int, Field(strict=True, gt=0, le=2**31 - 1)]
-    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
+    # 10–2000 is checked by the route so the error names the field.
+    reason: Annotated[str, StringConstraints(strip_whitespace=True)]
     expected_version: Annotated[int, Field(strict=True, ge=1, le=2**31 - 1)]
+
+
+class ProposalUndoRequest(ApiModel):
+    # Omitted means every reversible applied row (transitional behaviour).
+    picked_item_ids: list[Annotated[int, Field(strict=True, gt=0, le=2**31 - 1)]] | None = None
 
 
 class GradeCorrectionRequest(ApiModel):

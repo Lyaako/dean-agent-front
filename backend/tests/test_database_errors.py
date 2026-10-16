@@ -24,3 +24,14 @@ class DomainErrors(unittest.TestCase):
         self.assertNotIn('SQL', result[2])
         self.assertEqual(domain_error(failure('details', column='signed_by_id', table='academic_order',state='23502'))[1], 'order_signer_invalid')
         self.assertIsNone(domain_error(failure('unclassified conflict')))
+
+    def test_signer_field_matches_the_column(self):
+        for message in ("Invalid signer", "Приказ института 1 может подписать только работающий руководитель этого института"):
+            self.assertEqual(domain_error(failure(message))[3], {"field": "signed_by_id"})
+
+    def test_self_decision_check_and_validation_details(self):
+        result = domain_error(failure("check", "grade_correction_check5", state="23514"))
+        self.assertEqual(result[:2], (403, "correction_self_decision"))
+        detail = SimpleNamespace(sqlstate="P6205", diag=SimpleNamespace(message_primary="Комментарий",
+            message_detail='{"field": "reason", "max": 500}', constraint_name="", column_name="", table_name=""))
+        self.assertEqual(domain_error(detail)[:2] + (domain_error(detail)[3],), (422, "validation_error", {"field": "reason", "max": 500}))

@@ -3,7 +3,7 @@
 
 ## Согласованные дополнения Б1–Б11, 15.10.2026
 
-Текущий head — `0056_read_boundaries`. Ниже — дополнения к прежнему контракту; прежние маршруты и поля сохраняются. Фронтенд коллеги подключается отдельно. Схема и флаги действий сервера определяют доступность кнопок; наличие роли admin само по себе не разрешает решить коррекцию.
+Текущий head — `0058_teacher_sheets`. Ниже — дополнения к прежнему контракту; прежние маршруты и поля сохраняются. Фронтенд коллеги подключается отдельно. Схема и флаги действий сервера определяют доступность кнопок; наличие роли admin само по себе не разрешает решить коррекцию.
 
 Все новые POST изменений требуют обычной авторизации и проверенного `Origin`. В перечисленных маршрутах, кроме смены пароля/выхода, нужен заголовок `Idempotency-Key: UUID`. Повтор того же решения с тем же ключом возвращает существующий результат, в том числе после закрытия ведомости; он не выполняет запись повторно.
 
@@ -13,11 +13,12 @@
 | `POST /api/v1/auth/logout-all` | 204, отзыв всех собственных сеансов | Все роли |
 | `GET /api/v1/me/profile` | Собственные данные и роль; для сотрудника должность/подразделение/ставка/дата приёма, для студента учебные реквизиты | Все роли |
 | `POST /api/v1/admin/users/{user_id}/reset-password` | `{user_id,temporary_password,must_change_password:true}`; пароль показывается ровно один раз | Только admin; все сеансы адресата отзываются |
-| `GET /api/v1/orders/signers?institute_id=N` | `{items:[...]}`; действующие директор/заместители, директор первым | Деканат своего института, admin |
-| `POST /api/v1/orders/{order_number}/students/{student_id}/cancel` | `{}`; отмена будущего неисполненного приказа и задания, результат сохраняется | Деканат в своей области; правила БД, включая запрет отмены зачисления |
+| `GET /api/v1/orders/signers?institute_id=N` | `{items:[{employee_id,person,position,is_director}]}`; действующие директор/заместители, директор первым. Значение для `signed_by_id` — `employee_id` | Деканат своего института, admin |
+| `POST /api/v1/orders/{order_number}/students/{student_id}/cancel` | `{}`; отмена будущего неисполненного приказа и задания, результат сохраняется. `order_number` передаётся в пути закодированным (`encodeURIComponent`) и может содержать «/», например `151-%D1%81%2F26` для «151-с/26» | Деканат в своей области; правила БД, включая запрет отмены зачисления |
 | `GET /api/v1/resources/grade_sheet/{sheet_id}/missing` | `{items:[{student_id,student}]}` | Деканат; активные студенты группы без записи основной ведомости; для пересдачи `[]` |
 | `POST /api/v1/grade-corrections` | `{sheet_id,student_id,new_points,new_is_absent,reason}`; Proposal с `submission_status=submitted` | Экзаменатор своей закрытой ведомости или деканат; reason 10–2000 символов |
-| `POST /api/v1/agent/proposals/{id}/undo` | `{}`; применённое обратное Proposal | Тот же решающий, до 15 минут, только обратимые строки |
+| `POST /api/v1/agent/proposals/{id}/undo` | `{picked_item_ids?:[int]}`; применённое обратное Proposal. Без `picked_item_ids` — все обратимые строки (переходный режим) | Тот же решающий, до 15 минут, только обратимые строки |
+| `GET /api/v1/audit` | Журнал событиями, см. «Журнал изменений» | admin — весь; director, dean_staff — свой институт; teacher, student — 403 |
 
 `GET /api/v1/agent/capabilities` сохраняет `attachment_context.agent_status` для всех ролей; подробный объект `services` выдаётся только admin.
 
@@ -33,7 +34,7 @@
 
 Студент читает только свои `grade,grade_sheet,attendance,v_attendance,v_last_result,v_debtors,v_current_modules,v_active_scholarships,v_student_orders`. Текущие модули определяются семестром его текущей группы, последней попыткой по дисциплине/этапу. Стипендия содержит сумму конкретного назначения. Студент создаёт свою заявку и меняет только `copies,purpose` своей заявки в статусе «Новая»; удалить её через API не может. Деканат удаляет заявки любого статуса в своей области.
 
-`v_audit` доступен деканату с ограничением института, включая правки персон студентов; admin видит весь журнал. Паспортные данные, СНИЛС/ИНН, адрес, дата рождения и хэш пароля исключены. Фильтры `changed_at__gte`, `changed_at__lte` принимают ISO-даты/время; дата верхней границы включает весь день по Москве. Календарь сохраняет фильтры `lesson_date__gte/lte`. Обычные списки сортируются/фильтруются и разбиваются на страницы в SQL; `limit=1..500`, `offset>=0`, `has_more` рассчитывается по следующей строке.
+Ресурс `v_audit` (строка на поле) сохранён без изменений; для экрана журнала используйте `GET /api/v1/audit`. `v_audit` доступен деканату с ограничением института, включая правки персон студентов; admin видит весь журнал. Паспортные данные, СНИЛС/ИНН, адрес, дата рождения и хэш пароля исключены. Фильтры `changed_at__gte`, `changed_at__lte` принимают ISO-даты/время; дата верхней границы включает весь день по Москве. Календарь сохраняет фильтры `lesson_date__gte/lte`. Обычные списки сортируются/фильтруются и разбиваются на страницы в SQL; `limit=1..500`, `offset>=0`, `has_more` рассчитывается по следующей строке.
 
 ### Пакетные предложения и отмена
 
@@ -47,6 +48,28 @@
 
 `actions.can_undo` добавлен к прежним флагам. Обратимы `document_request.request_status_id` между незавершёнными статусами, `academic_work.topic`, `student.needs_dormitory`, `schedule_slot.classroom_id/weekday/pair_number`, `grade.points/is_absent` в открытой ведомости, `attendance.is_present/absence_reason`. Добавления и другие поля пропускаются; результат обратного предложения сообщает `execution.skipped`, исходное — `execution.undo_skipped/undo_id`. Если ни одной обратимой строки нет — `undo_unavailable`. Если после применения изменена любая из выбранных обратимых строк, отмена целиком откатывается с `undo_changed` и item_id; проверяются полная строка и номер аудита, поэтому изменение и возврат к прежнему значению также обнаруживаются. Перед сверкой берутся блокировки предметных данных: конкурирующая ручная правка не затирается. Повтор undo с тем же ключом возвращает то же обратное предложение.
 
+### Решения Р1–Р9, 16.10.2026 (миграция `0057_decision_contract`)
+
+**Комментарий к решению.** `POST .../decision` для `kind=grade_correction`: `reason` 10–500 символов после обрезки (столбец `grade_correction.decision_comment VARCHAR(500)`); иначе 422 `validation_error`, `details:{field:"reason",max:500}`. Для остальных видов — 10–2000, как раньше. Отказ без комментария невозможен (поле обязательно).
+
+**Передача.** `POST .../assignment`: `reason` 10–2000 символов после обрезки; иначе 422 `validation_error`, `details:{field:"reason"}`.
+
+**Повтор просьбы.** `actions.can_redo` есть во всех ответах Proposal: истинен у автора, если предложение создал запуск агента, оно истекло (`validity.state=expired`) или отклонено и чат не удалён. `GET /agent/proposals/{id}` дополнительно отдаёт `request_text` — исходный текст просьбы, только автору агентного предложения; иначе `null`. В списке очереди `request_text` нет.
+
+**Обратимость строк пакета.** У `items[]` пакета: `reversible:boolean`, `undo_reason: null|irreversible|sheet_closed|request_final|expired`. До одобрения — прогноз по полям и текущим данным; после одобрения — по применённой строке, после окна 15 минут или выполненной отмены — `expired`; неприменённая строка — `reversible=false, undo_reason=null`. `actions.can_undo` ложен, если обратимых строк нет или срок истёк.
+
+**Отмена по выбранным строкам.** `POST .../undo` с `picked_item_ids` (непустой, без повторов, только применённые строки, иначе 422 `validation_error`, `details.field="picked_item_ids"`) отменяет ровно эти строки одной транзакцией. Если хоть одну отменить нельзя, ничего не отменяется: 409 с `details:{item_id,reason}` — `undo_changed`/`changed` (строку изменили после применения) или `undo_unavailable`/`irreversible|sheet_closed|request_final|conflict` (`conflict` — правило базы отклонило возврат, например аудитория занята; текст ошибки базы в `message`). Ключ идемпотентности привязан к набору строк: тот же ключ с другим набором — 409 `idempotency_conflict`. Ошибка всей отмены `undo_unavailable` содержит `details.reason` (`expired` — срок истёк или отмена уже выполнена; `irreversible`; либо общая причина строк). `execution.skipped`/`undo_skipped`: `[{item_id,code,reason}]`.
+
+**Журнал изменений.** `GET /api/v1/audit?changed_at__gte&changed_at__lte&table_name&operation=I|U|D&changed_by=<логин>&source=ui|agent&limit=1..500(100)&offset`. Ответ `{items,limit,offset,has_more}`, сортировка от новых. Событие: `{audit_id:string,changed_at,table_name,record_key,operation:"I"|"U"|"D",changed_by,changed_by_name,source:"ui"|"agent",proposal_id,changes:[{column,old,new}]}`. `limit` и `has_more` считают события, одно изменение не делится между страницами. `source=agent` — только изменения из запуска агента; формы (в том числе исправление оценки и отмена через форму) — `ui`. `proposal_id` — предложение, через которое прошло изменение, иначе `null`. Паспорт, СНИЛС, ИНН, дата рождения, адрес и хэш пароля приходят как `***`. Даты — как у ресурсов: верхняя дата включает весь день по Москве.
+
+### Ведомости преподавателя, 16.10.2026 (миграция `0058_teacher_sheets`)
+
+**Чтение для teacher.** Кроме групп и строк плана текущих поручений, преподаватель видит строку `curriculum_item`/`v_curriculum` и группу `study_group`/`v_groups`, если он экзаменатор (`grade_sheet.examiner_id`) хотя бы одной ведомости по ним. Набор полей не меняется. Студенты, расписание, работы, практики и OLAP по-прежнему ограничены текущими поручениями.
+
+**Состав ведомости.** `GET /api/v1/resources/grade_sheet/{sheet_id}/roster` → `{items:[{student_id,student,active,grade_id,points,is_absent}]}`, сортировка по ФИО; `grade_id=null` — результата ещё нет. Правила (как `trg_grade_check`/`trg_sheet_status`): закрытая или отменённая — студенты с оценкой в ней; открытая `main` — обучающиеся студенты группы плюс все с оценкой; открытая `retake`/`commission`/`individual` — с оценкой плюс обучающиеся, у кого есть попытка того же этапа по дисциплине (discipline_id + semester) в другой неотменённой ведомости, нет попытки с баллами и нет другой открытой ведомости этого этапа. Доступ: admin, director, dean_staff — ведомость в их области; teacher — только где он экзаменатор; иначе 404 `not_found` (как для несуществующей). Отдаются только ФИО и `active`.
+
+**Запланированные приказы (проверено, без изменений).** Деканат читает `v_pending_orders` (`order_type_code`, `due_date`, `days_left`) в области своего института; преподавателю и студенту ресурс недоступен. После `cancel` строка `order_student` удаляется, приказ пропадает из `v_pending_orders` и `v_student_orders`; статуса «Отменён» нет. Отмена зачисления — `order_cancel_enrollment`.
+
 ### Пять новых режимов OLAP
 
 Прежние восемь mode сохраняются. Добавлены `session,heat,risk,retake,moves` для admin/director/dean_staff и teacher; преподаватель видит только свои учебные группы, студент получает 403. Ответ `{mode,level,rows,total,filters}`. Фильтры: `course,group_id,discipline_id,semester,status_id`; `level=course|group|discipline|student` (для retake только course/group), `mod_min=25..54` (30), `att_min=0..100` (75), `period=month|semester|year`, `pick` для периода движения.
@@ -55,12 +78,12 @@
 
 ### Коды предметных ошибок
 
-Форма: `{error:{code,message,details},request_id}`. В details могут быть field/items/item_id. Внутренние SQL, имена функций, чувствительные реквизиты исключены.
+Форма: `{error:{code,message,details},request_id}`. В details могут быть field/items/item_id/reason/max. Внутренние SQL, имена функций, чувствительные реквизиты исключены.
 
 | code | HTTP | details / смысл |
 | --- | --- | --- |
 | `order_past_date`, `effective_date_past` | 422 | effective_date, прошедшая дата |
-| `order_signer_invalid` | 422 | signed_by/signed_by_id |
+| `order_signer_invalid` | 422 | signed_by_id |
 | `order_pending_exists` | 409 | student_id |
 | `slot_semester_mismatch` | 422 | assignment_id |
 | `sheet_dates_invalid` | 422 | exam_date: от выдачи до +366 дней, закрытие после экзамена |
@@ -73,7 +96,18 @@
 | `blank_text` | 422 | поле с пустотой/краевыми пробелами |
 | `batch_too_large` | 422 | больше 200 строк |
 | `stale_item`, `undo_changed` | 409 | item_id |
-| `undo_unavailable` | 409 | истёк срок, закрытая ведомость, необратимое изменение |
+| `undo_unavailable` | 409 | reason: `expired`, `sheet_closed`, `request_final`, `irreversible`, `conflict`; item_id для строки |
+| `validation_error` | 422 | field (`reason` — с `max` для исправления оценки; `picked_item_ids`) |
+| `correction_pending_exists` | 409 | sheet_id; по оценке уже есть открытая заявка |
+| `sheet_open` | 409 | sheet_id; ведомость открыта — исправлять обычным изменением |
+| `sheet_cancelled` | 409 | sheet_id; ведомость отменена — исправлять нечего |
+| `correction_not_allowed` | 403 | подать заявку может только работающий сотрудник |
+| `correction_not_own_sheet` | 403 | sheet_id; преподаватель — только по своей ведомости |
+| `correction_self_decision` | 403 | автор не решает свою заявку |
+| `correction_not_manager` | 403 | решает директор или заместитель института |
+| `correction_decided` | 409 | заявка уже рассмотрена |
+| `order_cancel_enrollment` | 409 | зачисление отменяется удалением студента |
+| `order_not_pending` | 409 | запланированного приказа нет (исполнен или не существует) |
 
 Прочие прежние `forbidden/not_found/conflict/invalid_record` сохраняются. Дополнительные детали развёртывания и исключения источника БД: [NEW_DATABASE_IMPLEMENTATION.md](NEW_DATABASE_IMPLEMENTATION.md).
 

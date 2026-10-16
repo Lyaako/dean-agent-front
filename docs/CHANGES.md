@@ -1,0 +1,128 @@
+# Журнал изменений бекенда
+
+Новые записи сверху, одна запись — одно изменение. Журнал объясняет, **почему** изменили; как работает сейчас — в [API.md](API.md). Допущения первоначальной реализации (P00–P13, Б1–Б11) записаны таблицей в [IMPLEMENTATION_DECISIONS.md](IMPLEMENTATION_DECISIONS.md); её формат не вмещает поля этого журнала, поэтому новые изменения ведутся здесь.
+
+Задачи Р1–Р9 взяты из документа фронта «Задачи по решениям Р1–Р9» (`api-decisions-tasks.md`, раздел «Бекенд»). Все они вошли в миграцию `0057_decision_contract` (`backend/db/migrations/sql/049_decision_contract.sql`). Исходная база `deanery_db` не менялась.
+
+---
+
+## 2026-10-16 — Преподаватель видит дисциплину и состав своих ведомостей
+Статус: готово
+Проблема: ведомости и оценки преподавателю отдаются по экзаменатору, а строки плана, группы и студенты — только по текущим поручениям. У novikov ведомости охватывают 14 строк плана и 16 групп, видно 11 строк плана (ни одной из этих 14) и 13 групп; у прошлых ведомостей нет дисциплины, открытая пересдача по группе, которую он сейчас не ведёт, показывает пустой состав. Состав ведомости собирает фронт, повторяя правило базы.
+База: `deanery_teacher` пишет `grade`; `trg_grade_check` и `trg_sheet_status` определяют, кто может быть в ведомости; `trg_correction_check` — преподаватель подаёт заявку только по своей ведомости.
+Решение: миграция `0058_teacher_sheets`. (1) В `agent_backend.visible_rows_for_actor` для роли teacher строка `curriculum_item`/`v_curriculum` видна также при `EXISTS grade_sheet` с этим `item_id` и `examiner_id = teacher_id`; группа `study_group`/`v_groups` — при `EXISTS grade_sheet` с этим `group_id` и тем же экзаменатором. (2) Функция `backend_api.sheet_roster(sheet_id, token)` и маршрут `GET /api/v1/resources/grade_sheet/{sheet_id}/roster`.
+Обоснование: «своё» для преподавателя — группы, где он ведёт занятия, или ведомости, где он экзаменатор. `allowed_groups`/`allowed_students` не расширялись: через них читаются студенты, расписание, работы, практики и OLAP. Состав считается на сервере по правилам `trg_grade_check`/`trg_sheet_status`, чтобы фронт не дублировал правило базы: закрытая/отменённая — только студенты с оценкой; открытая main — обучающиеся студенты группы и все с оценкой; открытая retake/commission/individual — с оценкой плюс обучающиеся, у кого есть попытка того же этапа по дисциплине (discipline_id + semester, как `v_last_result`) в другой неотменённой ведомости, нет попытки с баллами и нет другой открытой ведомости этого этапа. Отдаются только ФИО и признак `active`. Недоступная ведомость неотличима от несуществующей (404). `visible_rows_for_actor` меняется заменой по точному фрагменту: если фрагмент изменится, миграция остановится, а не перезапишет функцию молча.
+Что изменилось: `backend/db/migrations/sql/050_teacher_sheets.sql`, `versions/0058_teacher_sheets.py`, `backend/app.py` (маршрут roster), `backend/tests/test_teacher_sheets.py`, `backend/tests/test_recovery_inventory.py` (head). Новый маршрут `GET /api/v1/resources/grade_sheet/{sheet_id}/roster` → `{items:[{student_id,student,active,grade_id|null,points|null,is_absent}]}`, сортировка по ФИО; доступ: admin/director/dean_staff — ведомость в их области, teacher — только свой `examiner_id`; иначе 404. Маршрут `…/missing` не менялся.
+Что нужно фронту: состав ведомости брать из `/roster` вместо своего расчёта; `grade_id = null` — результата ещё нет. Названия дисциплины и группы прошлых ведомостей теперь приходят преподавателю в `v_curriculum`/`v_groups`.
+Проверка: `test_teacher_sheets.py` — видимость плана и групп своих прошлых ведомостей без расширения `allowed_groups` (OLAP и расписание те же); roster открытой main, пересдачи (без тех, кто в другой открытой ведомости этапа; переведённый студент с долгом — в составе), закрытой ведомости; доступ (своя ведомость по группе, которую не ведёт, — 200; чужая — 404; студент — без данных). Полный прогон на чистой засеянной базе 0001→0058: 510 passed, 6 skipped. На обновлённой копии рабочей базы под novikov: у всех 96 его ведомостей видны дисциплина и группа; roster открытой пересдачи ИДБ-25-11 (модуль 1) — 35 студентов.
+Открытые вопросы: нет.
+
+## 2026-10-16 — Отмена приказа с «/» в номере
+Статус: готово
+Проблема: `POST /api/v1/orders/{order_number}/students/{student_id}/cancel` на любой настоящий приказ отвечал 404 `{"detail":"Not Found"}` от FastAPI: номера вида «151-с/26» содержат «/», параметр `{order_number}` совпадал с одним сегментом, а `%2F` Starlette раскодирует до сопоставления маршрута. Тест `test_empty_date_defaults_today_and_cancel_future_order_through_http` не ловил это: номер `WF-<hex>` без «/».
+База: `academic_order.order_number VARCHAR(30)`, формат номера не ограничен; `sp_cancel_scheduled_order(номер, студент)` принимает номер как есть. База ни при чём.
+Решение: маршрут объявлен как `/api/v1/orders/{order_number:path}/students/{student_id}/cancel`.
+Обоснование: хвост `/students/{id}/cancel` отделяет номер однозначно (регулярное выражение с откатом); других маршрутов с номером приказа в пути нет, `GET /orders/signers` — другой метод и статичный путь. Отказался, по условию задачи, от перехода на `order_id` (его нет в `v_pending_orders`/`v_student_orders`) и от номера в теле запроса — это сломало бы вызов фронта. Права и тело не менялись.
+Что изменилось: `backend/app.py` (объявление маршрута); миграции нет.
+Что нужно фронту: передавать номер через `encodeURIComponent` (как сейчас); ничего менять не нужно.
+Проверка: `test_workflows.py::test_cancel_accepts_a_real_order_number_with_slash` — номер `WF-xxxxxx-с/26` в закодированном виде: 200; приказ пропал из `v_pending_orders` и `v_student_orders`, задание `cancelled`; повтор с тем же Idempotency-Key — прежний ответ; отмена зачисления с таким номером — 409 `order_cancel_enrollment`, а не 404. Весь `test_workflows.py`: 11 passed.
+Открытые вопросы: нет.
+
+## 2026-10-16 — Р7: запланированные приказы (проверка, без кода)
+Статус: готово
+Проблема: фронту нужно знать, какие приказы ещё не исполнены, когда вступят в силу и можно ли их отменить.
+База: `v_pending_orders` (`order_type_code`, `due_date`, `days_left`), `v_student_orders.applied_at`; `sp_cancel_scheduled_order` удаляет строку `order_student` (и пустой `academic_order`), статуса «Отменён» нет; отмена зачисления запрещена.
+Решение: бекенд не меняется; права чтения и поведение после отмены проверены и описаны в API.md.
+Обоснование: нужные поля уже есть в представлениях базы.
+Что изменилось: —
+Что нужно фронту: см. Ф-Р7.
+Проверка: `test_workflows.py::test_cancel_accepts_a_real_order_number_with_slash` — после отмены приказ пропадает из `v_pending_orders` и `v_student_orders`, отмена зачисления даёт 409 `order_cancel_enrollment`; чтение `v_pending_orders` ограничено STAFF в реестре ресурсов (`resources.py`) и областью института.
+Открытые вопросы: нет.
+
+## 2026-10-16 — Р6: журнал изменений событиями
+Статус: готово
+Проблема: ресурс `v_audit` отдаёт строку на каждое поле, постраничный вывод режет одно изменение на две страницы; источник «Интерфейс / Чат-агент» по `agent_request IS NOT NULL` неверен — бекенд создаёт `agent_request` и для форм («Запрос коррекции оценки через форму», «Отмена применённых изменений через форму»); `operation` приходит русским словом.
+База: `audit_log` + `audit_log_detail` (поле на строку, 1НФ); источник пишет `trg_audit` из `app.agent_request_id`; скрытые поля (`password_hash`, паспорт, СНИЛС, ИНН, дата рождения, адрес) база уже пишет как `***`.
+Решение: новая функция `backend_api.audit_events` и маршрут `GET /api/v1/audit`. Событие = одна запись `audit_log` с массивом `changes`. `source='agent'` только если `agent_request` связан с `agent_backend.agent_run`. `proposal_id` — предложение с тем же `agent_request_id` (при нескольких — решённое в той же транзакции, `decided_at = changed_at`). Страница считает события. Фильтры: `changed_at__gte/lte`, `table_name`, `operation`, `changed_by` (логин), `source`.
+Обоснование: `v_audit` и ресурс `/resources/v_audit` не тронуты — старый клиент не ломается. Отдельный маршрут выбран вместо подмены ресурса: у ресурса другой формат строк и фильтров. Права прежние: admin/director/dean_staff, область — `audit_in_scope`; студенту и преподавателю 403. Скрытые поля отдаются как `***` (раньше ресурс их вырезал целиком; задача требует `***`, значения в базе уже замаскированы, сервер маскирует ещё раз).
+Что изменилось: миграция 0057; `backend/app.py` — `GET /api/v1/audit`.
+Что нужно фронту: экран «Журнал» (Ф-Р6) строить на `GET /api/v1/audit`; `audit_id` — строка.
+Проверка: `test_decision_contract.py::test_journal_returns_events_with_source_and_proposal` — два поля одного изменения в одном событии, постраничность по событиям, форма → `ui`, одобренное предложение агента → `agent` и `proposal_id`, исправление оценки через форму → `ui` с `proposal_id`, студент и преподаватель — 403. Прошёл на копии базы.
+Открытые вопросы: нет.
+
+## 2026-10-16 — Р9: причина недоступности отмены
+Статус: готово
+Проблема: `undo_unavailable` одинаков для истёкшего срока, закрытой ведомости и необратимого поля; фронт держит свою копию списка обратимых полей.
+База: закрытая ведомость (`trg_grade_check`) и завершающий статус заявки (`request_status.is_final`) — правила базы; срок 15 минут и список обратимых полей — правила бекенда.
+Решение: функция `backend_api.undo_reason(item)` → `NULL | irreversible | sheet_closed | request_final`; `reversible_item` теперь `undo_reason IS NULL` (один источник правды). У строк пакета (`items[]`) — `reversible` и `undo_reason`; для применённого пакета после окна отмены — `expired`; для неприменённой строки одобренного пакета — `reversible=false, undo_reason=null`. `undo_unavailable` получает `details.reason`; `execution.skipped`/`undo_skipped` — `reason` у каждой строки.
+Обоснование: код ошибки один — совместимо с текущим фронтом. Уже выполненная отмена тоже отдаётся как `expired` (повторно отменить нельзя, отдельной причины в Р9 нет). При отсутствии обратимых строк причина общая, если у всех строк она одна, иначе `irreversible`.
+Что изменилось: миграция 0057 (`undo_reason`, `reversible_item`, обёртка `agent_backend.proposal_view`, `undo_proposal`).
+Что нужно фронту: Ф-Р9 — кнопку по `actions.can_undo`, причину строки по `undo_reason`, подпись ошибки по `details.reason`.
+Проверка: `test_each_unavailable_undo_names_its_reason`, `test_closed_sheet_row_is_not_reversible` — прошли на копии базы.
+Открытые вопросы: нет.
+
+## 2026-10-16 — Р8: отмена по выбранным строкам
+Статус: готово
+Проблема: одна изменённая строка из пакета не давала отменить остальные; необратимые строки пропускались молча.
+База: обратимые поля лежат в независимых строках, правил на несколько строк нет; база может отклонить отдельную строку (`trg_schedule_conflicts`, `trg_grade_check`, `request_final`).
+Решение: `POST /agent/proposals/{id}/undo` принимает `{picked_item_ids}`. Выбранные строки отменяются одной транзакцией; если строку отменить нельзя — откат всего и 409 с `details.item_id` и `details.reason`: `undo_changed` + `changed` (изменена после применения), `undo_unavailable` + `irreversible|sheet_closed|request_final` (по Р9) или `conflict` (правило базы отклонило возврат, например занятая аудитория). Невалидный набор (пустой, повторы, не применённые строки) — 422 `validation_error`, `details.field="picked_item_ids"`. Ключ идемпотентности — по `(id, picked_item_ids)`; тот же ключ с другим набором — `idempotency_conflict`. Без `picked_item_ids` — прежнее поведение (все обратимые строки).
+Обоснование: механика совпадает с одобрением пакета. Сначала ошибку правила базы при возврате хотел отдавать исходным кодом базы, но тогда в ответе нет `item_id`; выбран перехват ошибки строки и `reason='conflict'` с текстом базы. Значение `conflict` — дополнение к перечню Р9, у этой ситуации нет подходящего значения там. Блокировки и сверка по снимку и номеру записи журнала сохранены.
+Что изменилось: миграция 0057 (`backend_api.undo_proposal(uuid,uuid,text,jsonb)`, трёхаргументная версия — обёртка); `backend/contracts.py` — `ProposalUndoRequest`; `backend/app.py` — маршрут undo; `backend/database_errors.py` — разбор `details` (`item_id`, `reason`, `field`, `max`), новый внутренний SQLSTATE `P6205` → 422 `validation_error`.
+Что нужно фронту: Ф-Р8.
+Проверка: `test_selected_undo_skips_an_unselected_changed_row`, `test_schedule_conflict_in_a_selected_row_rolls_back_the_whole_undo`; прежние `test_batches.py` — прошли на копии базы.
+Открытые вопросы: значение `reason='conflict'` согласовать с фронтом (в таблице Ф-Р9 его нет).
+
+## 2026-10-16 — Р5: подписанты приказа
+Статус: готово
+Проблема: ответ `/orders/signers` не описан; поле подписанта в ошибках называлось то `signed_by`, то `signed_by_id`.
+База: столбец `academic_order.signed_by_id`; подписантов определяет `fn_manages_institute`.
+Решение: правило `Invalid signer` отдаёт `details.field="signed_by_id"`; ответ `/orders/signers` описан в API.md.
+Обоснование: фронт подсвечивает поле по `details.field`, имя должно совпадать со столбцом.
+Что изменилось: `backend/database_errors.py`.
+Что нужно фронту: Ф-Р5.
+Проверка: `test_database_errors.py::test_signer_field_matches_the_column` — оба правила подписанта отдают `field="signed_by_id"`. Прошёл.
+Открытые вопросы: нет.
+
+## 2026-10-16 — Р4: текст просьбы и «Подготовить заново»
+Статус: готово
+Проблема: у истёкшего или отклонённого предложения нечего повторить — исходного текста просьбы в ответе нет.
+База: `agent_request.request_text`; при удалении чата бекенд заменяет его на «Переписка удалена»; у форм там служебный текст.
+Решение: `GET /agent/proposals/{id}` отдаёт `request_text` — только автору и только если предложение создал запуск агента (`run_id IS NOT NULL`), иначе `null`. Во всех ответах предложения — `actions.can_redo`: автор, предложение агента, `validity.state='expired'` или `status='rejected'`, текст не «Переписка удалена». В списке очереди `request_text` нет.
+Обоснование: флаг считает сервер — фронту не нужно распознавать служебные тексты. Согласующему текст не отдаётся. Чтение текста — через узкую `SECURITY DEFINER` функцию `agent_backend.proposal_request_text`, у персональных ролей нет прямого доступа к `agent_request`.
+Что изменилось: миграция 0057 (`proposal_request_text`, `proposal_view`, `get_proposal`).
+Что нужно фронту: Ф-Р4.
+Проверка: `test_request_text_and_redo_belong_to_the_author_of_an_agent_proposal`, `test_expired_agent_proposal_can_be_redone_but_form_correction_cannot` — прошли на копии базы.
+Открытые вопросы: нет.
+
+## 2026-10-16 — Р3: причина передачи 10–2000 символов
+Статус: готово
+Проблема: `assign_proposal` принимал 1–2000 символов; при нарушении приходил `422 invalid_record` без поля.
+База: передача хранится только в схеме бекенда; минимальной длины в базе нет.
+Решение: SQL-проверка `BETWEEN 10 AND 2000` (защита); маршрут проверяет длину после обрезки и отдаёт 422 `validation_error`, `details.field="reason"`.
+Обоснование: одно правило 10–2000 для всех текстов решений. Ограничение длины убрано из модели запроса и перенесено в маршрут, иначе ошибка Pydantic не называет поле; тело запроса по-прежнему ограничено прокси (21 МБ).
+Что изменилось: миграция 0057; `backend/contracts.py` (`ProposalAssignmentRequest.reason`), `backend/app.py`.
+Что нужно фронту: Ф-Р3.
+Проверка: `test_transfer_reason_is_10_to_2000_characters_after_trimming` — 9 символов, 9 с пробелами по краям, 2001 — ошибка с полем; 10 и 2000 принимаются. Прошёл.
+Открытые вопросы: нет.
+
+## 2026-10-16 — Р2: коды для ошибок базы
+Статус: готово
+Проблема: ошибки исправления оценки и отмены приказа доходили как общий `409 conflict`; отменённая ведомость выдавалась как `sheet_closed`.
+База: `trg_correction_check`, `sp_decide_grade_correction`, `sp_cancel_scheduled_order` — `RAISE EXCEPTION` (P0001); `ux_one_open_correction` — уникальный индекс (23505); CHECK `grade_correction_check5` (`decided_by_id <> requested_by_id`).
+Решение: правила в `database_errors.py`: `correction_pending_exists` 409 `sheet_id` (по `constraint_name`), `sheet_open` 409 `sheet_id`, `sheet_cancelled` 409 `sheet_id`, `correction_not_allowed` 403, `correction_not_own_sheet` 403 `sheet_id`, `correction_self_decision` 403 (текст триггера и CHECK), `correction_not_manager` 403, `correction_decided` 409 («уже рассмотрена», «Решение по заявке … уже принято»), `order_cancel_enrollment` 409, `order_not_pending` 409. Общее правило «Ведомость … закрыта/отменена» срабатывает только если более точное не нашлось.
+Обоснование: базу менять нельзя, остаётся сопоставление по тексту. `domain_error` вызывается в `app.py` раньше общего разбора SQLSTATE, поэтому 403 и код для `23505` не перекрываются.
+Что изменилось: `backend/database_errors.py`.
+Что нужно фронту: Ф-Р2.
+Проверка: `test_database_error_codes.py` — каждое нарушение вызывается на настоящей базе, проверяются код, HTTP-статус и поле.
+Открытые вопросы: нет.
+
+## 2026-10-16 — Р1: комментарий к решению по исправлению оценки до 500 символов
+Статус: готово
+Проблема: бекенд принимал комментарий 10–2000, а `grade_correction.decision_comment` — `VARCHAR(500)`; 501+ символ давал `22001` → `422 invalid_record` без пояснения.
+База: `decision_comment VARCHAR(500)`, при отказе обязателен (`CHECK status <> 'rejected' OR decision_comment IS NOT NULL`).
+Решение: в `decide_proposal_v1` перед `CALL sp_decide_grade_correction` проверка 10–500 после обрезки → 422 `validation_error`, `details={"field":"reason","max":500}`. У остальных видов — по-прежнему 10–2000.
+Обоснование: базу не меняем, сервер проверяет предел столбца до записи. Проверка в SQL, а не в маршруте: только там известен вид предложения без лишнего запроса.
+Что изменилось: миграция 0057; `backend/database_errors.py` (`P6205`).
+Что нужно фронту: Ф-Р1.
+Проверка: `test_correction_comment_is_limited_to_the_column_size` (501 — ошибка с полем и `max`, 500 — принят, отказ без комментария — 422), `test_other_decisions_keep_2000_characters`. Прошли на копии базы.
+Открытые вопросы: нет.

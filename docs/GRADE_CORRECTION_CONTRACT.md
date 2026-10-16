@@ -21,7 +21,7 @@ POST /agent/proposals/{id}/submit, JSON {expected_version}, Bearer и Idempotenc
 
 ## Решение руководителя
 
-Используется существующий POST /agent/proposals/{id}/decision с {approve, reason, expected_version} и Idempotency-Key.
+Используется существующий POST /agent/proposals/{id}/decision с {approve, reason, expected_version} и Idempotency-Key. Комментарий решения `reason` — 10–500 символов после обрезки: он записывается в `grade_correction.decision_comment VARCHAR(500)`. Нарушение — 422 `validation_error`, `details:{field:"reason",max:500}` (с 16.10.2026, миграция 0057; у остальных видов предложений по-прежнему 10–2000).
 
 - Решать можно только submitted, после допустимого назначения/взятия по специальной предметной политике. Решающий — директор/замдиректора института, отличный от заявителя.
 - Сервер вызывает sp_decide_grade_correction под контекстом согласующего. Одобрение, изменение grade и финальное состояние proposal фиксируются одной транзакцией; отказ сохраняет оценку.

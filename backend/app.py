@@ -1,7 +1,7 @@
 """HTTP entry point for the pinned React client."""
 
 from collections import defaultdict, deque
-from datetime import date
+from datetime import date, timedelta
 import os
 from threading import Lock
 from time import monotonic
@@ -28,7 +28,8 @@ from backend.file_parser import AttachmentError
 from backend.agent_config import AgentSettings
 from backend.presentation import ApiJSONResponse
 from backend.contracts import (ChatRequest, ChatTitle, EmptyRequest, Job, Me,
-                               ManualGradeCorrectionRequest, ProposalAssignmentRequest, ProposalDecisionRequest, ProposalSubmitRequest)
+                               ManualGradeCorrectionRequest, ProposalAssignmentRequest, ProposalDecisionRequest, ProposalSubmitRequest,
+                               ProposalUndoRequest)
 
 
 app = FastAPI(title="Деканат: агент и данные",default_response_class=ApiJSONResponse)
@@ -275,6 +276,14 @@ def sheet_missing(sheet_id: int, request: Request, authorized=Depends(actor), db
             (sheet_id,request.headers["authorization"][7:])).fetchone()["items"]}
 
 
+@app.get("/api/v1/resources/grade_sheet/{sheet_id}/roster")
+def sheet_roster(sheet_id: int, request: Request, authorized=Depends(actor), db=Depends(db_connection, scope="function")):
+    # Состав ведомости по правилам базы. Права проверяет сама функция по токену, поэтому вызов без личной роли:
+    # недоступная ведомость (в том числе для студента) — 404, как несуществующая.
+    return {"items": db.execute("SELECT backend_api.sheet_roster(%s,%s) AS items",
+        (sheet_id,request.headers["authorization"][7:])).fetchone()["items"]}
+
+
 def _record_action(name: str, action: str, request: Request, key: dict[str, str],
                    data: dict[str, Any], authorized: tuple[Me, str], db):
     info = resources.spec(db, name, authorized[0].roles[0])
@@ -324,6 +333,29 @@ def _olap_report(request,mode,group_id,discipline_id,semester,status_id,course,l
                        group_id, discipline_id, semester, status_id)
 
 
+@app.get("/api/v1/audit")
+def audit_events(request: Request, changed_at__gte: str | None = None, changed_at__lte: str | None = None,
+                 table_name: Annotated[str | None, Query(max_length=63)] = None,
+                 operation: Literal["I", "U", "D"] | None = None,
+                 changed_by: Annotated[str | None, Query(max_length=63)] = None,
+                 source: Literal["ui", "agent"] | None = None,
+                 limit: Annotated[int, Query(ge=1, le=500)] = 100,
+                 offset: Annotated[int, Query(ge=0, le=2**31 - 1)] = 0,
+                 authorized=Depends(actor), db=Depends(db_connection, scope="function")):
+    bounds = []
+    for raw, end in ((changed_at__gte, False), (changed_at__lte, True)):
+        try:
+            value = resources._value(raw, "timestamp with time zone")
+        except ValueError:
+            raise HTTPException(status_code=422, detail="invalid_value") from None
+        if value is not None and end and len(raw) == 10:
+            value += timedelta(days=1) - timedelta(microseconds=1)
+        bounds.append(value)
+    return db.execute("SELECT backend_api.audit_events(%s,%s,%s,%s,%s,%s,%s,%s,%s) AS result",
+        (request.headers["authorization"][7:], *bounds, table_name, operation, changed_by, source,
+         limit, offset)).fetchone()["result"]
+
+
 @app.post("/api/v1/workflows/{name}")
 def run_workflow(name: str, data: dict[str, Any], request: Request,
                  idempotency_key: UUID = Header(), authorized=Depends(actor), db=Depends(db_connection, scope="function")):
@@ -346,7 +378,9 @@ def order_signers(request: Request, institute_id: Annotated[int, Query(gt=0)],
         (institute_id,request.headers["authorization"][7:])).fetchone()["items"]}
 
 
-@app.post("/api/v1/orders/{order_number}/students/{student_id}/cancel")
+# Номер приказа содержит «/» (например «151-с/26»), а Starlette раскодирует %2F до сопоставления маршрута,
+# поэтому номер — :path; хвост /students/{id}/cancel отделяет его однозначно.
+@app.post("/api/v1/orders/{order_number:path}/students/{student_id}/cancel")
 def cancel_order(order_number: str, student_id: int, request: Request, idempotency_key: UUID = Header(),
                  authorized=Depends(actor), db=Depends(db_connection, scope="function")):
     if authorized[0].roles[0] not in resources.STAFF:
@@ -418,12 +452,20 @@ def get_proposal(proposal_id: UUID, request: Request, authorized=Depends(actor),
     return proposals.get(db, proposal_id, request.headers["authorization"][7:])
 
 
+def _invalid(field: str, message: str) -> HTTPException:
+    return HTTPException(422, {"code": "validation_error", "message": message, "details": {"field": field}})
+
+
 @app.post('/api/v1/agent/proposals/{proposal_id}/undo')
-def undo_proposal(proposal_id: UUID, request: Request, idempotency_key: UUID = Header(),
-                  authorized=Depends(actor), db=Depends(db_connection, scope='function')):
+def undo_proposal(proposal_id: UUID, request: Request, payload: ProposalUndoRequest | None = None,
+                  idempotency_key: UUID = Header(), authorized=Depends(actor), db=Depends(db_connection, scope='function')):
+    picked = payload.picked_item_ids if payload else None
+    if picked is not None and (not picked or len(set(picked)) != len(picked)):
+        raise _invalid("picked_item_ids", "Выберите применённые строки без повторов")
     with user_context(db,authorized[0].user_id):
-        return db.execute('SELECT backend_api.undo_proposal(%s,%s,%s) AS result',
-            (proposal_id,idempotency_key,request.headers['authorization'][7:])).fetchone()['result']
+        return db.execute('SELECT backend_api.undo_proposal(%s,%s,%s,%s) AS result',
+            (proposal_id,idempotency_key,request.headers['authorization'][7:],
+             Jsonb(picked) if picked is not None else None)).fetchone()['result']
 
 
 @app.get("/api/v1/agent/proposals/{proposal_id}/assignees")
@@ -441,6 +483,8 @@ def proposal_events(proposal_id: UUID, request: Request, after: Annotated[int, Q
 @app.post("/api/v1/agent/proposals/{proposal_id}/assignment")
 def assign_proposal(proposal_id: UUID, payload: ProposalAssignmentRequest, request: Request,
                     idempotency_key: UUID = Header(), authorized=Depends(actor), db=Depends(db_connection, scope="function")):
+    if not 10 <= len(payload.reason) <= 2000:
+        raise _invalid("reason", "Причина передачи — от 10 до 2000 символов")
     return proposals.assign(db, proposal_id, payload, idempotency_key, request.headers["authorization"][7:])
 
 
