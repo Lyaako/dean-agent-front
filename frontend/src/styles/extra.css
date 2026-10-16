@@ -739,3 +739,7 @@ body {
 /* Счётчик строк под таблицей (React: TableTools) */
 .table-meta .count { margin-left: auto; font-size: 13.5px; color: var(--muted); white-space: nowrap; }
 .table-meta .count b { color: var(--ink-2); }
+
+/* Журнал: источник и ссылка на предложение в одной ячейке */
+.audit-src { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.table-wrap td .effects { text-align: left; }
