@@ -17,10 +17,11 @@ ANALYSES = {'session','heat','risk','retake','moves'}
 
 
 def analyze(db, token, mode, *, group_id=None, discipline_id=None, semester=None,
-            status_id=None, course=None, level=None, mod_min=30, att_min=75, period='month', pick=None):
-    if (mode not in ANALYSES or any(v is not None and v<1 for v in
-            (group_id,discipline_id,semester,status_id,course)) or not 25<=mod_min<=54 or not 0<=att_min<=100
-            or level not in (None,'course','group','discipline','student')
+            status_id=None, course=None, level=None, mod_min=30, att_min=70, period='month', pick=None):
+    # Параметры «Итогов сессии» проверяет analysis_from_data: ошибка называет поле (validation_error).
+    if (mode not in ANALYSES or (mode!='session' and any(v is not None and v<1 for v in
+            (group_id,discipline_id,semester,status_id,course))) or not 25<=mod_min<=54 or not 0<=att_min<=100
+            or (mode!='session' and level not in (None,'course','group','discipline','student'))
             or period not in ('month','semester','year') or (pick is not None and len(pick)>40)
             or (mode=='retake' and level not in (None,'course','group'))):
         raise HTTPException(422,'invalid_filter')
@@ -29,8 +30,182 @@ def analyze(db, token, mode, *, group_id=None, discipline_id=None, semester=None
         semester=semester,status_id=status_id,course=course,level=level,mod_min=mod_min,att_min=att_min,period=period,pick=pick)
 
 
+def _invalid(field):
+    return HTTPException(422,{'code':'validation_error','message':'Некорректный параметр: '+field,'details':{'field':field}})
+
+
+def _pct(part, whole):
+    # Целый процент, половина вверх (как ROUND в PostgreSQL); null при пустом знаменателе.
+    return None if not whole else int((Decimal(100*part)/whole).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
+
+
+def _one_digit(values):
+    return float((Decimal(sum(values))/len(values)).quantize(Decimal('0.1'),rounding=ROUND_HALF_UP)) if values else None
+
+
+def _passed_attempts(attempts):
+    """Вид ведомости самой ранней попытки с баллами по ключу (студент, дисциплина, семестр)."""
+    earliest={}
+    for r in attempts:
+        if r['points'] is None:
+            continue
+        key=(r['student_id'],r['discipline_id'],r['semester'])
+        order=(r['exam_date'] is None,r['exam_date'] or '',r['sheet_id'])
+        if key not in earliest or order<earliest[key][0]:
+            earliest[key]=(order,r['sheet_kind'])
+    return {key:value[1] for key,value in earliest.items()}
+
+
+FIRST_TIME=('main','individual')
+
+
+def _key(r):
+    return (r['student_id'],r['discipline_id'],r['semester'])
+
+
+
+
+def _session_summary(rows, passed):
+    """Студенты сессии и их доли по результатам rows (все результаты строки, сгруппированные по студенту)."""
+    by_student=defaultdict(list)
+    for r in rows:
+        by_student[r['student_id']].append(r)
+    first=lambda r: passed.get(_key(r)) in FIRST_TIME
+    clean=[v for v in by_student.values() if all(first(r) for r in v)]
+    graded=lambda v: [r for r in v if r['is_graded']]
+    quality=sum(all((r['mark'] or 0)>=4 for r in graded(v)) for v in clean)
+    excellent=sum(bool(graded(v)) and all(r['mark']==5 for r in graded(v)) for v in clean)
+    count=len(by_student)
+    return {'students':count,'abs_pct':_pct(len(clean),count),'qual_pct':_pct(quality,count),
+        'debts':sum(not first(r) for r in rows),'excellent':excellent}
+
+
+def _session_rows(data, students, passed, level, course, group_id, discipline_id, semester):
+    level=level or 'course'
+    if level=='student':
+        level='result'
+    if level not in ('course','group','discipline','result'):
+        raise _invalid('level')
+    for field,value in (('course',course),('group_id',group_id),('discipline_id',discipline_id)):
+        if value is not None and value<1:
+            raise _invalid(field)
+    if semester is not None and not 1<=semester<=12:
+        raise _invalid('semester')
+    if level=='group' and course is None:
+        raise _invalid('course')
+    if level in ('discipline','result') and group_id is None:
+        raise _invalid('group_id')
+    if level=='result' and discipline_id is None:
+        raise _invalid('discipline_id')
+    # Сессия студента: заданный семестр или предыдущий семестр его группы.
+    session={sid:(semester if semester is not None else s['current_semester']-1) for sid,s in students.items()}
+    results=[r for r in data['results'] if r['student_id'] in students and r['semester']==session[r['student_id']]
+        and r['semester']>=1 and (discipline_id is None or r['discipline_id']==discipline_id)]
+    total=_session_summary(results,passed)
+    rows=[]
+    if level=='result':
+        for r in results:
+            rows.append({'student_id':r['student_id'],'student':students[r['student_id']]['student'],
+                'control_type':r['control_type'],'is_graded':r['is_graded'],'points':r['points'],
+                'is_absent':r['is_absent'],'mark':r['mark'],'result':r['result'],'attempt':passed.get(_key(r))})
+        rows.sort(key=lambda r:(r['student'],r['student_id']))
+        return level,rows,total
+    field={'course':'course','group':'group_id','discipline':'discipline_id'}[level]
+    buckets=defaultdict(list)
+    names={}
+    for r in results:
+        value=students[r['student_id']]['course'] if field=='course' else r[field]
+        buckets[value].append(r)
+        names[value]=(f'{value} курс' if field=='course' else
+            r['group_name'] if field=='group_id' else r['discipline'])
+    for value,members in buckets.items():
+        summary=_session_summary(members,passed)
+        if summary['students']:
+            rows.append({field:value,'name':names[value],**summary})
+    rows.sort(key=lambda r:(r[field] if field=='course' else r['name'],r[field]))
+    return level,rows,total
+
+
+def _risk_rows(data, students, mod_min, att_min):
+    pool={sid:s for sid,s in students.items() if s['is_active']}
+    weak=defaultdict(list)
+    for r in data['modules']:
+        if r['student_id'] in pool and (r['points'] is None or r['points']<mod_min):
+            weak[r['student_id']].append({'discipline_id':r['discipline_id'],'discipline':r.get('discipline'),
+                'points':r['points'],'is_absent':r['is_absent']})
+    presence=defaultdict(list)
+    for r in data['attendance']:
+        presence[r['student_id']].append(int(r['is_present']))
+    debts=defaultdict(int)
+    for r in data['debts']:
+        debts[r['student_id']]+=1
+    points=defaultdict(list)
+    for r in data['results']:
+        if r['points'] is not None:
+            points[r['student_id']].append(r['points'])
+
+
+    rows=[]
+    scatter=[]
+    for sid,s in pool.items():
+        attendance=_one_digit([100*v for v in presence[sid]])
+        low_attendance=attendance is not None and attendance<att_min
+        low_modules=sorted(weak[sid],key=lambda m:(m['discipline'] or '',m['discipline_id']))
+        score=bool(low_modules)+low_attendance+(debts[sid]>0)
+        average=_one_digit(points[sid])
+        if average is not None:
+            scatter.append({'student_id':sid,'student':s['student'],'group_name':s['group_name'],
+                'attendance_pct':attendance,'avg_points':average,'debts':debts[sid]})
+        if score:
+            rows.append({'student_id':sid,'student':s['student'],'group_id':s['group_id'],
+                'group_name':s['group_name'],'course':s['course'],'low_modules':low_modules,
+                'attendance_pct':attendance,'attendance_count':len(presence[sid]),'attendance_low':low_attendance,
+                'debts':debts[sid],'score':score,'risk':'high' if score>=2 else 'medium'})
+    rows.sort(key=lambda r:(-r['score'],-len(r['low_modules']),r['student'],r['student_id']))
+    scatter.sort(key=lambda r:(r['student'],r['student_id']))
+    total={'pool':len(pool),'at_risk':len(rows),'high':sum(r['risk']=='high' for r in rows),
+        'low_module':sum(bool(r['low_modules']) for r in rows),
+        'low_attendance':sum(r['attendance_low'] for r in rows),'with_debts':sum(r['debts']>0 for r in rows)}
+    return rows,total,scatter
+
+
+def _retake_rows(data, students, passed, level):
+    level=level or 'group'
+    field='course' if level=='course' else 'group_id'
+    pool={sid:s for sid,s in students.items() if s['is_active']}
+    buckets=defaultdict(lambda:{'failed':0,'closed_retake':0,'closed_commission':0,'open':0})
+    names={}
+    totals={'failed':0,'closed_retake':0,'closed_commission':0,'open':0}
+    for r in data['results']:
+        s=pool.get(r['student_id'])
+        if s is None or r['semester']>=s['current_semester']:
+            continue
+        kind=passed.get(_key(r))
+        if kind in FIRST_TIME:
+            continue
+        # Долг сессии закрыт пересдачей, комиссией или ещё открыт (такой ключ есть в v_debtors).
+        column='closed_retake' if kind=='retake' else 'closed_commission' if kind=='commission' else 'open'
+        value=s[field]
+        names[value]=f'{value} курс' if field=='course' else s['group_name']
+        for target in (buckets[value],totals):
+            target['failed']+=1
+            target[column]+=1
+    def closed(counts):
+        return {**counts,'closed_pct':_pct(counts['closed_retake']+counts['closed_commission'],counts['failed'])}
+    rows=[{field:value,'name':names[value],**closed(counts)} for value,counts in buckets.items()]
+    rows.sort(key=lambda r:(r[field] if field=='course' else r['name'],r[field]))
+    per_student=defaultdict(list)
+    for r in data['debts']:
+        if r['student_id'] in pool:
+            per_student[r['student_id']].append(r['attempts'])
+    # Правило v_expulsion_risk: MAX(attempts) >= 3 или COUNT(*) >= 3 по строкам v_debtors.
+    candidates=sum(max(values)>=3 or len(values)>=3 for values in per_student.values())
+    return level,rows,{**closed(totals),'expulsion_candidates':candidates}
+
+
+
 def analysis_from_data(data, mode, *, group_id=None, discipline_id=None, semester=None,
-                       status_id=None, course=None, level=None, mod_min=30, att_min=75, period='month', pick=None):
+                       status_id=None, course=None, level=None, mod_min=30, att_min=70, period='month', pick=None):
     if sum(len(v) for v in data.values())>100_000:
         raise HTTPException(413,'olap_too_large')
     students={s['student_id']:s for s in data['students'] if
@@ -58,22 +233,15 @@ def analysis_from_data(data, mode, *, group_id=None, discipline_id=None, semeste
                 and all(r['points'] is not None and (not r['is_graded'] or r['mark']==5) for r in values)
                 for values in by_student.values())}
     total=metrics(results,set(students)); rows=[]
-    if mode=='session':
-        level=level or 'course'
-        keyfield={'course':'course','group':'group_id','discipline':'discipline_id','student':'student_id'}[level]
-        buckets=defaultdict(list); names={}; members=defaultdict(set)
-        if level in ('course','group','student'):
-            for s in students.values():
-                key=s[keyfield]; members[key].add(s['student_id'])
-                names[key]=s['group_name'] if level=='group' else s['student'] if level=='student' else str(key)
-        for r in results:
-            key=r[keyfield]; buckets[key].append(r); members[key].add(r['student_id'])
-            if level=='discipline': names[key]=r['discipline']
-        for key in sorted(members):
-            value=metrics(buckets[key],members[key])
-            if level=='discipline':
-                value['debts']=sum(d['discipline']==names[key] for d in debts)
-            rows.append({keyfield:key,'name':names[key],**value})
+    if mode in ('session','risk','retake'):
+        # Новые метрики экрана OLAP: доли по студентам, риск по студенту, воронка по долгам.
+        passed=_passed_attempts([r for r in data['attempts'] if r['student_id'] in students])
+        if mode=='session':
+            level,rows,total=_session_rows(data,students,passed,level,course,group_id,discipline_id,semester)
+        elif mode=='risk':
+            rows,total,scatter=_risk_rows(data,students,mod_min,att_min)
+        else:
+            level,rows,total=_retake_rows(data,students,passed,level)
     elif mode=='heat':
         cells=defaultdict(list)
         for r in results: cells[r['discipline_id'],r['group_id']].append(r)
@@ -82,30 +250,6 @@ def analysis_from_data(data, mode, *, group_id=None, discipline_id=None, semeste
             rows.append({'discipline_id':did,'discipline':values[0]['discipline'],'group_id':gid,
                 'group_name':values[0]['group_name'],'results':len(values),'first_pass':passed,
                 'not_first_pass_pct':round(100*(len(values)-passed)/len(values),2)})
-    elif mode=='retake':
-        level=level or 'course'; field='course' if level=='course' else 'group_id'
-        buckets=defaultdict(list)
-        for r in attempts: buckets[r[field]].append(r)
-        for key,values in sorted(buckets.items()):
-            counts={kind:{'attempts':sum(r['sheet_kind']==kind for r in values),
-                'students':len({r['student_id'] for r in values if r['sheet_kind']==kind}),
-                'passed':sum(r['sheet_kind']==kind and r['points'] is not None for r in values)}
-                for kind in ('main','retake','commission','individual')}
-            rows.append({field:key,'name':str(key) if field=='course' else values[0]['group_name'],'attempts':counts})
-    elif mode=='risk':
-        presence=defaultdict(list)
-        for r in data['attendance']:
-            presence[r['student_id'],r['discipline_id']].append(r['is_present'])
-        for r in scoped(data['modules']):
-            s=students[r['student_id']]; values=presence[r['student_id'],r['discipline_id']]
-            attendance=round(100*sum(values)/len(values),2) if values else None
-            reasons=[]
-            if r['points'] is None: reasons.append('not_attested')
-            elif r['points']<mod_min: reasons.append('module_below_threshold')
-            if attendance is not None and attendance<att_min: reasons.append('attendance_below_threshold')
-            if reasons:
-                rows.append({**s,**r,'attendance_pct':attendance,'attendance_count':len(values),'reasons':reasons})
-        rows.sort(key=lambda r:(r['group_id'],r['student_id'],r['discipline_id']))
     elif mode=='moves':
         def period_key(raw):
             value=date.fromisoformat(raw)
@@ -130,7 +274,7 @@ def analysis_from_data(data, mode, *, group_id=None, discipline_id=None, semeste
                 for r in values: kinds[r['order_type_code']].add(r['order_id'])
                 rows.append({'period':key,'orders':len({r['order_id'] for r in values}),
                     'students':len({r['student_id'] for r in values}),'by_type':{k:len(v) for k,v in kinds.items()}})
-    return {'mode':mode,'level':level,'rows':rows,'total':total,
+    return {'mode':mode,'level':level,'rows':rows,'total':total,**({'points':scatter} if mode=='risk' else {}),
         'filters':{'course':course,'group_id':group_id,'discipline_id':discipline_id,'semester':semester,
             'status_id':status_id,'mod_min':mod_min,'att_min':att_min,'period':period,'pick':pick}}
 

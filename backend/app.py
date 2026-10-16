@@ -318,7 +318,7 @@ def delete_resource(name: str, request: Request, authorized=Depends(actor), db=D
 def get_olap(request: Request, mode: str = "rollup-group", group_id: int | None = None,
              discipline_id: int | None = None, semester: int | None = None,
              status_id: int | None = None, course: int | None = None, level: str | None = None,
-             mod_min: int = 30, att_min: float = 75, period: str = 'month', pick: str | None = None,
+             mod_min: int = 30, att_min: float = 70, period: str = 'month', pick: str | None = None,
              authorized=Depends(actor), db=Depends(db_connection, scope="function")):
     with user_context(db,authorized[0].user_id,read_only=True):
         return _olap_report(request,mode,group_id,discipline_id,semester,status_id,course,level,mod_min,att_min,period,pick,db)
