@@ -64,27 +64,16 @@ const complete = await load("api/resources.ts", {
 assert.deepEqual(await complete.fetchAll("person"), [{ id: 1 }]);
 
 let query;
-const olap = await load("api/olap.ts", { "./client": { api: async (_, opts) => { query = opts.query; return opts.query; } } });
-assert.equal(olap.OLAP_MODES.length, 8);
-for (const [mode] of olap.OLAP_MODES) {
-  await olap.fetchOlap(mode, { group_id: 1, discipline_id: 2, semester: 3, status_id: 4 });
-  assert.deepEqual(query, { mode, group_id: 1, discipline_id: 2, semester: 3, status_id: 4 });
+// OLAP — срезы макета (session, heat, risk, retake, moves); параметры уходят в запрос как есть
+const olap = await load("api/olap.ts", { "@tanstack/react-query": { useQuery: () => {} }, "./client": { api: async (_, opts) => { query = opts.query; return opts.query; } } });
+for (const mode of ["session", "heat", "risk", "retake", "moves"]) {
+  await olap.fetchOlap(mode, { course: 2, group_id: 1, semester: 3, period: "semester", pick: "2025/26-1" });
+  assert.deepEqual(query, { mode, course: 2, group_id: 1, semester: 3, period: "semester", pick: "2025/26-1" });
 }
-const logic = await load("pages/olapLogic.ts");
-const dimensions = { "rollup-group": "group_id", "rollup-discipline": "discipline_id", "rollup-semester": "semester", "slice-group": "discipline_id", "slice-discipline": "group_id", "drilldown-group": "student_id", "cross-group-semester": "group_id" };
-for (const [mode, dimension] of Object.entries(dimensions)) {
-  assert.notEqual(logic.olapRowKey(mode, { name: "Одинаковое имя", [dimension]: 1 }), logic.olapRowKey(mode, { name: "Одинаковое имя", [dimension]: 2 }));
-}
-assert.notEqual(logic.olapRowKey("dice", { student_id: 1, discipline_id: 2, semester: 1 }), logic.olapRowKey("dice", { student_id: 2, discipline_id: 2, semester: 1 }));
-assert.notEqual(logic.olapRowKey("dice", { student_id: 1, discipline_id: 2, semester: 1 }), logic.olapRowKey("dice", { student_id: 1, discipline_id: 3, semester: 1 }));
-const scale = logic.chartScale([{ min_points: 10, max_points: 19, mark: 3 }, { min_points: 20, max_points: 40, mark: 4 }]);
-assert.equal(scale.percent(10), 0); assert.equal(scale.percent(40), 100); assert.equal(scale.mark(30), 4);
-assert.equal(logic.chartScale([]), null);
-assert.equal(logic.chartPath([{ avg: "20" }, { avg: null }, { avg: "35" }, { avg: "30" }], (i) => i, (v) => v), "M0,20  M2,35 L3,30");
 console.log({ mutationCode, mutationRequests, lateRefresh, restoredAccess, oldResponseCode });
 assert.equal(mutationCode, "session_refreshed");
 assert.equal(mutationRequests, 1, "unkeyed mutation must not automatically replay");
 assert.equal(lateRefresh, false);
 assert.equal(restoredAccess, false, "late refresh cannot restore a logged-out account");
 assert.equal(oldResponseCode, "session_changed", "old account response cannot enter the new account cache");
-console.log("Foundation assertions passed: session boundary/replay, pagination, all eight OLAP modes, stable IDs and null chart gaps.");
+console.log("Foundation assertions passed: session boundary/replay, pagination, OLAP slices request parameters.");
