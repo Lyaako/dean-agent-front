@@ -7,6 +7,8 @@ import { useCan } from "../../api/schema";
 import { ApiError } from "../../api/client";
 import { errorCode, errorField, errorItems, errorText, requestIdOf } from "../../api/errors";
 import { addDays, fmtDate, plural, todayIso } from "../../lib/format";
+import { ptsError, RES_MODES, type Mode } from "./result";
+import { CorrectionDialog } from "./CorrectionDialog";
 import {
   attemptsOf, closeSheet, createRetake, KIND_NAME, resultText, retakeCandidates, saveGrade, STAGE_NAME, STATUS_NAME,
   useGradesOf, useRoster, useScale, type RosterRow, type Sheet,
@@ -14,8 +16,6 @@ import {
 
 // Вид результата в строке: баллы 25–54, «не аттестован» (баллов нет, не неявка) или неявка.
 // В открытой ведомости строка без баллов и без отметки — результат ещё не выставлен (строки grade нет)
-type Mode = "points" | "na" | "absent";
-const RES_MODES: [Mode, string][] = [["points", "Баллы"], ["na", "Не аттестован"], ["absent", "Неявка"]];
 
 interface Draft { student_id: number; student: string; pts: string; absent: boolean; na: boolean }
 
@@ -28,11 +28,6 @@ const fromRow = (r: RosterRow): Draft => ({
 const modeOf = (r: Draft): Mode => (r.absent ? "absent" : r.pts !== "" ? "points" : r.na ? "na" : "points");
 const hasResult = (r: Draft) => r.pts !== "" || r.absent || r.na;
 const same = (a: Draft, b: Draft) => a.pts === b.pts && a.absent === b.absent && a.na === b.na;
-const ptsError = (pts: string) => {
-  if (pts === "") return undefined;
-  const p = Number(pts);
-  return !Number.isInteger(p) || p < 25 || p > 54 ? "Баллы — от 25 до 54" : undefined;
-};
 
 interface Props { sheet: Sheet; all: Sheet[]; onClose: () => void; onOpen: (sheetId: number) => void }
 
@@ -44,9 +39,11 @@ export function SheetDialog({ sheet, all, onClose, onOpen }: Props) {
   const scale = useScale();
   const rosterQ = useRoster(sheet.sheet_id);
   const roster = rosterQ.data;
-  // Попытки того же этапа нужны только закрытой основной ведомости — для кнопки «Создать ведомость пересдачи»
+  // Исправить результат закрытой ведомости: экзаменатор этой ведомости или деканат, директор, админ
+  const canFix = sheet.status === "closed" && can("grade", "update") && (role !== "teacher" || sheet.examiner_id === me?.teacher_id);
+  // Попытки того же этапа нужны закрытой ведомости: для «Создать ведомость пересдачи» и чтобы исправляли последнюю попытку
   const forRetake = sheet.status !== "open" && sheet.sheet_kind === "main" && can("grade_sheet", "create");
-  const attempts = useMemo(() => (forRetake ? attemptsOf(sheet, all) : []), [forRetake, sheet, all]);
+  const attempts = useMemo(() => (forRetake || canFix ? attemptsOf(sheet, all) : []), [forRetake, canFix, sheet, all]);
   const attemptGrades = useGradesOf(attempts.map((a) => a.sheet_id));
   const attemptData = attempts.map((a, i) => ({ sheet: a, grades: attemptGrades[i]?.data }));
   const loadError = rosterQ.error || attemptGrades.find((q) => q.error)?.error;
@@ -55,6 +52,9 @@ export function SheetDialog({ sheet, all, onClose, onOpen }: Props) {
   const sheetStaff = can("grade_sheet", "update");
   const edit = isOpen && can("grade", "update") && (role !== "teacher" || sheet.examiner_id === me?.teacher_id);
   const retake = forRetake && roster ? retakeCandidates(roster, attemptData) : [];
+  // Исправлять можно только последнюю попытку: если студент есть в более поздней ведомости этого этапа — исправляют там
+  const laterSheet = (id: number) => attemptData.find((a) => a.sheet.sheet_id > sheet.sheet_id && a.grades?.some((g) => g.student_id === id))?.sheet;
+  const [fixing, setFixing] = useState<RosterRow | null>(null);
 
   // Черновик строится один раз, когда известен состав; после сохранения база обновляется, черновик остаётся
   const [draft, setDraft] = useState<Draft[] | null>(null);
@@ -130,9 +130,19 @@ export function SheetDialog({ sheet, all, onClose, onOpen }: Props) {
     const pe = ptsError(d.pts);
     const [t, k] = pe ? ["—", ""] : resultText(sheet, scale.data, d.pts === "" ? null : Number(d.pts), d.absent, d.na || !isOpen);
     const res = k ? <Badge kind={k}>{t}</Badge> : t;
-    if (!edit) return (
-      <tr key={d.student_id}><td>{d.student}</td><td>{d.pts || "—"}</td><td>{d.absent ? "да" : "—"}</td><td>{res}</td></tr>
-    );
+    if (!edit) {
+      const later = canFix ? laterSheet(d.student_id) : undefined;
+      const r = base.get(d.student_id);
+      return (
+        <tr key={d.student_id}><td>{d.student}</td><td>{d.pts || "—"}</td><td>{d.absent ? "да" : "—"}</td><td>{res}</td>
+          {canFix && <td>
+            <button type="button" className="btn sm ghost" disabled={!!later || !r?.grade}
+              title={later ? `Исправлять нужно последнюю попытку — ведомость ${later.sheet_number}` : "Запросить исправление"}
+              aria-label={`Запросить исправление: ${d.student}`} onClick={() => r && setFixing(r)}><Icon name="edit" /></button>
+          </td>}
+        </tr>
+      );
+    }
     const err = errs[d.student_id];
     return (
       <tr key={d.student_id}>
@@ -176,7 +186,7 @@ export function SheetDialog({ sheet, all, onClose, onOpen }: Props) {
               : (
                 <div className="sheet-wrap">
                   <table className="sheet-table">
-                    <thead><tr><th>Студент</th>{edit ? <><th>Результат</th><th>Баллы</th><th>Оценка</th></> : <><th>Баллы</th><th>Неявка</th><th>Результат</th></>}</tr></thead>
+                    <thead><tr><th>Студент</th>{edit ? <><th>Результат</th><th>Баллы</th><th>Оценка</th></> : <><th>Баллы</th><th>Неявка</th><th>Результат</th>{canFix && <th />}</>}</tr></thead>
                     <tbody>{draft.map(row)}</tbody>
                   </table>
                 </div>
@@ -193,6 +203,7 @@ export function SheetDialog({ sheet, all, onClose, onOpen }: Props) {
           </div>
         </div>
       </Modal>
+      {fixing && <CorrectionDialog sheet={sheet} row={fixing} onClose={() => setFixing(null)} />}
       {closing && draft && (
         <CloseSheetDialog sheet={sheet} missing={draft.filter((d) => !hasResult(d)).map((d) => d.student)}
           onCancel={() => setClosing(false)}

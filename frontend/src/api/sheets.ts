@@ -4,7 +4,8 @@
 // Строки grade нет — результат ещё не выставлен.
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { fetchAll, createRow, updateRow, type Row } from "./resources";
-import { api } from "./client";
+import { api, newKey } from "./client";
+import type { Proposal } from "./proposals";
 import { todayIso } from "../lib/format";
 
 export type Stage = "module_1" | "module_2" | "final";
@@ -163,3 +164,8 @@ export const createRetake = (sheet: Sheet, all: Sheet[]) => createRow("grade_she
   sheet_number: retakeNumber(sheet, all), item_id: sheet.item_id, group_id: sheet.group_id, examiner_id: sheet.examiner_id,
   stage: sheet.stage, sheet_kind: "retake", issue_date: todayIso(),
 }) as Promise<Row>;
+
+// Заявка на исправление результата в закрытой ведомости (Б5): уходит директору или заместителю в «Согласование».
+// new_points = null и new_is_absent = false — «не аттестован». Ключ идемпотентности — на одну попытку отправки
+export const requestCorrection = (body: { sheet_id: number; student_id: number; new_points: number | null; new_is_absent: boolean; reason: string },
+  key: string = newKey()) => api<Proposal>("/grade-corrections", { method: "POST", json: body, headers: { "Idempotency-Key": key } });
