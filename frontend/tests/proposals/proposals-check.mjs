@@ -57,8 +57,14 @@ const draft = { ...p, kind: "grade_correction", submission_status: "draft", acti
 assert.deepEqual(api.createProposalAttempt(draft, { action: "submit" }).body, { expected_version: 11 });
 assert.throws(() => api.createProposalAttempt(draft, { action: "decision", approve: true, reason }));
 assert.throws(() => api.createProposalAttempt(p, { action: "assignment", assignee_user_id: 8, reason: "" }));
-assert.throws(() => api.createProposalAttempt(p, { action: "assignment", assignee_user_id: NaN, reason: "Передача" }));
-assert.equal(api.createProposalAttempt(p, { action: "assignment", assignee_user_id: 9, reason: "Передача" }).body.assignee_user_id, 9);
+assert.throws(() => api.createProposalAttempt(p, { action: "assignment", assignee_user_id: NaN, reason: "Передача по заявке" }));
+// Причина передачи — 10–2000 символов (решение Р3)
+assert.throws(() => api.createProposalAttempt(p, { action: "assignment", assignee_user_id: 9, reason: "Передача" }));
+assert.equal(api.createProposalAttempt(p, { action: "assignment", assignee_user_id: 9, reason: "Передача по заявке" }).body.assignee_user_id, 9);
+// Комментарий к решению по исправлению оценки — до 500 символов (решение Р1)
+const correction = { ...p, kind: "grade_correction" };
+assert.throws(() => api.createProposalAttempt(correction, { action: "decision", approve: true, reason: "x".repeat(501) }));
+assert.equal(api.createProposalAttempt(correction, { action: "decision", approve: true, reason: "x".repeat(500) }).body.approve, true);
 assert.throws(() => api.createProposalAttempt(p, { action: "assignment", assignee_user_id: 8, reason: "Взято в работу", claim: true }));
 const claim = api.createProposalAttempt({ ...p, actions: { ...p.actions, can_claim: true } }, { action: "assignment", assignee_user_id: 8, reason: "Взято в работу", claim: true });
 assert.deepEqual(claim.body, { expected_version: 11, assignee_user_id: 8, reason: "Взято в работу" });
@@ -77,7 +83,8 @@ const dialog = await load("chat/proposals/ProposalDialog.tsx", {
   "../../components/Icon": { Icon: () => null },
   "../../components/ui": { Modal: ({ children }) => React.createElement("section", null, children), Badge: ({ children }) => React.createElement("span", null, children), ErrorNote: ({ text }) => text },
   "./useProposal": { REASON_MIN: 10, TABLE_NAME: { person: "Личные данные" }, useProposal: () => ({ proposal: current, rows: [], reason: "", reasonOk: false,
-    events: {}, assignees: {}, tableName: "person", operation: "UPDATE", loadError }) },
+    reasonMax: 2000, reasonError: null, events: {}, assignees: {}, tableName: "person", operation: "UPDATE", loadError }) },
+  "../../lib/chatPrefill": { prefillChat() {} },
   "../../components/form/lookups": { useLookup: () => ({}) },
   "../../auth/AuthProvider": { useAuth: () => ({ me: { user_id: 8 } }) },
   "../../api/errors": { errorText: String },
@@ -101,17 +108,5 @@ assert.match(denied, /Предложение недоступно/);
 assert.doesNotMatch(denied, />Взять в работу<|>Передать<|>Подтвердить<|>Отклонить<|>Подать заявку<|class="diff/);
 loadError = null;
 
-let role = "student";
-const queue = await load("chat/proposals/ProposalQueue.tsx", {
-  "react": React, "react/jsx-runtime": jsx,
-  "@tanstack/react-query": { useQuery: () => ({ data: { items: [], counts: { incoming: 0, mine: 0, completed: 0 }, has_more: false } }) },
-  "../../api/proposals": api, "../../auth/AuthProvider": { useAuth: () => ({ me: { user_id: 7, roles: [role] } }) },
-  "../../api/auth": { STAFF_ROLES: ["admin", "director", "dean_staff"] },
-  "../../api/errors": { errorText: String, requestIdOf: () => undefined },
-  "../../components/ui": { ErrorNote: ({ text }) => text }, "./presentation": presentation,
-});
-const queueHtml = () => renderToStaticMarkup(React.createElement(queue.ProposalQueue, { onOpen() {} }));
-assert.doesNotMatch(queueHtml(), />Входящие/); assert.match(queueHtml(), /Мои/); assert.match(queueHtml(), /История/);
-role = "director"; assert.match(queueHtml(), /Входящие/);
-assert.match(queueHtml(), /Предложений по этим условиям нет/);
-console.log("Proposal API/immutable attempt assertions and React server-render action/status/queue checks passed. Hooks, click flows and browser remain integration work.");
+// Очередь предложений перенесена из чата во вкладку «Согласование» (pages/ApprovalsPage.tsx)
+console.log("Proposal API/immutable attempt assertions and React server-render action/status checks passed. Hooks, click flows and browser remain integration work.");

@@ -23,6 +23,7 @@ import { AttendancePage } from "./pages/attendance/AttendancePage";
 import { AuditPage } from "./pages/AuditPage";
 import { UsersPage } from "./pages/admin/UsersPage";
 import { RefsPage } from "./pages/admin/RefsPage";
+import { ApprovalsPage } from "./pages/ApprovalsPage";
 import { GradesPage } from "./pages/student/GradesPage";
 import { MyAttendancePage } from "./pages/student/MyAttendancePage";
 import { MyRequestsPage } from "./pages/student/MyRequestsPage";
@@ -59,6 +60,7 @@ function App() {
         <Route path="/audit" element={<AuditPage />} />
         <Route path="/users" element={<UsersPage />} />
         <Route path="/refs" element={<RefsPage />} />
+        <Route path="/approvals" element={<ApprovalsPage />} />
         <Route path="/grades" element={<GradesPage />} />
         <Route path="/my-attendance" element={<MyAttendancePage />} />
         <Route path="/my-requests" element={<MyRequestsPage />} />

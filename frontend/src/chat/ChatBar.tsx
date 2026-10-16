@@ -8,7 +8,6 @@ import { useChat } from "./useChat";
 import { useAttachments } from "./attachments/useAttachments";
 import { ComposerThumbs, ContextDetails, FileViewer, MessageThumbs, type ViewTarget } from "./attachments/Thumbs";
 import { ProposalDialog } from "./proposals/ProposalDialog";
-import { ProposalQueue } from "./proposals/ProposalQueue";
 import { TABLE_NAME } from "./proposals/useProposal";
 import type { ChatMessage, ChatSummary } from "./store/ChatStore";
 import { onChatPrefill } from "../lib/chatPrefill";
@@ -106,7 +105,6 @@ export function ChatBar({ open, setOpen }: { open: boolean; setOpen: (v: boolean
           <button type="button" className="icon-btn" aria-label="Список чатов" aria-pressed={listOpen} onClick={() => setListOpen(!listOpen)}><Icon name="sidebar" /></button>
           <span className="orb" />
           <div className="who"><b>Агент деканата</b><small>{c.chat?.title ?? "Новый чат"}</small></div>
-          <ProposalQueue onOpen={setProposal} />
         </div>
 
         <div className="chat-body">
