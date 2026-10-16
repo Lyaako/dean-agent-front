@@ -146,6 +146,59 @@ class TeacherSheetTests(ProposalHelpers,DatabaseHttpCase):
         self.assertEqual(graded.status_code,200,graded.text)
         self.assertEqual(next(i for i in self.roster(retake)['items'] if i['student_id']==moved)['points'],35)
 
+    def other_group(self,past):
+        # Другая группа, в плане которой есть та же дисциплина того же семестра с нужным модулем,
+        # и обучающийся студент этой группы без баллов и без открытых ведомостей по этапу.
+        return self.query("""SELECT g.group_id,ci.item_id,
+                (SELECT s.student_id FROM deanery.student s JOIN deanery.student_status st USING(status_id)
+                 WHERE s.group_id=g.group_id AND st.is_active AND NOT EXISTS(SELECT FROM deanery.grade g3
+                     JOIN deanery.grade_sheet s3 USING(sheet_id) JOIN deanery.curriculum_item c3 USING(item_id)
+                     WHERE g3.student_id=s.student_id AND s3.status<>'cancelled' AND s3.stage=%(stage)s
+                       AND c3.discipline_id=%(discipline)s AND c3.semester=%(semester)s
+                       AND (g3.points IS NOT NULL OR s3.status='open' OR s3.group_id=%(group)s))
+                 ORDER BY s.student_id LIMIT 1) AS student_id
+            FROM deanery.study_group g JOIN deanery.curriculum_item ci ON ci.curriculum_id=g.curriculum_id
+            WHERE g.group_id<>%(group)s AND NOT g.is_archived AND ci.discipline_id=%(discipline)s AND ci.semester=%(semester)s
+              AND ci.module_count>=CASE %(stage)s WHEN 'module_2' THEN 2 WHEN 'module_1' THEN 1 ELSE 0 END
+            ORDER BY (SELECT count(*) FROM deanery.student s WHERE s.group_id=g.group_id) DESC,g.group_id LIMIT 1""",
+            {'group':past['group_id'],'stage':past['stage'],'discipline':past['discipline_id'],'semester':past['semester']})[0]
+
+    def sheet_in(self,past,other,kind='retake'):
+        return self.owner("""INSERT INTO deanery.grade_sheet(sheet_number,item_id,group_id,examiner_id,stage,sheet_kind,issue_date)
+            VALUES(%s,%s,%s,%s,%s,%s,CURRENT_DATE) RETURNING sheet_id""",
+            ('QA-'+uuid4().hex[:12],other['item_id'],other['group_id'],self.tid,past['stage'],kind))[0]['sheet_id']
+
+    def close(self,sheet):
+        self.owner("UPDATE deanery.grade_sheet SET status='closed',exam_date=CURRENT_DATE,closed_date=CURRENT_DATE WHERE sheet_id=%s",(sheet,))
+
+    def test_retake_omits_failed_students_of_other_groups(self):
+        past=self.past_sheet(); other=self.other_group(past)
+        self.assertIsNotNone(other['student_id'])
+        # Несданная попытка этого этапа в ведомости своей (другой) группы.
+        there=self.sheet_in(past,other)
+        self.owner('INSERT INTO deanery.grade(sheet_id,student_id) VALUES(%s,%s)',(there,other['student_id']))
+        self.close(there)
+        items={i['student_id'] for i in self.roster(self.sheet_like(past['sheet_id'],'retake'))['items']}
+        self.assertNotIn(other['student_id'],items)
+        self.assertEqual(items,set(self.not_attested(past)))
+
+    def test_retake_omits_student_who_passed_in_another_group(self):
+        past=self.past_sheet(); student=self.not_attested(past)[0]; other=self.other_group(past)
+        self.owner('UPDATE deanery.student SET group_id=%s WHERE student_id=%s',(other['group_id'],student))  # переведён с долгом
+        there=self.sheet_in(past,other)
+        self.owner('INSERT INTO deanery.grade(sheet_id,student_id,points) VALUES(%s,%s,40)',(there,student))
+        self.close(there)
+        items={i['student_id'] for i in self.roster(self.sheet_like(past['sheet_id'],'retake'))['items']}
+        self.assertNotIn(student,items)
+        self.assertEqual(items,set(self.not_attested(past)))
+
+    def test_student_without_result_is_in_one_group_retake_only(self):
+        past=self.past_sheet(); waiting=set(self.not_attested(past))
+        own={i['student_id'] for i in self.roster(self.sheet_like(past['sheet_id'],'retake'))['items']}
+        other={i['student_id'] for i in self.roster(self.sheet_in(past,self.other_group(past)))['items']}
+        self.assertEqual(own,waiting)
+        self.assertFalse(own&other)
+
     def test_closed_sheet_lists_only_graded_and_access_is_limited(self):
         past=self.past_sheet()
         graded={r['student_id'] for r in self.query('SELECT student_id FROM deanery.grade WHERE sheet_id=%s',(past['sheet_id'],))}
