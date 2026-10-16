@@ -10,7 +10,6 @@ import { AuthProvider, useAuth } from "./auth/AuthProvider";
 import { LoginPage } from "./auth/LoginPage";
 import { MustChangeDialog } from "./auth/AccountDialog";
 import { ToastProvider } from "./components/ui";
-import { Shell } from "./components/Shell";
 import { StudentsPage } from "./pages/students/StudentsPage";
 import { GroupsPage } from "./pages/GroupsPage";
 import { SchedulePage } from "./pages/schedule/SchedulePage";
@@ -22,8 +21,19 @@ import { OlapPage } from "./pages/OlapPage";
 import { SheetsPage } from "./pages/sheets/SheetsPage";
 import { AttendancePage } from "./pages/attendance/AttendancePage";
 import { AuditPage } from "./pages/AuditPage";
+import { GradesPage } from "./pages/student/GradesPage";
+import { MyAttendancePage } from "./pages/student/MyAttendancePage";
+import { MyRequestsPage } from "./pages/student/MyRequestsPage";
+import { MyStudyPage } from "./pages/student/MyStudyPage";
+import { Shell, useVisibleTabs } from "./components/Shell";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
+
+// Неизвестный адрес — на первую вкладку роли (у студента это «Расписание», у сотрудника — «Студенты»)
+function FirstTab() {
+  const tabs = useVisibleTabs();
+  return <Navigate to={tabs[0]?.path ?? "/schedule"} replace />;
+}
 
 function App() {
   const { status, mustChange } = useAuth();
@@ -45,7 +55,11 @@ function App() {
         <Route path="/employees" element={<EmployeesPage />} />
         <Route path="/olap" element={<OlapPage />} />
         <Route path="/audit" element={<AuditPage />} />
-        <Route path="*" element={<Navigate to="/students" replace />} />
+        <Route path="/grades" element={<GradesPage />} />
+        <Route path="/my-attendance" element={<MyAttendancePage />} />
+        <Route path="/my-requests" element={<MyRequestsPage />} />
+        <Route path="/my-study" element={<MyStudyPage />} />
+        <Route path="*" element={<FirstTab />} />
       </Route>
     </Routes>
   );
