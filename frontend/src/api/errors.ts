@@ -131,6 +131,8 @@ const UNDO_REASON: Record<string, [string, string]> = {
   sheet_closed: ["UN-03", "Ведомость закрыта — нужна заявка на исправление"],
   request_final: ["UN-03", "Заявка в завершающем статусе"],
   irreversible: ["UN-03", "Это изменение не отменяется"],
+  // Правило базы отклонило возврат строки (например, аудиторию уже заняли) — текст правила приходит в message
+  conflict: ["UN-03", "Вернуть прежнее значение не позволяют правила базы"],
 };
 const detail = (e: ApiError, k: string) => (e.details as Record<string, unknown> | null | undefined)?.[k];
 const undoReason = (e: unknown) => (e instanceof ApiError && e.code === "undo_unavailable" ? UNDO_REASON[String(detail(e, "reason"))] : undefined);
@@ -156,7 +158,7 @@ export function errorItems(e: unknown): string[] {
 
 export function errorText(e: unknown, table?: string): string {
   const undo = undoReason(e);
-  if (undo) return undo[1];
+  if (undo) return e instanceof ApiError && detail(e, "reason") === "conflict" && /[а-яё]/i.test(e.message) ? e.message : undo[1];
   const code = errorCode(e);
   if (code) return ERROR_CODES[code];
   if (e instanceof ApiError) {
