@@ -8,7 +8,7 @@ import { applyTable, type Column } from "../../components/table/tableLogic";
 import { useAuth } from "../../auth/AuthProvider";
 import { errorText } from "../../api/errors";
 import {
-  attemptsOf, KIND_NAME, rosterOf, STAGE_NAME, STATUS_NAME, useGradesOf, useSheets, useStudents, type Sheet,
+  KIND_NAME, STAGE_NAME, STATUS_NAME, useRosters, useSheets, type Sheet,
 } from "../../api/sheets";
 import { SheetDialog } from "./SheetDialog";
 
@@ -32,28 +32,21 @@ export function SheetsPage() {
   const { role } = useAuth();
   const mine = role === "teacher";   // преподаватель видит только свои ведомости — так отдаёт бэкенд
   const sheets = useSheets();
-  const students = useStudents();
   const all = useMemo(() => [...(sheets.data ?? [])].sort((a, b) =>
     a.status === b.status
       ? (b.semester ?? 0) - (a.semester ?? 0) || a.group_name.localeCompare(b.group_name, "ru", { numeric: true }) || a.sheet_number.localeCompare(b.sheet_number, "ru", { numeric: true })
       : a.status === "open" ? -1 : b.status === "open" ? 1 : 0), [sheets.data]);
 
-  // Оценки открытых ведомостей и попыток того же этапа (у пересдачи состав берётся из них)
+  // Состав открытых ведомостей — с сервера (/roster): у пересдачи это все, кого база разрешает внести
   const open = useMemo(() => all.filter((s) => s.status === "open"), [all]);
-  const need = useMemo(() => [...new Set(open.flatMap((s) => [s, ...(s.sheet_kind === "main" ? [] : attemptsOf(s, all))]).map((s) => s.sheet_id))], [open, all]);
-  const grades = useGradesOf(need);
-  const loaded = grades.map((q) => q.dataUpdatedAt).join();
+  const rosters = useRosters(open.map((s) => s.sheet_id));
+  const loaded = rosters.map((q) => q.dataUpdatedAt).join();
   const filled = useMemo(() => {
-    const byId = new Map(need.map((id, i) => [id, grades[i]?.data]));
     const out = new Map<number, [number, number]>();
-    for (const s of open) {
-      const roster = rosterOf(s, byId.get(s.sheet_id), students.data,
-        attemptsOf(s, all).map((a) => ({ sheet: a, grades: byId.get(a.sheet_id) })));
-      if (roster) out.set(s.sheet_id, [roster.filter((r) => r.grade).length, roster.length]);
-    }
+    open.forEach((s, i) => { const r = rosters[i]?.data; if (r) out.set(s.sheet_id, [r.filter((x) => x.grade).length, r.length]); });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, all, need, students.data, loaded]);
+  }, [open, loaded]);
   const filledReady = open.every((s) => filled.has(s.sheet_id));
   const sum = (i: 0 | 1) => open.reduce((t, s) => t + (filled.get(s.sheet_id)?.[i] ?? 0), 0);
 

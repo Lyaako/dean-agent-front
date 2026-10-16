@@ -4,6 +4,7 @@
 // Строки grade нет — результат ещё не выставлен.
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { fetchAll, createRow, updateRow, type Row } from "./resources";
+import { api } from "./client";
 import { todayIso } from "../lib/format";
 
 export type Stage = "module_1" | "module_2" | "final";
@@ -98,33 +99,21 @@ export const attemptsOf = (sheet: Sheet, all: Sheet[]) =>
 
 export interface RosterRow { student_id: number; student: string; active: boolean; grade: Grade | null }
 
-/** Состав ведомости. Закрытая — у кого есть оценка. Открытая основная — обучающиеся студенты группы и все, у кого уже есть оценка.
- *  Пересдача и другие — у кого есть оценка здесь, и обучающиеся без аттестации по этому этапу в других попытках,
- *  которых ещё нет в другой открытой ведомости (как trg_grade_check). undefined — данные ещё грузятся */
-export function rosterOf(sheet: Sheet, grades: Grade[] | undefined, students: Student[] | undefined,
-  attempts: { sheet: Sheet; grades: Grade[] | undefined }[]): RosterRow[] | undefined {
-  if (!grades || !students) return undefined;
-  const byId = new Map(students.map((s) => [s.student_id, s]));
-  const mine = new Map(grades.map((g) => [g.student_id, g]));
-  const ids = new Set(grades.map((g) => g.student_id));
-  if (sheet.status !== "open") {
-    // Закрытая или отменённая — только те, у кого есть оценка
-  } else if (sheet.sheet_kind === "main") {
-    for (const s of students) if (s.group_name === sheet.group_name && s.active) ids.add(s.student_id);
-  } else {
-    if (attempts.some((a) => !a.grades)) return undefined;
-    const passed = new Set<number>(), tried = new Set<number>(), elsewhereOpen = new Set<number>();
-    for (const a of attempts) for (const g of a.grades!) {
-      tried.add(g.student_id);
-      if (g.points != null) passed.add(g.student_id);
-      if (a.sheet.status === "open") elsewhereOpen.add(g.student_id);
-    }
-    for (const id of tried) if (!passed.has(id) && !elsewhereOpen.has(id) && byId.get(id)?.active) ids.add(id);
-  }
-  return [...ids].map((id) => ({
-    student_id: id, student: byId.get(id)?.student ?? `Студент №${id}`, active: !!byId.get(id)?.active, grade: mine.get(id) ?? null,
-  })).sort((a, b) => a.student.localeCompare(b.student, "ru"));
-}
+interface RosterItem { student_id: number; student: string; active: boolean; grade_id: number | null; points: number | null; is_absent: boolean }
+
+/** Состав ведомости считает сервер по правилам базы (trg_grade_check / trg_sheet_status), GET …/grade_sheet/{id}/roster:
+ *  закрытая или отменённая — студенты с оценкой; открытая основная — обучающиеся студенты группы и все с оценкой;
+ *  открытая пересдача, комиссия, индивидуальная — с оценкой и обучающиеся, кого база разрешает внести (несданная попытка этапа
+ *  по дисциплине в другой ведомости, нет оценки в другой открытой). grade_id = null — результата ещё нет */
+const rosterKey = (sheetId: number) => ["roster", sheetId];
+const loadRoster = async (sheetId: number): Promise<RosterRow[]> =>
+  (await api<{ items: RosterItem[] }>(`/resources/grade_sheet/${sheetId}/roster`)).items.map((r) => ({
+    student_id: r.student_id, student: r.student, active: r.active,
+    grade: r.grade_id == null ? null : { grade_id: r.grade_id, sheet_id: sheetId, student_id: r.student_id, points: r.points, is_absent: r.is_absent },
+  }));
+export const useRoster = (sheetId: number) => useQuery({ queryKey: rosterKey(sheetId), queryFn: () => loadRoster(sheetId) });
+export const useRosters = (ids: number[]) =>
+  useQueries({ queries: ids.map((id) => ({ queryKey: rosterKey(id), queryFn: () => loadRoster(id) })) });
 
 /** Кандидаты в пересдачу из закрытой ведомости: обучающиеся без аттестации, которые не сдали этап в другой попытке
  *  и ещё не внесены в открытую ведомость этого этапа */

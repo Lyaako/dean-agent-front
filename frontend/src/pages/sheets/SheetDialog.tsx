@@ -8,8 +8,8 @@ import { ApiError } from "../../api/client";
 import { errorCode, errorField, errorItems, errorText, requestIdOf } from "../../api/errors";
 import { addDays, fmtDate, plural, todayIso } from "../../lib/format";
 import {
-  attemptsOf, closeSheet, createRetake, KIND_NAME, resultText, retakeCandidates, rosterOf, saveGrade, STAGE_NAME, STATUS_NAME,
-  useGrades, useGradesOf, useScale, useStudents, type RosterRow, type Sheet,
+  attemptsOf, closeSheet, createRetake, KIND_NAME, resultText, retakeCandidates, saveGrade, STAGE_NAME, STATUS_NAME,
+  useGradesOf, useRoster, useScale, type RosterRow, type Sheet,
 } from "../../api/sheets";
 
 // Вид результата в строке: баллы 25–54, «не аттестован» (баллов нет, не неявка) или неявка.
@@ -42,18 +42,19 @@ export function SheetDialog({ sheet, all, onClose, onOpen }: Props) {
   const toast = useToast();
   const qc = useQueryClient();
   const scale = useScale();
-  const students = useStudents();
-  const grades = useGrades(sheet.sheet_id);
-  const attempts = useMemo(() => attemptsOf(sheet, all), [sheet, all]);
+  const rosterQ = useRoster(sheet.sheet_id);
+  const roster = rosterQ.data;
+  // Попытки того же этапа нужны только закрытой основной ведомости — для кнопки «Создать ведомость пересдачи»
+  const forRetake = sheet.status !== "open" && sheet.sheet_kind === "main" && can("grade_sheet", "create");
+  const attempts = useMemo(() => (forRetake ? attemptsOf(sheet, all) : []), [forRetake, sheet, all]);
   const attemptGrades = useGradesOf(attempts.map((a) => a.sheet_id));
   const attemptData = attempts.map((a, i) => ({ sheet: a, grades: attemptGrades[i]?.data }));
-  const roster = rosterOf(sheet, grades.data, students.data, attemptData);
-  const loadError = grades.error || students.error || attemptGrades.find((q) => q.error)?.error;
+  const loadError = rosterQ.error || attemptGrades.find((q) => q.error)?.error;
 
   const isOpen = sheet.status === "open";
   const sheetStaff = can("grade_sheet", "update");
   const edit = isOpen && can("grade", "update") && (role !== "teacher" || sheet.examiner_id === me?.teacher_id);
-  const retake = !isOpen && sheet.sheet_kind === "main" && can("grade_sheet", "create") && roster ? retakeCandidates(roster, attemptData) : [];
+  const retake = forRetake && roster ? retakeCandidates(roster, attemptData) : [];
 
   // Черновик строится один раз, когда известен состав; после сохранения база обновляется, черновик остаётся
   const [draft, setDraft] = useState<Draft[] | null>(null);
@@ -99,7 +100,7 @@ export function SheetDialog({ sheet, all, onClose, onOpen }: Props) {
         e[d.student_id] = <CodedText text={errorText(ex, "grade")} code={errorCode(ex)} />;
       }
     }
-    await qc.invalidateQueries({ queryKey: ["grades", sheet.sheet_id] });
+    await qc.invalidateQueries({ queryKey: ["roster", sheet.sheet_id] });
     setErrs(e);
     const failed = Object.keys(e).length;
     if (failed) toast(ok ? `Сохранено ${ok} из ${ok + failed} — проверьте отмеченные строки` : "Баллы не сохранены — проверьте отмеченные строки", true);
@@ -199,7 +200,8 @@ export function SheetDialog({ sheet, all, onClose, onOpen }: Props) {
             // Сначала сохраняем выставленное в окне, потом закрываем
             if (!(await save())) { setClosing(false); return false; }
             await closeSheet(sheet.sheet_id, examDate);
-            await Promise.all([qc.invalidateQueries({ queryKey: ["sheets"] }), qc.invalidateQueries({ queryKey: ["grades", sheet.sheet_id] })]);
+            // Закрытие меняет и составы других пересдач этого этапа
+            await Promise.all([qc.invalidateQueries({ queryKey: ["sheets"] }), qc.invalidateQueries({ queryKey: ["roster"] })]);
             toast("Ведомость закрыта");
             onClose();
             return true;
@@ -210,6 +212,7 @@ export function SheetDialog({ sheet, all, onClose, onOpen }: Props) {
 }
 
 /* ── Закрытие ведомости: дата экзамена и список студентов без результата. Закрывают деканат, директор, админ ── */
+// Закрыть можно, когда результат есть у всех в составе (как в макете; состав пересдачи — несдавшие этой группы, /roster)
 function CloseSheetDialog({ sheet, missing, onCancel, onConfirm }: {
   sheet: Sheet; missing: string[]; onCancel: () => void; onConfirm: (examDate: string) => Promise<boolean>;
 }) {
