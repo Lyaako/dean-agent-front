@@ -8,6 +8,7 @@ import { ROLE_NAME } from "../api/auth";
 import { human, initials, tone, todayIso } from "../lib/format";
 import { ChatBar } from "../chat/ChatBar";
 import { AccountDialog } from "../auth/AccountDialog";
+import { ServicesButton, ServicesDialog } from "../pages/admin/ServicesDialog";
 
 const WD_FULL = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
 
@@ -45,6 +46,7 @@ function Me() {
   const { me, role, fullName, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const [account, setAccount] = useState(false);
+  const [services, setServices] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -56,7 +58,9 @@ function Me() {
   const name = fullName || me?.login || "";
   return (
     <div className="me" ref={ref}>
-      <div className="when"><b>{WD_FULL[new Date().getDay()]}, {human(today)}</b></div>
+      {/* У админа на месте даты — состояние сервисов агента */}
+      {role === "admin" ? <ServicesButton onOpen={() => setServices(true)} />
+        : <div className="when"><b>{WD_FULL[new Date().getDay()]}, {human(today)}</b></div>}
       <button className={`avatar t${tone(name)} avatar-btn`} title={`${name} — ${role ? ROLE_NAME[role] : ""}`}
         aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
         {initials(name)}
@@ -73,6 +77,7 @@ function Me() {
         </div>
       )}
       {account && <AccountDialog onClose={() => setAccount(false)} />}
+      {services && <ServicesDialog onClose={() => setServices(false)} />}
     </div>
   );
 }

@@ -32,6 +32,8 @@ export const TABS: TabDef[] = [
   { id: "practice", path: "/practice", title: "Практики", icon: "briefcase", view: "v_practice", roles: NOT_STUDENT },
   { id: "employees", path: "/employees", title: "Сотрудники", icon: "badge", view: "v_employees", roles: NOT_STUDENT },
   { id: "olap", path: "/olap", title: "OLAP-анализ", short: "OLAP", icon: "chart", view: null, roles: NOT_STUDENT },
+  { id: "users", path: "/users", title: "Пользователи", short: "Доступ", icon: "users", view: "app_user", roles: ["admin"] },
+  { id: "refs", path: "/refs", title: "Справочники", short: "Списки", icon: "list", view: null, roles: ["admin"] },
   // Журнал отдаёт GET /audit, а не ресурс схемы — видимость задают только роли (Р6)
   { id: "audit", path: "/audit", title: "Журнал изменений", short: "Журнал", icon: "clock", view: null, roles: ["dean_staff", "director", "admin"] },
 ];
