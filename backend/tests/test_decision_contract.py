@@ -20,7 +20,7 @@ class DecisionContractTests(ProposalHelpers,DatabaseHttpCase):
             'sheet_id':target['sheet_id'],'student_id':target['student_id'],'new_points':30 if target['points']!=30 else 31,
             'new_is_absent':False,'reason':'Ошибка при переносе баллов из листа'})
         self.assertEqual(response.status_code,200,response.text)
-        p=response.json()
+        p=response.json(); self.target=target
         claimed=self.post(p,'assignment',{'assignee_user_id':self.user('smirnov'),'reason':'Принимаю на рассмотрение',
             'expected_version':p['version']},director)
         return teacher,director,claimed
@@ -89,7 +89,7 @@ class DecisionContractTests(ProposalHelpers,DatabaseHttpCase):
         self.query('DELETE FROM agent_backend.chat_session WHERE id=%s RETURNING id',(session,))
         self.assertFalse(self.get(p,student)['actions']['can_redo'])
 
-    def test_expired_agent_proposal_can_be_redone_but_form_correction_cannot(self):
+    def test_expired_agent_proposal_can_be_redone(self):
         headers=self.login('vasilyeva'); p=self.prepare(self.group_command(),headers)
         self.db.execute('RESET ROLE')
         self.db.execute('SET LOCAL session_replication_role=replica')
@@ -97,11 +97,49 @@ class DecisionContractTests(ProposalHelpers,DatabaseHttpCase):
         self.db.execute('SET LOCAL session_replication_role=origin')
         self.db.execute('SET LOCAL ROLE backend_api')
         self.assertTrue(self.get(p,headers)['actions']['can_redo'])
-        teacher,director,correction=self.correction()
-        rejected=self.post(correction,'decision',{'approve':False,'reason':'Основание не подтверждено',
-            'expected_version':correction['version']},director)
+
+    def reject(self,p,director):
+        return self.post(p,'decision',{'approve':False,'reason':'Основание не подтверждено','expected_version':p['version']},director)
+
+    def test_rejected_form_correction_can_be_redone_by_its_author_until_a_new_one_is_open(self):
+        teacher,director,pending=self.correction()
+        self.assertFalse(self.get(pending,teacher)['actions']['can_redo'])
+        rejected=self.reject(pending,director)
         own=self.get(rejected,teacher)
-        self.assertEqual((own['request_text'],own['actions']['can_redo']),(None,False))
+        self.assertEqual((own['status'],own['request_text'],own['actions']['can_redo']),('rejected',None,True))
+        self.assertFalse(self.get(rejected,director)['actions']['can_redo'])
+        mine=self.client.get('/api/v1/agent/proposals?box=mine',headers=teacher).json()['items']
+        self.assertTrue(next(i for i in mine if i['id']==rejected['id'])['actions']['can_redo'])
+        # Новая заявка по той же оценке открыта: повторить старую нельзя, пока её не рассмотрят.
+        again=self.client.post('/api/v1/grade-corrections',headers=teacher|{'Idempotency-Key':str(uuid4())},json={
+            'sheet_id':self.target['sheet_id'],'student_id':self.target['student_id'],
+            'new_points':30 if self.target['points']!=30 else 31,'new_is_absent':False,'reason':'Повторная заявка с документом'})
+        self.assertEqual(again.status_code,200,again.text)
+        self.assertFalse(self.get(rejected,teacher)['actions']['can_redo'])
+        self.assertFalse(again.json()['actions']['can_redo'])
+
+    def test_applied_correction_cannot_be_redone(self):
+        teacher,director,pending=self.correction()
+        applied=self.post(pending,'decision',{'approve':True,'reason':'Проверено руководителем',
+            'expected_version':pending['version']},director)
+        self.assertEqual(applied['status'],'approved')
+        self.assertFalse(self.get(applied,teacher)['actions']['can_redo'])
+
+    def test_rejected_agent_correction_can_be_redone(self):
+        teacher,director,form=self.correction()
+        self.reject(form,director)
+        row=self.query('''SELECT gs.sheet_number,s.record_book_number FROM deanery.grade_sheet gs
+            JOIN deanery.student s ON s.student_id=%s WHERE gs.sheet_id=%s''',(self.target['student_id'],self.target['sheet_id']))[0]
+        command={'version':1,'kind':'grade_correction','fields':{'sheet_number':row['sheet_number'],
+            'record_book':row['record_book_number'],'new_points':30 if self.target['points']!=30 else 31,
+            'new_is_absent':False,'reason':'Ошибка при переносе результата'}}
+        draft=self.prepare(command,teacher)
+        submitted=self.post(draft,'submit',{'expected_version':draft['version']},teacher)
+        claimed=self.post(submitted,'assignment',{'assignee_user_id':self.user('smirnov'),'reason':'Принимаю на рассмотрение',
+            'expected_version':submitted['version']},director)
+        rejected=self.reject(claimed,director)
+        own=self.get(rejected,teacher)
+        self.assertEqual((own['request_text'],own['actions']['can_redo']),('Проверка предложения',True))
 
     # Р6
     def audit(self,headers,status=200,**params):
