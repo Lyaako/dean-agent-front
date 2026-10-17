@@ -15,7 +15,8 @@
 Что изменилось: `backend/db/migrations/sql/053_redo_grade_correction.sql`, `backend/db/migrations/versions/0061_redo_grade_correction.py`, `backend/tests/test_decision_contract.py` (прежний тест «исправление через форму — `can_redo = false`» заменён проверками нового правила), `backend/tests/test_recovery_inventory.py` (head), `docs/API.md` (абзац «Повтор просьбы», head). Права: `EXECUTE` на `correction_redo` и новую `proposal_view` — `backend_api`, `backend_executor`; у `PUBLIC` отозваны.
 Что нужно фронту: ничего нового — `ProposalDialog.tsx` уже показывает кнопку для `grade_correction` по `can_redo` и открывает форму с ведомостью и студентом. После применения к стенду проверить под `novikov` на заявке № 6.
 Проверка: на чистой засеянной базе 0001→0061 `test_decision_contract.py` — 13 passed: отклонённая заявка через форму — автору `can_redo = true`, `request_text = null`, директору `false`, в списке «Мои» тоже `true`; пока заявка `pending` — `false`; одобренная (применённая) — `false`; после новой заявки по той же оценке у старой `false`; отклонённая заявка от агента — `true`. Без обёртки 0061 первый из этих тестов падает. Полный прогон: 525 passed, 6 skipped.
-Открытые вопросы: миграция `0061` меняет функцию в `agent_backend` стенда :8443 — применять только с согласия пользователя.
+Применение к стенду: 18.10.2026 по явному согласию пользователя миграция `0061` применена к стенду :8443 (бэкап перед ней — `.local/p13-backup-before-0061`), образ пересобран, api перезапущен. Заявка № 6 (отклонена, открытых заявок по этой оценке нет): до миграции у автора `novikov` `can_redo = false`; после — `novikov` `can_redo = true`, директор `smirnov` — `false`, `request_text = null` у обоих.
+Открытые вопросы: нет.
 
 ## 2026-10-16 — OLAP: метрики экрана для «Итогов сессии», «Раннего предупреждения» и «Пересдач»
 Статус: готово
