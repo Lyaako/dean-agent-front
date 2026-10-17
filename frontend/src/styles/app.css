@@ -290,7 +290,7 @@ th.sortable:hover { color: var(--ink); }
 .wg-time b { display: block; font: 600 16px/1.15 var(--font-display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .wg-time small { font-size: 11.5px; color: var(--muted); }
 .wg-cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 64px; padding: 8px; }
-.wg-cell.today, .wg-h.today { background: rgba(231, 237, 253, .45); }
+.wg-cell.today, .wg-h.today { background: color-mix(in srgb, var(--sky-100) 45%, transparent); }
 .wg-cell .lesson { gap: 4px; padding: 9px 10px 10px 13px; border-radius: 12px; }
 .wg-cell .lesson b { font-size: 13px; line-height: 1.25; }
 .wg-cell .lesson small { font-size: 11.5px; }
