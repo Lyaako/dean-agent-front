@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Navigate, NavLink, Outlet, useLocation } from "react-router-dom";
 import { Icon } from "./Icon";
 import { TABS, type TabDef } from "../pages/tabs";
 import { useSchema } from "../api/schema";
@@ -23,6 +23,10 @@ export function Shell() {
   const { me } = useAuth();
   const [scrolled, setScrolled] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  // Адрес чужой вкладки (остался от прошлой учётки или набран вручную) — на первую вкладку роли
+  const tabs = useVisibleTabs();
+  const { pathname } = useLocation();
+  const foreign = tabs.length > 0 && !tabs.some((t) => t.path === pathname);
   return (
     <div className={`app${scrolled ? " scrolled" : ""}`}>
       <header className="topbar">
@@ -35,7 +39,7 @@ export function Shell() {
       </header>
       <div className={`scrim${chatOpen ? " show" : ""}`} onClick={() => setChatOpen(false)} />
       <main className="content" onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 4)}>
-        <div className="page"><Outlet /></div>
+        <div className="page">{foreign ? <Navigate to={tabs[0].path} replace /> : <Outlet />}</div>
       </main>
       <TabBar />
     </div>
