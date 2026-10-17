@@ -7,7 +7,7 @@ import { applyTable, type Column } from "../../components/table/tableLogic";
 import { errorText } from "../../api/errors";
 import { useOlap, type Attempt, type OlapParams, type SessionResult, type SessionRow, type SessionStats } from "../../api/olap";
 import { Empty, Tiles } from "../student/parts";
-import { olap, Pct, Pending, type Setter } from "./parts";
+import { olap, Pct, Pending, useStudentCard, type Setter } from "./parts";
 
 /* ═════════ 1. Итоги сессии: Roll-up студент → группа → курс, Drill-down обратно ═════════
    Курс → группы → дисциплины → результаты студентов. Считает сервер (последняя сессия каждой группы) */
@@ -47,6 +47,7 @@ export function SessionView({ set }: { set: Setter }) {
   const [state, setState] = useTableState(id, cols);
   const rows = report.data?.rows ?? [];
   const shown = useMemo(() => applyTable(state, cols, rows), [state, cols, rows]);
+  const card = useStudentCard();
 
   if (report.isLoading) return <div className="skel" style={{ height: 200 }} />;
   if (report.error) return <Empty icon="alert" title="Не удалось загрузить">{errorText(report.error)}</Empty>;
@@ -57,7 +58,7 @@ export function SessionView({ set }: { set: Setter }) {
     : level === "group" ? `Drill-down: группы ${c.label} · нажмите на группу, чтобы раскрыть дисциплины`
     : level === "discipline" ? `Drill-down: дисциплины группы ${g.label} · нажмите на дисциплину, чтобы увидеть студентов`
     : `Студенты группы ${g.label} · ${d.label}`;
-  const onRow = isResult ? undefined : (r: SessionRow | SessionResult) => {
+  const onRow = isResult ? (card.open as ((r: SessionRow | SessionResult) => void) | undefined) : (r: SessionRow | SessionResult) => {
     const x = r as SessionRow;
     const step = level === "course" ? { course: x.course, label: x.name } : level === "group" ? { group_id: x.group_id, label: x.name } : { discipline_id: x.discipline_id, label: x.name };
     set({ path: [...olap.path, step] });
@@ -80,6 +81,7 @@ export function SessionView({ set }: { set: Setter }) {
       )}
       <DataTable cols={cols} rows={shown} base={rows} state={state} set={setState} title={title} onRowClick={onRow}
         rowKey={(r) => String(isResult ? (r as SessionResult).student_id : (r as SessionRow).course ?? (r as SessionRow).group_id ?? (r as SessionRow).discipline_id ?? (r as SessionRow).name)} />
+      {card.node}
     </>
   );
 }

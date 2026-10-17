@@ -1,6 +1,8 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useResource } from "../../api/resources";
 import { Empty } from "../student/parts";
+import { useAuth } from "../../auth/AuthProvider";
+import { StudentCard } from "../students/StudentsPage";
 
 // Общее для срезов OLAP (mockup/redesign/olap.js)
 
@@ -58,3 +60,12 @@ export const Pct = ({ v, good = true }: { v: number | null | undefined; good?: b
 export const Pending = ({ children }: { children: ReactNode }) => (
   <Empty icon="chart" title="Срез появится после обновления бекенда">{children}</Empty>
 );
+
+/** Карточка студента по клику на строку (как olapOpenStudent в макете); у преподавателя строки не раскрываются */
+export function useStudentCard() {
+  const { role } = useAuth();
+  const [card, setCard] = useState<{ student_id: number; student: string } | null>(null);
+  const open = role === "teacher" ? undefined : (r: { student_id: number; student: string }) => setCard({ student_id: r.student_id, student: r.student });
+  const node = card && <StudentCard studentId={card.student_id} title={card.student} onClose={() => setCard(null)} />;
+  return { open, node };
+}

@@ -5,7 +5,7 @@ import { ENROLL, STUDENT_ACTIONS, type WfDef } from "./studentActions";
 import { WorkflowDialog } from "../../components/form/WorkflowDialog";
 import { Icon } from "../../components/Icon";
 import { useCan } from "../../api/schema";
-import type { FormConfig } from "../../components/form/RecordDialog";
+import { RecordDialog, type FormConfig } from "../../components/form/RecordDialog";
 import type { Row } from "../../api/resources";
 import { fetchAll } from "../../api/resources";
 import { cancelStudentOrder } from "../../api/orders";
@@ -34,6 +34,21 @@ export function StudentsPage() {
         dialogTop={canOrders ? (viewRow) => <PendingOrder student={viewRow} /> : undefined} />
       {enroll && <WorkflowDialog def={ENROLL} onClose={() => setEnroll(false)} />}
     </>
+  );
+}
+
+/* ── Карточка студента вне вкладки «Студенты» (строки OLAP): то же окно записи, строка представления — по student_id ── */
+export function StudentCard({ studentId, title, onClose }: { studentId: number; title: string; onClose: () => void }) {
+  const can = useCan();
+  const canOrders = can("student", "workflow");
+  const { data: viewRow } = useQuery({
+    queryKey: ["res", "v_student_summary", { student_id: studentId }],
+    queryFn: async () => (await fetchAll("v_student_summary", { student_id: studentId }))[0] ?? null,
+  });
+  return (
+    <RecordDialog table="student" config={canOrders ? FORM : { ...FORM, note: undefined }} recordKey={{ student_id: studentId }} title={title}
+      extra={canOrders && viewRow ? () => <OrdersMenu student={viewRow} /> : undefined}
+      top={canOrders && viewRow ? <PendingOrder student={viewRow} /> : undefined} onClose={onClose} />
   );
 }
 

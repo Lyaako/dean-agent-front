@@ -7,7 +7,7 @@ import { errorText } from "../../api/errors";
 import { useOlap, type RiskPoint, type RiskRow, type RiskTotal } from "../../api/olap";
 import { plural } from "../../lib/format";
 import { Empty, Tiles } from "../student/parts";
-import { CourseGroup, olap, Pending, useScope, type Setter } from "./parts";
+import { CourseGroup, olap, Pending, useScope, useStudentCard, type Setter } from "./parts";
 
 /* ═════════ 3. Раннее предупреждение: Dice по курсу, модулю 1 и посещаемости ═════════
    Строка на студента: слабый модуль 1, низкая посещаемость, долги прошлых сессий; риск считает сервер */
@@ -51,6 +51,7 @@ export function RiskView({ set }: { set: Setter }) {
   const [state, setState] = useTableState("olap-risk", COLS);
   const shown = useMemo(() => applyTable(state, COLS, rows), [state, rows]);
   const t = report.data?.total;
+  const card = useStudentCard();
 
   const filters = (
     <div className="olap-filters">
@@ -72,9 +73,10 @@ export function RiskView({ set }: { set: Setter }) {
         ["Низкая посещаемость", String(t.low_attendance), `ниже ${attMin}%`],
         ["С долгами прошлых сессий", String(t.with_debts)],
       ]} />
-      <DataTable cols={COLS} rows={shown} base={rows} state={state} set={setState} rowKey={(r) => String(r.student_id)}
+      <DataTable cols={COLS} rows={shown} base={rows} state={state} set={setState} rowKey={(r) => String(r.student_id)} onRowClick={card.open}
         title="Студенты, которым нужна помощь до сессии · Dice: обучающиеся × текущий семестр × пороги" />
       {!!report.data?.points?.length && <AttendChart pool={report.data.points} aMin={attMin} />}
+      {card.node}
     </>
   );
 }
