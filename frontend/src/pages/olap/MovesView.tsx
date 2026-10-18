@@ -23,18 +23,18 @@ const months12 = () => {
   const t = todayIso(), now = Number(t.slice(0, 4)) * 12 + Number(t.slice(5, 7)) - 1;
   return Array.from({ length: 12 }, (_, i) => { const k = now - 11 + i; return `${Math.floor(k / 12)}-${String(k % 12 + 1).padStart(2, "0")}`; });
 };
-// Ключ периода бекенда для месяца: семестр «2025/26-1» (сентябрь–январь) или «-2» (февраль–август); год — календарный.
+// Ключ периода бекенда для месяца: семестр «2025/26-1» (сентябрь–январь) или «-2» (февраль–август);
+// год — учебный «2025/26» (сентябрь–август), как семестр без суффикса.
 // Нужен, чтобы показать и пустые периоды окна: в rows бекенд отдаёт только периоды с приказами
 const periodOf = (month: string, period: Period) => {
   const y = Number(month.slice(0, 4)), mo = Number(month.slice(5));
   if (period === "month") return month;
-  if (period === "year") return String(y);
-  const start = mo >= 9 ? y : y - 1;
-  return `${start}/${String((start + 1) % 100).padStart(2, "0")}-${mo >= 9 || mo === 1 ? 1 : 2}`;
+  const start = mo >= 9 ? y : y - 1, year = `${start}/${String((start + 1) % 100).padStart(2, "0")}`;
+  return period === "year" ? year : `${year}-${mo >= 9 || mo === 1 ? 1 : 2}`;
 };
 const periodLabel = (p: string, period: Period) =>
   period === "month" ? `${MONTH_SHORT[Number(p.slice(5)) - 1]} ${p.slice(2, 4)}`
-    : period === "semester" ? `${p.slice(0, -2)}, ${p.endsWith("-1") ? "осень" : "весна"}` : `${p} год`;
+    : period === "semester" ? `${p.slice(0, -2)}, ${p.endsWith("-1") ? "осень" : "весна"}` : `${p} уч. год`;
 
 // Движение считается по студентам (пары «приказ × студент»), как в макете
 const countOf = (r: MovesRow | undefined, t: string) => r?.students_by_type[t] ?? 0;
