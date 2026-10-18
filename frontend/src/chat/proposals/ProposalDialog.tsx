@@ -51,7 +51,8 @@ function DialogContent({ id, onClose, onDecided }: Props) {
           </div>
           <div className="hint"><p>Автор: {p.initiator.full_name}. Создано: {dateTime(p.created_at)} (Москва).</p><p>Согласующий: {p.routing.assignee_name || "Пока не назначен"}.</p>
             {p.kind === "grade_correction" && <p>{p.submission_status === "draft" ? "Черновик: автор должен подать заявку." : `Заявка №${p.correction_id} подана. Решение принимает другой уполномоченный директор или заместитель директора института.`}</p>}
-            {p.validity.state !== "current" && <p className="form-error">{VALIDITY[p.validity.state]}</p>}
+            {/* Актуальность важна только до решения: у решённых сервер хранит служебное значение (у отклонённого исправления — всегда stale) */}
+            {p.status === "pending" && p.validity.state !== "current" && <p className="form-error">{VALIDITY[p.validity.state]}</p>}
             {p.status === "pending" && p.submission_status !== "submitted" && <p>Срок предложения: {dateTime(p.expires_at)} (Москва).</p>}
             <p>Исполнение: <b>{EXECUTION[p.execution.status]}</b>{p.execution.effective_date ? ` · дата: ${p.execution.effective_date}` : ""}{p.execution.order_id ? ` · приказ №${p.execution.order_id}` : ""}.</p>
             {p.execution.completed_at && <p>Завершено: {dateTime(p.execution.completed_at)} (Москва).</p>}

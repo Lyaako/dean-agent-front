@@ -114,6 +114,9 @@ const fix = { ...p, kind: "grade_correction", status: "rejected", submission_sta
 assert.match(render(fix), /Подготовить заново/);
 assert.doesNotMatch(render({ ...fix, actions: {} }), /Подготовить заново/);
 assert.doesNotMatch(render({ ...fix, preview: { ...fix.preview, before: null } }), /Подготовить заново/);
+// Плашка актуальности — только до решения: у отклонённого исправления сервер хранит stale
+assert.doesNotMatch(render({ ...fix, validity: { state: "stale" } }), /Исходные данные изменились/);
+assert.match(render({ ...p, status: "pending", validity: { state: "stale" } }), /Исходные данные изменились/);
 
 // Очередь предложений перенесена из чата во вкладку «Согласование» (pages/ApprovalsPage.tsx)
 console.log("Proposal API/immutable attempt assertions and React server-render action/status checks passed. Hooks, click flows and browser remain integration work.");
