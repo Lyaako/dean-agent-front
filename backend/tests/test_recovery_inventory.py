@@ -6,7 +6,7 @@ import pytest
 from backend.tests.integration import p13_recovery as recovery
 
 
-@pytest.mark.parametrize('count,head,explicit',[(73,'0062_batch_labels',False),(72,'0039_scope_check_latency',True)])
+@pytest.mark.parametrize('count,head,explicit',[(73,'0063_stale_agent_runs',False),(72,'0039_scope_check_latency',True)])
 def test_inventory_includes_all_tables_and_preserves_backup_revision(monkeypatch,count,head,explicit):
     tables=[['public','alembic_version']]+[['agent_backend','fixture_'+str(i)] for i in range(count-1)]
     responses=iter([json.dumps(tables),'\n'.join(json.dumps([i,'hash'+str(i)]) for i in range(count)),json.dumps({'head':head})])

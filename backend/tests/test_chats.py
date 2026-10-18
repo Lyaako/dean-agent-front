@@ -198,3 +198,75 @@ class ChatTests(DatabaseHttpCase):
         self.work('finish_agent_run', (run_id, self.worker, 'Старый ответ', None))
         final = self.query('SELECT error_code,status FROM agent_backend.agent_run WHERE id=%s', (run_id,))[0]
         self.assertEqual(final, {'error_code': 'forbidden', 'status': 'failed'})
+
+    # Зависшие запуски без воркера
+    def claimed_with_lease(self, lease_sql):
+        run = self.start(self.create()['id'])
+        run_id = UUID(run['run_id'])
+        # Свой запуск переводится в running напрямую: claim берёт самый старый в очереди, а в общем прогоне там бывают чужие.
+        self.query(f"UPDATE agent_backend.agent_run SET status='running',lease_owner=%s,lease_until={lease_sql} WHERE id=%s RETURNING id",
+                   (self.worker, run_id))
+        return run, run_id
+
+    def session_info(self, session):
+        response = self.client.get('/api/v1/agent/sessions/' + session, headers=self.headers)
+        self.assertEqual(response.status_code, 200, response.text)
+        return response.json()
+
+    def test_run_without_live_lease_ends_on_first_access(self):
+        for lease in ("clock_timestamp()-interval '1 second'", 'NULL'):
+            with self.subTest(lease=lease):
+                run, run_id = self.claimed_with_lease(lease)
+                replay = chats.events(self.db, run_id, self.token, 0)
+                self.assertTrue(replay['finished'])
+                self.assertEqual(replay['events'][-1]['data']['type'], 'agent_outcome_unknown')
+                self.assertIsNone(self.session_info(run['session_id'])['activeRunId'])
+                self.assertNotEqual(self.start(run['session_id'])['run_id'], run['run_id'])
+                # Воркер, проснувшийся после снятия, получает отказ, а не второе завершение.
+                with self.assertRaises(psycopg.Error) as lost:
+                    self.work('renew_agent_run', (run_id, self.worker))
+                self.assertEqual(lost.exception.sqlstate, 'P8009')
+                finished = self.work('finish_agent_run', (run_id, self.worker, 'Поздний ответ', None))
+                self.assertEqual(finished['answer'], 'Запуск прерван на сервере. Он не будет повторён автоматически.')
+                self.assertEqual(len(chats.events(self.db, run_id, self.token, 0)['events']), len(replay['events']))
+
+    def test_session_and_delete_expire_a_stale_run_but_keep_a_live_one(self):
+        run, run_id = self.claimed_with_lease("clock_timestamp()+interval '60 seconds'")
+        self.assertEqual(self.session_info(run['session_id'])['activeRunId'], run['run_id'])
+        self.assertFalse(chats.events(self.db, run_id, self.token, 0)['finished'])
+        with self.assertRaises(psycopg.Error) as busy:
+            self.start(run['session_id'])
+        self.assertEqual(busy.exception.sqlstate, 'P8002')
+        path = '/api/v1/agent/sessions/' + run['session_id']
+        self.assertEqual(self.client.delete(path, headers=self.headers).status_code, 409)
+        self.query("UPDATE agent_backend.agent_run SET lease_until=NULL WHERE id=%s RETURNING id", (run_id,))
+        self.assertEqual(self.client.delete(path, headers=self.headers).status_code, 204)
+
+    def test_cancel_ends_a_run_with_an_expired_lease_at_once(self):
+        run, run_id = self.claimed_with_lease("clock_timestamp()-interval '1 second'")
+        stopped = self.client.post(f'/api/v1/agent/runs/{run_id}/cancel', headers=self.headers, json={})
+        self.assertEqual((stopped.status_code, stopped.json()['stop_requested']), (202, True))
+        status = self.query('SELECT status,error_code,finished_at IS NOT NULL AS finished FROM agent_backend.agent_run WHERE id=%s', (run_id,))[0]
+        self.assertEqual(status, {'status': 'cancelled', 'error_code': 'agent_cancelled', 'finished': True})
+        live, live_id = self.claimed_with_lease("clock_timestamp()+interval '60 seconds'")
+        self.assertEqual(self.client.post(f'/api/v1/agent/runs/{live_id}/cancel', headers=self.headers, json={}).status_code, 202)
+        status = self.query('SELECT stop_requested_at IS NOT NULL AS asked,finished_at IS NULL AS open FROM agent_backend.agent_run WHERE id=%s', (live_id,))[0]
+        self.assertEqual(status, {'asked': True, 'open': True})
+
+    def test_queued_run_without_worker_ends_after_the_queue_timeout(self):
+        young = self.start(self.create()['id'])
+        self.assertFalse(chats.events(self.db, UUID(young['run_id']), self.token, 0)['finished'])
+        old = self.start(self.create()['id'])
+        self.query("UPDATE agent_backend.agent_run SET created_at=clock_timestamp()-interval '11 minutes' WHERE id=%s RETURNING id",
+                   (old['run_id'],))
+        replay = chats.events(self.db, UUID(old['run_id']), self.token, 0)
+        self.assertTrue(replay['finished'])
+        self.assertEqual(replay['events'][-1]['data']['type'], 'agent_unavailable')
+        self.assertEqual(replay['events'][-1]['data']['message'], 'Агент сейчас недоступен. Отправьте запрос позже.')
+        self.assertFalse(chats.events(self.db, UUID(young['run_id']), self.token, 0)['finished'])
+
+    def test_claim_still_expires_runs_without_lease(self):
+        run, run_id = self.claimed_with_lease('NULL')
+        self.work('claim_agent_run', (uuid4(),))
+        self.assertEqual(self.query('SELECT error_code FROM agent_backend.agent_run WHERE id=%s', (run_id,))[0]['error_code'],
+                         'agent_outcome_unknown')
