@@ -13,7 +13,7 @@ export interface ProposalPreview {
   note: string | null;
   applied?: Record<string, unknown> | null;
 }
-/** Строка пакета (kind = batch). label — подпись записи и полей, если бекенд её отдаёт (ТЗ docs/backend-task-batch-labels.md) */
+/** Строка пакета (kind = batch). label — подпись записи и полей (бекенд с 0062_batch_labels; без неё — «таблица · ключ») */
 export type BatchState = "ok" | "already_done" | "conflict" | "gone" | "rule_violation";
 export interface BatchItem {
   item_id: number; table: string; key: Record<string, unknown>; field: string[];
