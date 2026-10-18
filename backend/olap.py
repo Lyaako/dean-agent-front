@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 import json
+import re
 
 from fastapi import HTTPException
 from psycopg import Connection
@@ -17,7 +18,7 @@ ANALYSES = {'session','heat','risk','retake','moves'}
 
 
 def analyze(db, token, mode, *, group_id=None, discipline_id=None, semester=None,
-            status_id=None, course=None, level=None, mod_min=30, att_min=70, period='month', pick=None):
+            status_id=None, course=None, level=None, mod_min=30, att_min=70, period='month', pick=None, moves=None):
     # Параметры «Итогов сессии» проверяет analysis_from_data: ошибка называет поле (validation_error).
     if (mode not in ANALYSES or (mode!='session' and any(v is not None and v<1 for v in
             (group_id,discipline_id,semester,status_id,course))) or not 25<=mod_min<=54 or not 0<=att_min<=100
@@ -26,8 +27,11 @@ def analyze(db, token, mode, *, group_id=None, discipline_id=None, semester=None
             or (mode=='retake' and level not in (None,'course','group'))):
         raise HTTPException(422,'invalid_filter')
     dataset=db.execute('SELECT backend_api.olap_dataset(%s) AS data',(token,)).fetchone()['data']
+    # Коды видов приказов — из справочника order_type (чтение, база не меняется).
+    order_types={r['code'] for r in _visible(db,'order_type',token)} if mode=='moves' else None
     return analysis_from_data(dataset,mode,group_id=group_id,discipline_id=discipline_id,
-        semester=semester,status_id=status_id,course=course,level=level,mod_min=mod_min,att_min=att_min,period=period,pick=pick)
+        semester=semester,status_id=status_id,course=course,level=level,mod_min=mod_min,att_min=att_min,period=period,pick=pick,
+        moves=moves,order_types=order_types)
 
 
 def _invalid(field):
@@ -204,8 +208,29 @@ def _retake_rows(data, students, passed, level):
 
 
 
+def _moves_filters(raw, order_types):
+    """Параметры «Движения контингента»: types, from, to (YYYY-MM включительно), list."""
+    raw=raw or {}
+    month=re.compile(r'^\d{4}-(0[1-9]|1[0-2])$')
+    for field in ('from','to'):
+        if raw.get(field) is not None and not month.match(raw[field]):
+            raise _invalid(field)
+    if raw.get('from') and raw.get('to') and raw['from']>raw['to']:
+        raise _invalid('from')
+    types=None
+    if raw.get('types') is not None:
+        types=raw['types'].split(',')
+        if any(not code for code in types) or (order_types is not None and not set(types)<=set(order_types)):
+            raise _invalid('types')
+    listed=raw.get('list')
+    if listed is not None and listed not in ('true','false'):
+        raise _invalid('list')
+    return types,raw.get('from'),raw.get('to'),listed=='true'
+
+
 def analysis_from_data(data, mode, *, group_id=None, discipline_id=None, semester=None,
-                       status_id=None, course=None, level=None, mod_min=30, att_min=70, period='month', pick=None):
+                       status_id=None, course=None, level=None, mod_min=30, att_min=70, period='month', pick=None,
+                       moves=None, order_types=None):
     if sum(len(v) for v in data.values())>100_000:
         raise HTTPException(413,'olap_too_large')
     students={s['student_id']:s for s in data['students'] if
@@ -232,7 +257,7 @@ def analysis_from_data(data, mode, *, group_id=None, discipline_id=None, semeste
             'excellent':sum(any(r['is_graded'] for r in values)
                 and all(r['points'] is not None and (not r['is_graded'] or r['mark']==5) for r in values)
                 for values in by_student.values())}
-    total=metrics(results,set(students)); rows=[]
+    total=metrics(results,set(students)); rows=[]; extra={}; extra_filters={}
     if mode in ('session','risk','retake'):
         # Новые метрики экрана OLAP: доли по студентам, риск по студенту, воронка по долгам.
         passed=_passed_attempts([r for r in data['attempts'] if r['student_id'] in students])
@@ -251,16 +276,21 @@ def analysis_from_data(data, mode, *, group_id=None, discipline_id=None, semeste
                 'group_name':values[0]['group_name'],'results':len(values),'first_pass':passed,
                 'not_first_pass_pct':round(100*(len(values)-passed)/len(values),2)})
     elif mode=='moves':
+        types,month_from,month_to,listed=_moves_filters(moves,order_types)
         def period_key(raw):
             value=date.fromisoformat(raw)
             if period=='year': return str(value.year)
             if period=='month': return value.strftime('%Y-%m')
             year=value.year if value.month>=9 else value.year-1
             return f'{year}/{str(year+1)[-2:]}-{1 if value.month>=9 or value.month==1 else 2}'
+        # Пары «приказ × студент» в области, по видам и окну месяцев order_date.
+        pairs=[r for r in data['orders'] if r['student_id'] in students
+            and (types is None or r['order_type_code'] in types)
+            and (month_from is None or r['order_date'][:7]>=month_from)
+            and (month_to is None or r['order_date'][:7]<=month_to)]
         buckets=defaultdict(list)
-        for r in data['orders']:
-            if r['student_id'] in students:
-                buckets[period_key(r['order_date'])].append(r)
+        for r in pairs:
+            buckets[period_key(r['order_date'])].append(r)
         if pick is not None:
             by_order={}
             for r in buckets.get(pick,[]):
@@ -270,13 +300,23 @@ def analysis_from_data(data, mode, *, group_id=None, discipline_id=None, semeste
             rows=list(by_order.values())
         else:
             for key,values in sorted(buckets.items()):
-                kinds=defaultdict(set)
-                for r in values: kinds[r['order_type_code']].add(r['order_id'])
+                kinds=defaultdict(set); people=defaultdict(int)
+                for r in values:
+                    kinds[r['order_type_code']].add(r['order_id']); people[r['order_type_code']]+=1
                 rows.append({'period':key,'orders':len({r['order_id'] for r in values}),
-                    'students':len({r['student_id'] for r in values}),'by_type':{k:len(v) for k,v in kinds.items()}})
-    return {'mode':mode,'level':level,'rows':rows,'total':total,**({'points':scatter} if mode=='risk' else {}),
+                    'students':len({r['student_id'] for r in values}),'by_type':{k:len(v) for k,v in kinds.items()},
+                    'students_by_type':dict(people)})
+        if listed:
+            fields=('order_id','order_number','order_date','effective_date','order_type','order_type_code',
+                'applied_at','student_id','student','group_id','group_name','course')
+            listing=sorted(({**{k:r[k] for k in fields},'period':period_key(r['order_date'])} for r in pairs),
+                key=lambda r:(r['order_number'],r['student'],r['student_id']))
+            listing.sort(key=lambda r:r['order_date'],reverse=True)
+            extra['orders']=listing
+        extra_filters={'types':types,'from':month_from,'to':month_to,'list':listed}
+    return {'mode':mode,'level':level,'rows':rows,'total':total,**({'points':scatter} if mode=='risk' else {}),**extra,
         'filters':{'course':course,'group_id':group_id,'discipline_id':discipline_id,'semester':semester,
-            'status_id':status_id,'mod_min':mod_min,'att_min':att_min,'period':period,'pick':pick}}
+            'status_id':status_id,'mod_min':mod_min,'att_min':att_min,'period':period,'pick':pick,**extra_filters}}
 
 
 def _visible(db: Connection, name: str, token: str):

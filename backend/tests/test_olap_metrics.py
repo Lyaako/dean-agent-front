@@ -152,3 +152,83 @@ def test_retake_funnel_counts_debts_and_expulsion_candidates():
     assert response['total'] == {'failed': 3, 'closed_retake': 1, 'closed_commission': 1, 'open': 1,
                                  'closed_pct': 67, 'expulsion_candidates': 1}
     assert analysis_from_data(data, 'retake', level='course')['rows'][0]['name'] == '2 курс'
+
+
+ORDER_TYPES = {'enroll', 'expel', 'transfer', 'leave', 'reinstate', 'scholarship', 'graduate', 'leave_return', 'practice', 'thesis_topics'}
+
+
+def order(data, order_id, code, day, sid, applied='2026-01-01T00:00:00+03:00'):
+    name = {'expel': 'Отчисление', 'leave': 'Академический отпуск', 'enroll': 'Зачисление'}.get(code, code)
+    s = next(x for x in data['students'] if x['student_id'] == sid)
+    data['orders'].append({'order_id': order_id, 'order_number': f'{order_id}-с/26', 'order_date': day,
+        'effective_date': day, 'order_type_code': code, 'order_type': name, 'student_id': sid,
+        'applied_at': applied, 'group_id': s['group_id'], 'group_name': s['group_name'], 'student': s['student'],
+        'course': s['course']})
+
+
+def moves(data, **params):
+    params.setdefault('order_types', ORDER_TYPES)
+    return analysis_from_data(data, 'moves', **params)
+
+
+def movement():
+    data = dataset()
+    student(data, 1, group=1); student(data, 2, group=2); student(data, 3, group=1); student(data, 4, group=1)
+    order(data, 10, 'expel', '2026-09-25', 1); order(data, 10, 'expel', '2026-09-25', 2)
+    order(data, 11, 'leave', '2026-02-10', 3, applied=None)
+    order(data, 12, 'enroll', '2026-09-01', 4)
+    order(data, 13, 'expel', '2025-06-30', 3)
+    return data
+
+
+def test_moves_count_students_by_type():
+    rows = moves(movement())['rows']
+    september = next(r for r in rows if r['period'] == '2026-09')
+    assert september['by_type'] == {'expel': 1, 'enroll': 1}
+    assert september['students_by_type'] == {'expel': 2, 'enroll': 1}
+    one = next(r for r in moves(movement(), group_id=2)['rows'] if r['period'] == '2026-09')
+    assert one['students_by_type'] == {'expel': 1}
+
+
+@pytest.mark.parametrize('period', ['month', 'semester', 'year'])
+def test_moves_list_matches_rows_by_period(period):
+    window = {'types': 'expel,leave', 'from': '2025-11', 'to': '2026-10', 'list': 'true'}
+    response = moves(movement(), period=period, moves=window)
+    orders = response['orders']
+    assert [(o['order_id'], o['student_id']) for o in orders] == [(10, 1), (10, 2), (11, 3)]
+    assert set(orders[0]) == {'order_id', 'order_number', 'order_date', 'effective_date', 'order_type', 'order_type_code',
+                              'applied_at', 'student_id', 'student', 'group_id', 'group_name', 'course', 'period'}
+    rows = {r['period']: r for r in response['rows']}
+    for key in {o['period'] for o in orders}:
+        assert sum(o['period'] == key for o in orders) == sum(rows[key]['students_by_type'].values())
+    assert set(rows) == {o['period'] for o in orders}
+    assert next(o for o in orders if o['order_id'] == 11)['applied_at'] is None
+    assert {k: response['filters'][k] for k in ('types', 'from', 'to', 'list')} == {
+        'types': ['expel', 'leave'], 'from': '2025-11', 'to': '2026-10', 'list': True}
+
+
+def test_moves_without_new_parameters_keep_the_format_and_pick():
+    response = moves(movement())
+    assert 'orders' not in response
+    assert set(response['rows'][0]) == {'period', 'orders', 'students', 'by_type', 'students_by_type'}
+    picked = moves(movement(), pick='2026-09', moves={'list': 'true', 'types': 'expel'})
+    assert [r['order_id'] for r in picked['rows']] == [10]
+    assert len(picked['rows'][0]['students']) == 2
+    # pick сужает rows до периода, а orders — всё окно (здесь без from/to — все даты).
+    assert [o['order_id'] for o in picked['orders']] == [10, 10, 13]
+
+
+@pytest.mark.parametrize('window,field', [
+    ({'from': '2026-13'}, 'from'),
+    ({'to': '26-01'}, 'to'),
+    ({'from': '2026-10', 'to': '2026-01'}, 'from'),
+    ({'types': 'expel,foo'}, 'types'),
+    ({'types': 'expel,'}, 'types'),
+    ({'list': 'yes'}, 'list'),
+])
+def test_moves_parameters_name_the_field(window, field):
+    with pytest.raises(HTTPException) as raised:
+        moves(movement(), moves=window)
+    assert raised.value.status_code == 422
+    assert raised.value.detail['code'] == 'validation_error'
+    assert raised.value.detail['details'] == {'field': field}

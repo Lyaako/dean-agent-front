@@ -319,16 +319,22 @@ def get_olap(request: Request, mode: str = "rollup-group", group_id: int | None 
              discipline_id: int | None = None, semester: int | None = None,
              status_id: int | None = None, course: int | None = None, level: str | None = None,
              mod_min: int = 30, att_min: float = 70, period: str = 'month', pick: str | None = None,
+             types: Annotated[str | None, Query(max_length=500)] = None,
+             month_from: Annotated[str | None, Query(alias='from', max_length=20)] = None,
+             month_to: Annotated[str | None, Query(alias='to', max_length=20)] = None,
+             listed: Annotated[str | None, Query(alias='list', max_length=10)] = None,
              authorized=Depends(actor), db=Depends(db_connection, scope="function")):
     with user_context(db,authorized[0].user_id,read_only=True):
-        return _olap_report(request,mode,group_id,discipline_id,semester,status_id,course,level,mod_min,att_min,period,pick,db)
+        # Параметры «Движения контингента» проверяет olap.analysis_from_data (validation_error с полем).
+        moves={'types':types,'from':month_from,'to':month_to,'list':listed}
+        return _olap_report(request,mode,group_id,discipline_id,semester,status_id,course,level,mod_min,att_min,period,pick,db,moves)
 
 
-def _olap_report(request,mode,group_id,discipline_id,semester,status_id,course,level,mod_min,att_min,period,pick,db):
+def _olap_report(request,mode,group_id,discipline_id,semester,status_id,course,level,mod_min,att_min,period,pick,db,moves=None):
     if mode in olap.ANALYSES:
         return olap.analyze(db,request.headers['authorization'][7:],mode,group_id=group_id,
             discipline_id=discipline_id,semester=semester,status_id=status_id,course=course,level=level,
-            mod_min=mod_min,att_min=att_min,period=period,pick=pick)
+            mod_min=mod_min,att_min=att_min,period=period,pick=pick,moves=moves)
     return olap.report(db, request.headers["authorization"][7:], mode,
                        group_id, discipline_id, semester, status_id)
 

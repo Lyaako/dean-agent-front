@@ -38,6 +38,23 @@ class AnalyticsHttpTests(ManualResourceHelpers,DatabaseHttpCase):
             response=self.client.get(f'/api/v1/olap?mode=session&level=group&course={course}',headers=teacher)
             self.assertEqual(response.status_code,200,response.text)
             self.assertTrue(all(r['group_id'] in groups for r in response.json()['rows']))
+        # Движение контингента одним запросом: столбцы и вся таблица приказов окна.
+        query='/api/v1/olap?mode=moves&period=month&types=expel,leave,leave_return,reinstate,transfer&from=2000-01&to=2100-12&list=true'
+        for headers in (admin,teacher):
+            response=self.client.get(query,headers=headers)
+            self.assertEqual(response.status_code,200,response.text)
+            body=response.json()
+            self.assertEqual(sum(sum(r['students_by_type'].values()) for r in body['rows']),len(body['orders']))
+            self.assertTrue({o['order_type_code'] for o in body['orders']}<={'expel','leave','leave_return','reinstate','transfer'})
+        with self.owner():
+            allowed={r['name'] for r in self.db.execute('SELECT name FROM deanery.study_group WHERE group_id=ANY(%s)',(list(groups),))}
+            pairs=self.db.execute("""SELECT count(*) AS n FROM deanery.order_student os JOIN deanery.academic_order o USING(order_id)
+                JOIN deanery.order_type t USING(order_type_id) WHERE t.code IN ('expel','leave','leave_return','reinstate','transfer')""").fetchone()['n']
+        self.assertTrue({o['group_name'] for o in body['orders']}<=allowed)
+        self.assertEqual(len(self.client.get(query,headers=admin).json()['orders']),pairs)
+        response=self.client.get('/api/v1/olap?mode=moves&types=expel,foo',headers=admin)
+        self.assertEqual((response.status_code,response.json()['error']['details']),(422,{'field':'types'}))
+        self.assertEqual(self.client.get(query,headers=student).status_code,403)
         response=self.client.get('/api/v1/olap?mode=session&level=result&group_id=1',headers=admin)
         self.assertEqual((response.status_code,response.json()['error']['details']),(422,{'field':'discipline_id'}))
         for query in ('mod_min=20','att_min=101','period=day','level=unknown','course=0'):
