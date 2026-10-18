@@ -1,4 +1,7 @@
 import { useMemo, useState } from "react";
+import { Icon } from "../../components/Icon";
+import { errorText } from "../../api/errors";
+import { Empty } from "../student/parts";
 import { useResource } from "../../api/resources";
 import { useAuth } from "../../auth/AuthProvider";
 import { StudentCard } from "../students/StudentsPage";
@@ -21,7 +24,7 @@ export function useGroupOptions() {
   const groups = useResource("v_groups");
   const list = useMemo(() => [...(groups.data ?? [])].sort((a, b) => s(a.group_name).localeCompare(s(b.group_name), "ru", { numeric: true })), [groups.data]);
   const courses = [...new Set(list.map((g) => Number(g.course)))].sort((a, b) => a - b);
-  return { list, courses, isLoading: groups.isLoading, error: groups.error };
+  return { list, courses, isLoading: groups.isLoading, error: groups.error, refetch: groups.refetch };
 }
 
 /** Курс и группа из состояния вкладки → параметры запроса */
@@ -63,3 +66,9 @@ export function useStudentCard() {
   const node = card && <StudentCard studentId={card.student_id} title={card.student} onClose={() => setCard(null)} />;
   return { open, node };
 }
+
+/** Срез не загрузился: текст ошибки и «Повторить» (в том числе после 429 olap_busy — сами не повторяем) */
+export const LoadError = ({ error, onRetry }: { error: unknown; onRetry: () => void }) => (
+  <Empty icon="alert" title="Не удалось загрузить">{errorText(error)}
+    <button type="button" className="btn sm soft retry" onClick={onRetry}><Icon name="refresh" />Повторить</button></Empty>
+);

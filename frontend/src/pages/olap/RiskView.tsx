@@ -3,11 +3,10 @@ import { Badge } from "../../components/ui";
 import { DataTable } from "../../components/table/DataTable";
 import { useTableState } from "../../components/table/useTableState";
 import { applyTable, type Column } from "../../components/table/tableLogic";
-import { errorText } from "../../api/errors";
 import { useOlap, type RiskPoint, type RiskRow, type RiskTotal } from "../../api/olap";
 import { plural } from "../../lib/format";
-import { Empty, Tiles } from "../student/parts";
-import { CourseGroup, olap, useScope, useStudentCard, type Setter } from "./parts";
+import { Tiles } from "../student/parts";
+import { CourseGroup, LoadError, olap, useScope, useStudentCard, type Setter } from "./parts";
 
 /* ═════════ 3. Раннее предупреждение: Dice по курсу, модулю 1 и посещаемости ═════════
    Строка на студента: слабый модуль 1, низкая посещаемость, долги прошлых сессий; риск считает сервер */
@@ -59,7 +58,7 @@ export function RiskView({ set }: { set: Setter }) {
       <NumField label="Посещаемость ниже" value={olap.attMin} suffix="%" range={[0, 100]} onChange={(v) => set({ attMin: v })} />
     </div>
   );
-  if (report.error) return <>{filters}<Empty icon="alert" title="Не удалось загрузить">{errorText(report.error)}</Empty></>;
+  if (report.error) return <>{filters}<LoadError error={report.error} onRetry={() => void report.refetch()} /></>;
   if (report.isLoading) return <>{filters}<div className="skel" style={{ height: 200 }} /></>;
   if (!t) return null;
 

@@ -4,10 +4,9 @@ import { Icon } from "../../components/Icon";
 import { DataTable } from "../../components/table/DataTable";
 import { useTableState } from "../../components/table/useTableState";
 import { applyTable, type Column } from "../../components/table/tableLogic";
-import { errorText } from "../../api/errors";
 import { useOlap, type Attempt, type OlapParams, type SessionResult, type SessionRow, type SessionStats } from "../../api/olap";
-import { Empty, Tiles } from "../student/parts";
-import { olap, Pct, useStudentCard, type Setter } from "./parts";
+import { Tiles } from "../student/parts";
+import { LoadError, olap, Pct, useStudentCard, type Setter } from "./parts";
 
 /* ═════════ 1. Итоги сессии: Roll-up студент → группа → курс, Drill-down обратно ═════════
    Курс → группы → дисциплины → результаты студентов. Считает сервер (последняя сессия каждой группы) */
@@ -48,7 +47,7 @@ export function SessionView({ set }: { set: Setter }) {
   const card = useStudentCard();
 
   if (report.isLoading) return <div className="skel" style={{ height: 200 }} />;
-  if (report.error) return <Empty icon="alert" title="Не удалось загрузить">{errorText(report.error)}</Empty>;
+  if (report.error) return <LoadError error={report.error} onRetry={() => void report.refetch()} />;
 
   const crumbs = [{ label: "Все курсы" }, ...olap.path];
   const title = level === "course" ? "Roll-up до курсов · нажмите на курс, чтобы раскрыть группы"

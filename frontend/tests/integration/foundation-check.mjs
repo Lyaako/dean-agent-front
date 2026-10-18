@@ -65,7 +65,7 @@ assert.deepEqual(await complete.fetchAll("person"), [{ id: 1 }]);
 
 let query;
 // OLAP — срезы макета (session, heat, risk, retake, moves); параметры уходят в запрос как есть
-const olap = await load("api/olap.ts", { "@tanstack/react-query": { useQuery: () => {} }, "./client": { api: async (_, opts) => { query = opts.query; return opts.query; } } });
+const olap = await load("api/olap.ts", { "@tanstack/react-query": { useQuery: () => {} }, "./client": { ApiError: client.ApiError, api: async (_, opts) => { query = opts.query; return opts.query; } } });
 for (const mode of ["session", "heat", "risk", "retake", "moves"]) {
   await olap.fetchOlap(mode, { course: 2, group_id: 1, semester: 3, period: "semester", pick: "2025/26-1" });
   assert.deepEqual(query, { mode, course: 2, group_id: 1, semester: 3, period: "semester", pick: "2025/26-1" });

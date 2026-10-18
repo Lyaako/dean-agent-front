@@ -1,9 +1,8 @@
 import { useMemo } from "react";
-import { errorText } from "../../api/errors";
 import { useOlap, type HeatRow } from "../../api/olap";
 import type { Row } from "../../api/resources";
 import { Empty, Tiles } from "../student/parts";
-import { olap, Select, useGroupOptions, type Setter } from "./parts";
+import { LoadError, olap, Select, useGroupOptions, type Setter } from "./parts";
 
 /* ═════════ 2. Проблемные дисциплины: Pivot дисциплина × группа + Slice по семестру ═════════ */
 
@@ -27,7 +26,7 @@ export function HeatView({ set }: { set: Setter }) {
 
   if (groups.isLoading || (sem > 0 && report.isLoading)) return <div className="skel" style={{ height: 200 }} />;
   const error = groups.error || report.error;
-  if (error) return <Empty icon="alert" title="Не удалось загрузить">{errorText(error)}</Empty>;
+  if (error) return <LoadError error={error} onRetry={() => { void groups.refetch(); void report.refetch(); }} />;
   // У преподавателя без групп с прошедшими сессиями сравнивать нечего
   if (!sems.length) return <Empty icon="chart" title="Нет данных">У ваших групп ещё не было сессий</Empty>;
 

@@ -4,11 +4,10 @@ import { DataTable } from "../../components/table/DataTable";
 import { useTableState } from "../../components/table/useTableState";
 import { applyTable, type Column } from "../../components/table/tableLogic";
 import { useResource } from "../../api/resources";
-import { errorText } from "../../api/errors";
 import { useOlap, type MovesRow } from "../../api/olap";
 import { fmtDate, plural, todayIso } from "../../lib/format";
-import { Empty, Tiles } from "../student/parts";
-import { CourseGroup, olap, s, useScope, type Setter } from "./parts";
+import { Tiles } from "../student/parts";
+import { CourseGroup, LoadError, olap, s, useScope, type Setter } from "./parts";
 
 /* ═════════ 5. Движение контингента: Roll-up по времени (месяц → семестр → год), Drill-down до приказов ═════════
    Один запрос на выбранную детализацию: пять видов движения, окно 12 месяцев (from/to) и list=true — столбцы (rows)
@@ -88,7 +87,7 @@ export function MovesView({ set }: { set: Setter }) {
         <label className="field"><span>Roll-up по времени</span>
           <Seg value={olap.period} onChange={(v) => set({ period: v, pick: null })} options={[["month", "Месяцы"], ["semester", "Семестры"], ["year", "Год"]]} /></label>
       </div>
-      {error ? <Empty icon="alert" title="Не удалось загрузить">{errorText(error)}</Empty> : <>
+      {error ? <LoadError error={error} onRetry={() => { void groups.refetch(); void report.refetch(); }} /> : <>
         <Tiles items={[
           ["Отчислено", loading ? "…" : String(n("expel")), "за 12 месяцев", n("expel") ? "bad" : ""],
           ["Ушли в академ", loading ? "…" : String(n("leave")), `вернулись — ${n("leave_return")}`],

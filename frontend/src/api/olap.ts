@@ -1,7 +1,7 @@
 // OLAP: GET /api/v1/olap?mode=… Ответ {mode, level, rows, total, filters}.
 // Срезы — как в макете (mockup/redesign/olap.js). Форматы — docs/API.md бекенда, раздел «Пять новых режимов OLAP»
 import { useQuery } from "@tanstack/react-query";
-import { api } from "./client";
+import { api, ApiError } from "./client";
 
 export type OlapOp = "session" | "heat" | "risk" | "retake" | "moves";
 
@@ -60,4 +60,6 @@ export const fetchOlap = <R, T = Record<string, unknown>>(mode: OlapOp, params: 
   api<OlapReport<R, T>>("/olap", { query: { mode, ...params } });
 
 export const useOlap = <R, T = Record<string, unknown>>(mode: OlapOp, params: OlapParams, enabled = true) =>
-  useQuery({ queryKey: ["olap", mode, params], queryFn: () => fetchOlap<R, T>(mode, params), enabled });
+  useQuery({ queryKey: ["olap", mode, params], queryFn: () => fetchOlap<R, T>(mode, params), enabled,
+    // 429 olap_busy не повторяем сами: сервер и так перегружен, повтор — кнопкой «Повторить»
+    retry: (count, e) => !(e instanceof ApiError && e.status === 429) && count < 1 });

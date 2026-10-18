@@ -3,10 +3,9 @@ import { Seg } from "../../components/ui";
 import { DataTable } from "../../components/table/DataTable";
 import { useTableState } from "../../components/table/useTableState";
 import { applyTable, type Column } from "../../components/table/tableLogic";
-import { errorText } from "../../api/errors";
 import { useOlap, type RetakeRow, type RetakeTotal } from "../../api/olap";
-import { Empty, Tiles } from "../student/parts";
-import { CourseGroup, olap, Pct, useScope, type Setter } from "./parts";
+import { Tiles } from "../student/parts";
+import { CourseGroup, LoadError, olap, Pct, useScope, type Setter } from "./parts";
 
 /* ═════════ 4. Пересдачи: Roll-up по попытке сдачи ═════════
    Воронка по долгам сессии: не сдали в сессию → закрыли на пересдаче → комиссией → не закрыто */
@@ -37,7 +36,7 @@ export function RetakeView({ set }: { set: Setter }) {
         <Seg value={olap.level} onChange={(v) => set({ level: v })} options={[["group", "Групп"], ["course", "Курсов"]]} /></label>
     </div>
   );
-  if (report.error) return <>{filters}<Empty icon="alert" title="Не удалось загрузить">{errorText(report.error)}</Empty></>;
+  if (report.error) return <>{filters}<LoadError error={report.error} onRetry={() => void report.refetch()} /></>;
   if (report.isLoading) return <>{filters}<div className="skel" style={{ height: 200 }} /></>;
   if (!t) return null;
 
