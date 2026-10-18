@@ -21,6 +21,10 @@ export function useChat() {
   const [pending, setPending] = useState<Attempt[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
+  // Ответ агента недоступен окончательно (4xx на событиях запуска): повтор бесполезен, выход — новый чат
+  const [deadEnd, setDeadEnd] = useState(false);
+  // Запуски, события которых сервер отказался отдавать, — к ним в этой вкладке больше не подключаемся
+  const deadRuns = useRef(new Set<string>());
   const [storageNotice, setStorageNotice] = useState<string | null>(null);
   const chatRef = useRef<Chat | null>(null);
   const pendingRef = useRef<Attempt[]>([]);
@@ -123,11 +127,11 @@ export function useChat() {
         } catch (e) {
           if (!alive()) return;
           if (e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 429) {
-            if (!attempt.runId) {
-              forget(attempt);
-              setNotice(errorText(e));
-            }
-            throw e;
+            forget(attempt);
+            setNotice(errorText(e));
+            // Запуск уже есть (agent_scope_changed, запуск не найден): повтор даст тот же отказ — не крутим «Восстановить соединение»
+            if (attempt.runId) { deadRuns.current.add(attempt.runId); setDeadEnd(true); }
+            return;
           }
           if (failures >= 2) throw e;
           attempt.status = "Связь прервалась. Восстанавливаю тот же запуск…"; persist();
@@ -150,7 +154,7 @@ export function useChat() {
   connectRef.current = connect;
 
   function observe(current: Chat) {
-    if (!current.activeRunId) return;
+    if (!current.activeRunId || deadRuns.current.has(current.activeRunId)) return;
     let attempt = pendingRef.current.find((a) => a.chatId === current.id);
     if (!attempt) {
       attempt = { key: newKey(), createKey: newKey(), title: current.title, body: null, chatId: current.id, runId: current.activeRunId, after: 0, terminal: false };
@@ -243,13 +247,13 @@ export function useChat() {
       }
     }
   }
-  function newChat() { opening.current++; setCurrent(null); setNotice(null); if (userId !== undefined) activeChat(userId, null); }
+  function newChat() { opening.current++; setCurrent(null); setNotice(null); setDeadEnd(false); if (userId !== undefined) activeChat(userId, null); }
   async function openChat(id: string) {
     const ticket = ++opening.current, signal = scope.current?.signal;
     try {
       const value = await store.get(id, signal);
       if (signal?.aborted || ticket !== opening.current) return;
-      setCurrent(value); setNotice(null);
+      setCurrent(value); setNotice(null); setDeadEnd(false);
       if (userId !== undefined) activeChat(userId, id);
       observe(value);
     } catch (e) { if (!signal?.aborted && ticket === opening.current) setNotice(errorText(e)); }
@@ -293,7 +297,7 @@ export function useChat() {
   const busy = !!visible || !!chat?.activeRunId;
   return {
     chats, chat, messages: chat?.messages ?? [], busy, anyBusy: busy || loading, loading, status: visible?.status,
-    notice: visible?.error ?? notice ?? storageNotice, disconnected: !!visible?.disconnected, stopping: !!visible?.stopping,
+    notice: visible?.error ?? notice ?? storageNotice, disconnected: !!visible?.disconnected, deadEnd: deadEnd && !visible?.error, stopping: !!visible?.stopping,
     canStop: !!(visible?.runId ?? chat?.activeRunId), send, stop, newChat, openChat, renameChat, removeChat, refreshCurrent, retry,
     attachments: { agentReads: !!att?.backend_supported && !!att.agent_supported && att.agent_status === "ready", maxCount: att?.max_attachments ?? 5, maxTotal: att?.max_total_bytes ?? 20_000_000 },
   };

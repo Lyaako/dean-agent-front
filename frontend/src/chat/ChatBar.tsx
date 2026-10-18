@@ -134,7 +134,9 @@ export function ChatBar({ open, setOpen }: { open: boolean; setOpen: (v: boolean
               )}
               {att.notice && <small className="form-error attach-hint">{att.notice}</small>}
               {att.items.length > 0 && !c.attachments.agentReads && <small className="form-error attach-hint">Агент сейчас не готов принять вложения. При отправке файлы останутся в черновике.</small>}
-              {c.notice && <div className="form-error attach-hint" role="alert">{c.notice} <button type="button" className="btn sm soft" onClick={c.retry}>{c.disconnected ? "Восстановить соединение" : "Повторить загрузку"}</button></div>}
+              {c.notice && <div className="form-error attach-hint" role="alert">{c.notice} {c.deadEnd
+                ? <button type="button" className="btn sm soft" onClick={c.newChat}><Icon name="plus" />Новый чат</button>
+                : <button type="button" className="btn sm soft" onClick={c.retry}>{c.disconnected ? "Восстановить соединение" : "Повторить загрузку"}</button>}</div>}
               <form className="input-row" onSubmit={submit}>
                 <input ref={fileInput} type="file" accept={ATTACH_TYPES.join(",")} multiple hidden
                   onChange={(e) => { if (e.target.files) att.add(e.target.files); e.target.value = ""; }} />
