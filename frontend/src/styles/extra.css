@@ -718,6 +718,13 @@ body {
 .b-row:last-child { border-bottom: 0; }
 .batch-dialog .b-row:not(:has(input)) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 210px; }
 .b-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--indigo); }
+/* Шапка столбцов списка пакета */
+.b-cols { padding: 10px 0 8px; font-size: 12px; font-weight: 500; color: var(--muted); }
+/* Название поля — одной строкой по центру столбца; значения «было → стало» под ним тоже по центру */
+.b-cols > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.b-cols-val { text-align: center; }
+.batch-list .b-val { justify-content: center; }
+.batch-dialog .b-row.b-cols.has-check { grid-template-columns: 20px minmax(0, 1fr) minmax(0, 1fr) 210px; }
 .b-row.off .b-rec, .b-row.off .b-val { opacity: .45; }
 .b-row.invalid .b-rec, .b-row.invalid .b-val { opacity: .6; }
 .b-head { grid-template-columns: 20px auto 1fr; font-size: 13px; color: var(--ink-2); cursor: pointer; }

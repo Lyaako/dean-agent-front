@@ -6,6 +6,7 @@ import { prefillChat } from "../../lib/chatPrefill";
 import type { Proposal } from "../../api/proposals";
 import { useAuth } from "../../auth/AuthProvider";
 import { errorText } from "../../api/errors";
+import { plural } from "../../lib/format";
 import { FileViewer, MessageThumbs, type ViewTarget } from "../attachments/Thumbs";
 import { STATUS, EXECUTION, VALIDITY, dateTime } from "./presentation";
 import { RedoCorrectionDialog } from "../../pages/sheets/CorrectionDialog";
@@ -68,7 +69,10 @@ function DialogContent({ id, onClose, onDecided }: Props) {
         {m.loading ? <div className="skel" style={{ height: 140 }} /> : m.loadError ? <p className="form-error">{m.loadError}</p> : p && <>
           {batch ? <>
             <div className="batch-sum"><Icon name="sparkle" /><div><p>{batch.explanation}</p>
-              {batch.status === "approved" && <p>Применено {applied(batch).size} из {items.length}{batch.execution.undo_id ? " · отменено" : ""}.</p>}
+              {/* Отмену пишем числом строк, которые она вернула: «· отменено» читалось как «отменён весь пакет» */}
+              {batch.status === "approved" && <p>Применено {applied(batch).size} из {items.length}{batch.execution.undo_id
+                ? m.undone ? (m.undone.size ? `, затем ${m.undone.size} ${plural(m.undone.size, "строка отменена", "строки отменены", "строк отменено")}` : ", отмена ничего не вернула") : ", затем выполнена отмена"
+                : ""}.</p>}
               {batch.reason && <small className="hint">Основание агента: {batch.reason}</small>}</div></div>
             <BatchItems p={batch} mode={mode} picked={pickSet} onPick={setPick} culprit={m.error?.itemId} disabled={locked} undone={m.undone} />
             {mode === "approve" && !items.some((it) => it.state === "ok") && <p className="form-error">Ни одну строку применить нельзя — причины указаны в строках.</p>}

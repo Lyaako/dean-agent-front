@@ -50,7 +50,7 @@ function notes(p: Proposal, it: BatchItem, undone?: Set<number>): [string, Kind]
   const out: [string, Kind][] = [done ? ["Применено", "ok"] : ["Пропущено", "muted"]];
   // Отмена уже выполнена: какие строки она вернула — из обратного предложения (execution.undo_id → его picked_item_ids).
   // undo_reason у строк после отмены — expired, но «срок истёк» здесь неверно: строку отменили или сняли с отмены
-  if (done && p.execution.undo_id) { if (undone) out.push(undone.has(it.item_id) ? ["Отменено", "muted"] : ["Не отменено", "muted"]); return out; }
+  if (done && p.execution.undo_id) { if (undone?.has(it.item_id)) out.push(["Отменено", "muted"]); return out; }   // «Не отменено» не пишем: без метки и так понятно
   const skipped = p.execution.undo_skipped?.find((x) => x.item_id === it.item_id);
   if (done && it.reversible === false) {
     const why = undoReasonText(it.undo_reason ?? skipped?.reason);
@@ -109,14 +109,20 @@ export function BatchItems({ p, mode, picked, onPick, culprit, disabled, undone 
       {chips.length > 1 && <div className="chips">{chips}</div>}
       <label className="search sm"><Icon name="search" /><input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Найти запись" aria-label="Найти запись" autoComplete="off" /></label>
     </div>
-    {!check && one && <p className="hint">{title(one, one.field[0])}: было → стало</p>}
     <div className="batch-list" role="list">
+      {/* Названия столбцов явно: что за запись, какое поле меняется, итог по строке */}
+      <div className={`b-row b-cols${check ? " has-check" : ""}`} aria-hidden="true">
+        {check && <span />}
+        <span>Запись</span>
+        <span className="b-cols-val" title={one ? title(one, one.field[0]) : undefined}>{one ? title(one, one.field[0]) : "Что меняется"}</span>
+        <span>{p.status === "pending" ? "Проверка" : "Результат"}</span>
+      </div>
       {check && (
         <label className="b-row b-head">
           <input type="checkbox" checked={allOn} disabled={disabled || !can.length} aria-label="Отметить все"
             onChange={(e) => { const next = new Set(picked); can.forEach((it) => (e.target.checked ? next.add(it.item_id) : next.delete(it.item_id))); onPick(next); }} />
           <span>Отметить все{filter !== "all" || q ? " найденные" : ""}</span>
-          <span className="hint">{one ? `${title(one, one.field[0])}: было → стало · ` : ""}Shift+клик — диапазон</span>
+          <span className="hint">Shift+клик — диапазон</span>
         </label>
       )}
       {rows.map((it) => {
@@ -124,7 +130,7 @@ export function BatchItems({ p, mode, picked, onPick, culprit, disabled, undone 
         const blocked = check && !ok;
         return (
           <div key={it.item_id} role="listitem"
-            className={`b-row${blocked ? " invalid" : ""}${it.state === "conflict" || it.state === "gone" ? " stale" : ""}${it.item_id === culprit ? " culprit" : ""}${check && !on ? " off" : ""}`}>
+            className={`b-row${blocked ? " invalid" : ""}${p.status === "pending" && (it.state === "conflict" || it.state === "gone") ? " stale" : ""}${it.item_id === culprit ? " culprit" : ""}${check && !on ? " off" : ""}`}>
             {check && <input type="checkbox" checked={on} disabled={disabled || !ok} aria-label={`${recordOf(it)} ${subOf(it) ?? ""}`}
               onChange={(e) => toggle(it.item_id, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)} />}
             <div className="b-rec"><b>{recordOf(it)}</b>{subOf(it) && <small>{subOf(it)}</small>}</div>

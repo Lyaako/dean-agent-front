@@ -97,6 +97,7 @@ const dialog = await load("chat/proposals/ProposalDialog.tsx", {
   "./useProposal": { REASON_MIN: 10, TABLE_NAME: { person: "Личные данные" }, useProposal: () => ({ proposal: current, rows: [], reason: "", reasonOk: false,
     reasonMax: 2000, reasonError: null, events: {}, assignees: {}, tableName: "person", operation: "UPDATE", loadError, undone }) },
   "../../lib/chatPrefill": { prefillChat() {} },
+  "../../lib/format": { plural: (n, a, b, c) => (n % 10 === 1 && n % 100 !== 11 ? a : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? b : c) },
   "../../components/form/lookups": { useLookup: () => ({}) },
   "../../auth/AuthProvider": { useAuth: () => ({ me: { user_id: 8 } }) },
   "../../api/errors": { errorText: String },
@@ -139,18 +140,18 @@ const batch = { ...p, kind: "batch", explanation: "Общежитие трём �
 const pending = render(batch);
 assert.match(pending, /Применить изменения\?/); assert.match(pending, /Применить 2 из 3/);
 assert.match(pending, /Студент/); assert.match(pending, /student_id=2/); assert.match(pending, /Сидоров Никита/);
-assert.match(pending, /CH-02/); assert.match(pending, /Нуждается в общежитии: было → стало/);
+assert.match(pending, /CH-02/); assert.match(pending, /<span class="b-cols-val"[^>]*>Нуждается в общежитии<\/span>/); assert.doesNotMatch(pending, /было → стало/);
 assert.doesNotMatch(pending, />Подтвердить</);
 const done = render({ ...batch, status: "approved", actions: { can_undo: true },
   execution: { status: "succeeded", picked_item_ids: [1, 2] }, items: [row(1), row(2, { reversible: false, undo_reason: "sheet_closed" }), row(3, { reversible: false })] });
 assert.match(done, /Пакетное изменение/); assert.match(done, /Применено 2 из 3/); assert.match(done, /Пропущено/);
 assert.match(done, /Ведомость закрыта — нужна заявка на исправление/); assert.match(done, /Отменить…/);
 assert.doesNotMatch(render({ ...batch, status: "approved", actions: {}, execution: { status: "succeeded", picked_item_ids: [1] } }), /Отменить…/);
-// После выполненной отмены: «Отменено» у возвращённых строк, «Не отменено» у снятых — не «срок истёк»
+// После выполненной отмены: «Отменено» только у возвращённых строк (без «Не отменено»), итог — числом; не «срок истёк»
 undone = new Set([1]);
 const reverted = render({ ...batch, status: "approved", actions: {}, execution: { status: "succeeded", picked_item_ids: [1, 3], undo_id: "inverse" },
   items: [row(1, { reversible: false, undo_reason: "expired" }), row(2, { reversible: false }), row(3, { reversible: false, undo_reason: "expired" })] });
-assert.match(reverted, /Отменено/); assert.match(reverted, /Не отменено/); assert.doesNotMatch(reverted, /Срок отмены истёк|Внимание/);
+assert.match(reverted, /Отменено/); assert.doesNotMatch(reverted, /Не отменено/); assert.match(reverted, /Применено 2 из 3, затем 1 строка отменена\./); assert.doesNotMatch(reverted, /Срок отмены истёк|Внимание/);
 undone = undefined;
 // Тело решения по пакету — с picked_item_ids; отмена — только выбранные строки
 const decided = api.createProposalAttempt(batch, { action: "decision", approve: true, reason: "Проверено, применяем", picked_item_ids: [1, 2] });
