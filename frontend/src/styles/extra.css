@@ -722,8 +722,10 @@ body {
 .b-cols { padding: 10px 0 8px; font-size: 12px; font-weight: 500; color: var(--muted); }
 /* Название поля — одной строкой по центру столбца; значения «было → стало» под ним тоже по центру */
 .b-cols > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.b-cols-val { text-align: center; }
-.batch-list .b-val { justify-content: center; }
+/* Как в основных таблицах: шапка и содержимое каждого столбца — по центру (галочка — на своём месте) */
+.b-cols > span { text-align: center; }
+.batch-list .b-rec { text-align: center; }
+.batch-list .b-val, .batch-list .b-note { justify-content: center; }
 .batch-dialog .b-row.b-cols.has-check { grid-template-columns: 20px minmax(0, 1fr) minmax(0, 1fr) 210px; }
 .b-row.off .b-rec, .b-row.off .b-val { opacity: .45; }
 .b-row.invalid .b-rec, .b-row.invalid .b-val { opacity: .6; }
