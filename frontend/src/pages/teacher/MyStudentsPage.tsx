@@ -56,14 +56,14 @@ export function MyStudentsPage() {
 
   return (
     <Page title="Мои студенты">
-      {/* Коротко одной строкой, как в макете */}
+      {/* Только числа: список групп длинный и не читается, группа есть в каждой строке таблицы и в фильтре */}
       <p className="stat-line">
-        <span>{gs.length === 1 ? "Группа" : "Группы"} <b>{gs.join(", ") || "—"}</b></span>
+        <span>Групп <b>{gs.length}</b></span>
         <span>Студентов <b>{all.length}</b></span>
         <span>С долгами <b className={withDebts ? "neg" : ""}>{withDebts}</b></span>
         {cur && <span>Вы куратор <b>{s(cur.group_name)}</b></span>}
       </p>
-      <TableTools state={state} set={set} cols={cols} rows={all} count={loading || error ? undefined : shown.length} />
+      <TableTools state={state} set={set} cols={cols} rows={all} />
       <DataTable cols={cols} rows={shown} base={all} state={state} set={set} rowKey={(r) => s(r.student_id)}
         loading={loading} error={error ? errorText(error) : null} onRetry={() => students.refetch()} />
     </Page>

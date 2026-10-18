@@ -37,7 +37,7 @@ export function MyWorksPage() {
       {!works.isLoading && !works.error && !all.length
         ? <Empty icon="cap" title="Нет работ">Вы не руководитель и не рецензент ни одной курсовой или ВКР</Empty>
         : <>
-          <TableTools state={state} set={set} cols={cols} rows={all} count={works.isLoading || works.error ? undefined : shown.length} />
+          <TableTools state={state} set={set} cols={cols} rows={all} />
           <DataTable cols={cols} rows={shown} base={all} state={state} set={set} rowKey={(r) => s(r.work_id)}
             loading={works.isLoading} error={works.error ? errorText(works.error) : null} onRetry={() => works.refetch()} />
         </>}

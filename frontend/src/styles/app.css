@@ -292,6 +292,11 @@ th.sortable:hover { color: var(--ink); }
 .wg-cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 64px; padding: 8px; }
 .wg-cell.today, .wg-h.today { background: color-mix(in srgb, var(--sky-100) 45%, transparent); }
 .wg-cell .lesson { gap: 4px; padding: 9px 10px 10px 13px; border-radius: 12px; }
+/* Карточка пары не сливается с подсветкой «сегодня»: тонкая рамка цвета вида занятия, в колонке сегодняшнего дня — белый фон */
+.wg-cell .lesson { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sky) 28%, transparent); }
+.wg-cell .lesson.prac { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--violet) 22%, transparent); }
+.wg-cell.today .lesson { background: var(--surface); }
+.wg-cell .l-top { flex-wrap: wrap; row-gap: 4px; }
 .wg-cell .lesson b { font-size: 13px; line-height: 1.25; }
 .wg-cell .lesson small { font-size: 11.5px; }
 .wg-cell .lesson .badge { font-size: 11px; }

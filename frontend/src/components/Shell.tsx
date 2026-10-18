@@ -8,7 +8,7 @@ import { ROLE_NAME } from "../api/auth";
 import { human, initials, tone, todayIso } from "../lib/format";
 import { ChatBar } from "../chat/ChatBar";
 import { AccountDialog } from "../auth/AccountDialog";
-import { ServicesButton, ServicesDialog } from "../pages/admin/ServicesDialog";
+import { ServicesDialog, ServicesMenuItem, useServicesDown } from "../pages/admin/ServicesDialog";
 
 const WD_FULL = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
 
@@ -60,12 +60,13 @@ function Me() {
   }, [open]);
   const today = todayIso();
   const name = fullName || me?.login || "";
+  // У админа состояние сервисов агента — в меню профиля; при сбое на аватаре точка
+  const svcDown = useServicesDown(role === "admin");
   return (
     <div className="me" ref={ref}>
-      {/* У админа на месте даты — состояние сервисов агента */}
-      {role === "admin" ? <ServicesButton onOpen={() => setServices(true)} />
-        : <div className="when"><b>{WD_FULL[new Date().getDay()]}, {human(today)}</b></div>}
-      <button className={`avatar t${tone(name)} avatar-btn`} title={`${name} — ${role ? ROLE_NAME[role] : ""}`}
+      <div className="when"><b>{WD_FULL[new Date().getDay()]}, {human(today)}</b></div>
+      <button className={`avatar t${tone(name)} avatar-btn${svcDown ? " has-alert" : ""}`}
+        title={`${name} — ${role ? ROLE_NAME[role] : ""}${svcDown ? " · есть сбои сервисов" : ""}`}
         aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
         {initials(name)}
       </button>
@@ -75,6 +76,7 @@ function Me() {
           <button role="menuitem" className="menu-item" onClick={() => { setOpen(false); setAccount(true); }}>
             <Icon name="users" /><span>Личный кабинет</span>
           </button>
+          {role === "admin" && <ServicesMenuItem onOpen={() => { setOpen(false); setServices(true); }} />}
           <button role="menuitem" className="menu-item" onClick={() => { setOpen(false); logout(); }}>
             <Icon name="logout" /><span>Выйти</span>
           </button>

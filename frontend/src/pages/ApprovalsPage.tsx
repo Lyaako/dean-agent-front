@@ -64,7 +64,7 @@ export function ApprovalsPage() {
 
   return (
     <Page title="Согласование">
-      <TableTools state={state} set={set} cols={COLS} rows={rows} count={q.isLoading || q.error ? undefined : shown.length}>
+      <TableTools state={state} set={set} cols={COLS} rows={rows}>
         {views.length > 1 && <>
           <span className="spacer" />
           <Seg value={box} onChange={setBox} label="Очередь"

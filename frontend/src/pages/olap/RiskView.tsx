@@ -85,7 +85,7 @@ function AttendChart({ pool, aMin }: { pool: RiskPoint[]; aMin: number }) {
   const atts = pool.map((p) => p.attendance_pct), pts = pool.map((p) => p.avg_points);
   const X0 = Math.max(0, Math.floor((Math.min(aMin, ...atts) - 4) / 10) * 10), X1 = 100;
   const Y0 = Math.floor((Math.min(...pts) - 1) / 5) * 5, Y1 = Math.ceil((Math.max(...pts) + 1) / 5) * 5;
-  const W = 1000, H = 320, L = 34, R = 12, T = 12, B = 30;
+  const W = 1000, H = 320, L = 34, R = 24, T = 16, B = 30;   // справа и сверху — запас под точки на краю (100 %)
   const x = (v: number) => L + (Math.max(X0, Math.min(X1, v)) - X0) / (X1 - X0) * (W - L - R);
   const y = (v: number) => T + (1 - (v - Y0) / (Y1 - Y0)) * (H - T - B);
   const range = (a: number, b: number, st: number) => Array.from({ length: Math.floor((b - a) / st) + 1 }, (_, i) => a + i * st);

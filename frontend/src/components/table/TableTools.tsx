@@ -11,13 +11,12 @@ interface Props<R> {
   set: (patch: Partial<TableState> | ((s: TableState) => Partial<TableState>)) => void;
   cols: Column<R>[];
   rows: R[];            // все строки — из них берутся значения для фильтров
-  count?: number;       // сколько записей видно после поиска и фильтров (нет — ещё загружаются)
   children?: ReactNode; // дополнительные элементы справа (переключатель вида, «Добавить»)
 }
 
 // Панель над таблицей: поиск (по колонкам с текстовым фильтром), «Фильтры» с остальными колонками,
 // ниже — плашки активных фильтров слева и число записей справа
-export function TableTools<R>({ state, set, cols, rows, count, children }: Props<R>) {
+export function TableTools<R>({ state, set, cols, rows, children }: Props<R>) {
   const [open, setOpen] = useState(false);
   const [dd, setDd] = useState<number | null>(null);
   const panelRef = useRef<HTMLElement>(null);
@@ -79,7 +78,7 @@ export function TableTools<R>({ state, set, cols, rows, count, children }: Props
         </section>
       )}
 
-      {(active.length > 0 || count != null) && (
+      {active.length > 0 && (
         <div className="table-meta">
           {active.length > 0 && (
             <div className="fplaques">
@@ -92,7 +91,6 @@ export function TableTools<R>({ state, set, cols, rows, count, children }: Props
               <button type="button" className="btn sm ghost" onClick={() => set({ f: {}, page: 1 })}>Сбросить всё</button>
             </div>
           )}
-          {count != null && <span className="count">Всего записей: <b>{count}</b></span>}
         </div>
       )}
     </>

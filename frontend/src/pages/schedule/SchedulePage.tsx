@@ -105,7 +105,7 @@ export function SchedulePage() {
       {bar}
       {s.view === "table" ? (
         <>
-          <TableTools state={tstate} set={tset} cols={SCHEDULE_COLS} rows={weekRows} count={lessons.isLoading || error ? undefined : filtered.length}>
+          <TableTools state={tstate} set={tset} cols={SCHEDULE_COLS} rows={weekRows}>
             <span className="spacer" />
             {addBtn}
           </TableTools>

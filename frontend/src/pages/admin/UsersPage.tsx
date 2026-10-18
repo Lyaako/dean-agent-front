@@ -36,7 +36,7 @@ export function UsersPage() {
   const [open, setOpen] = useState<AppUser | null>(null);
   return (
     <Page title="Пользователи">
-      <TableTools state={state} set={set} cols={COLS} rows={rows} count={data.isLoading || data.error ? undefined : shown.length} />
+      <TableTools state={state} set={set} cols={COLS} rows={rows} />
       <DataTable cols={COLS} rows={shown} base={rows} state={state} set={set} rowKey={(r) => String(r.user_id)} onRowClick={setOpen}
         loading={data.isLoading} error={data.error ? errorText(data.error) : null} onRetry={() => data.refetch()} />
       {open && <UserDialog u={open} onClose={() => setOpen(null)} />}

@@ -71,7 +71,7 @@ export function MyRequestsPage() {
 
   return (
     <Page title="Справки">
-      <TableTools state={state} set={set} cols={COLS} rows={rows} count={loading || error ? undefined : shown.length}>
+      <TableTools state={state} set={set} cols={COLS} rows={rows}>
         <span className="spacer" />
         <button className="btn sm primary" onClick={() => setOrdering(true)} disabled={!types.data?.length}><Icon name="plus" />Заказать справку</button>
       </TableTools>

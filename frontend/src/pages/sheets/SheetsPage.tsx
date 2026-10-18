@@ -69,7 +69,7 @@ export function SheetsPage() {
           <div key={label} className={`card olap-tile ${kind}`}><small>{label}</small><b>{sheets.isLoading ? "…" : value}</b><span>{note}</span></div>
         ))}
       </div>
-      <TableTools state={state} set={set} cols={cols} rows={all} count={sheets.isLoading || sheets.error ? undefined : rows.length} />
+      <TableTools state={state} set={set} cols={cols} rows={all} />
       <DataTable cols={cols} rows={rows} base={all} state={state} set={set} rowKey={(r) => String(r.sheet_id)}
         onRowClick={(r) => setOpenId(r.sheet_id)} loading={sheets.isLoading}
         error={sheets.error ? errorText(sheets.error) : null} onRetry={() => sheets.refetch()} />

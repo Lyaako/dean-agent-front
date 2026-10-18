@@ -41,5 +41,5 @@ export const TABS: TabDef[] = [
   // Журнал отдаёт GET /audit, а не ресурс схемы — видимость задают только роли (Р6)
   { id: "audit", path: "/audit", title: "Журнал изменений", short: "Журнал", icon: "clock", view: null, roles: ["dean_staff", "director", "admin"] },
   // Согласование — у всех ролей; кого что видно, решает сервер (box=incoming|mine|completed)
-  { id: "approvals", path: "/approvals", title: "Согласование", short: "Согласов.", icon: "check", view: null },
+  { id: "approvals", path: "/approvals", title: "Согласование", short: "Решения", icon: "check", view: null },
 ];

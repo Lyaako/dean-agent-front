@@ -157,6 +157,24 @@ button.lesson { width: 100%; border: 0; text-align: left; font: inherit; color: 
 .thumb-retry .ic { width: 12px; height: 12px; }
 .spinner.sm { width: 11px; height: 11px; border-width: 2px; border-color: rgba(255, 255, 255, .35); border-top-color: #fff; }
 .attach-hint { padding: 0 8px; }
+/* Сообщение над полем ввода: текст и кнопка в одну строку, с отступами; спокойный фон вместо розовой заливки */
+.chat-notice { display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap; margin: 0 4px 10px; padding: 10px 10px 10px 14px; border-radius: 16px;
+  background: var(--fill); box-shadow: inset 0 0 0 1px var(--line); font-size: 13.5px; line-height: 1.4; color: var(--ink-2); }
+.chat-notice > span { flex: 1 1 240px; min-width: 0; }
+.chat-notice .btn { flex: none; }
+/* История действий в окне заявки: своя стрелка вместо системного треугольника, записи и кнопки с отступами */
+.p-history summary { display: inline-flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; font-weight: 600; }
+.p-history summary::-webkit-details-marker { display: none; }
+.p-history summary .ic { width: 15px; height: 15px; color: var(--muted); transition: transform var(--t2) var(--ease); }
+.p-history[open] summary .ic { transform: rotate(90deg); }
+.p-history[open] summary { margin-bottom: 8px; }
+.p-history .hint { margin: 0 0 6px; }
+.p-history-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+/* «Вы остановили агента» — тихая строка, а не ошибка */
+.msg.stopped { align-items: center; gap: 10px; color: var(--muted); font-size: 13.5px; }
+.msg.stopped p { margin: 0; }
+.stop-mark { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 10px; background: var(--fill); }
+.stop-mark .ic { width: 14px; height: 14px; }
 .canvas-host { max-width: 100%; }
 .toast.bad .tick { background: var(--rose); }
 
@@ -422,8 +440,6 @@ button.lesson { width: 100%; border: 0; text-align: left; font: inherit; color: 
 :root[data-theme="dark"] .btn.soft:hover { background: #283765; }
 /* Приветствие чата: тёмно-синие участки градиента сливаются с фоном — берём цвета тёмной темы */
 :root[data-theme="dark"] .hello h2 { background-image: linear-gradient(100deg, var(--indigo) 0%, var(--sky) 25%, var(--violet) 50%, var(--orchid) 70%, var(--indigo) 100%); }
-/* В расписании таблица лежит в том же блоке, что и панель (отступ 16, а не 28) — «Всего записей» не должна заезжать под неё */
-.table-meta:has(+ .enter) { margin-bottom: 0; }
 .acc-note { margin: 0; text-align: center; }
 
 /* ═════════ OLAP v2 (olap.js): срезы-вопросы с OLAP-операциями ═════════ */
@@ -437,10 +453,15 @@ button.lesson { width: 100%; border: 0; text-align: left; font: inherit; color: 
 .olap-op[aria-pressed="true"] small { color: rgba(255, 255, 255, .72); }
 @media (max-width: 1180px) { .olap-ops { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .olap-ops { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Блоки среза (фильтры, плитки, таблицы, графики) — с отступом друг от друга */
+.olap-body { display: flex; flex-direction: column; gap: 20px; }
 .olap-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; }
 .olap-filters .select { min-width: 170px; }
-.num-in { position: relative; display: inline-flex; align-items: center; }
+.num-in { position: relative; display: inline-flex; align-items: center; align-self: flex-start; }
 .num-in .text-input { width: 120px; height: 42px; padding-right: 62px; }
+/* Ошибка порога — под полем, не раздвигая ряд фильтров */
+.field:has(> .num-in) { position: relative; }
+.field:has(> .num-in) .field-error { position: absolute; top: calc(100% + 4px); left: 4px; white-space: nowrap; }
 .num-in i { position: absolute; right: 14px; font-style: normal; font-size: 13px; color: var(--muted); pointer-events: none; }
 /* Плитки с ключевыми числами */
 .olap-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
@@ -548,10 +569,18 @@ body {
 .sheet-table tbody tr:hover td { background: none; }
 .sheet-table th:not(:first-child), .sheet-table td:not(:first-child) { text-align: center; }
 .sheet-table .pts { width: 84px; height: 36px; text-align: center; }
+/* Стрелки браузера в числовых полях сдвигают число с центра и наезжают на подписи («баллов», «%») — убираем */
+.text-input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.text-input[type="number"]::-webkit-inner-spin-button, .text-input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .sheet-table .field-error { display: block; margin-top: 4px; white-space: nowrap; }   /* ошибка базы — под баллами, а не сбоку */
 /* Ввод результата: переключатель «Баллы / Не аттестован / Неявка» в строке — компактнее, окно шире */
 .sheet-dialog.sheet-edit { width: min(880px, 100%); }
-.sheet-table .seg button { height: 30px; padding: 0 10px; font-size: 12.5px; }
+/* В ведомости доли переключателя — по своим подписям (равные доли в узкой ячейке прижимали «Не аттестован» к соседям),
+   поэтому вместо скользящего бегунка подсвечена сама нажатая кнопка */
+.sheet-table .seg { grid-auto-columns: auto; }
+.sheet-table .seg::before { display: none; }
+.sheet-table .seg button { height: 30px; padding: 0 12px; font-size: 12.5px; transition: color var(--t3) var(--ease), background-color var(--t3) var(--ease); }
+.sheet-table .seg button[aria-pressed="true"] { background: var(--sky-100); }
 .sheet-table .seg button:disabled { cursor: default; }
 .sheet-table td .btn.sm { padding: 0 10px; }
 /* Закрытие ведомости и заявка на исправление */
@@ -620,9 +649,10 @@ body {
 /* Временный пароль и кнопка «Сервисы» в шапке */
 .pw-box { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-radius: 16px; background: var(--fill); }
 .pw-box code { font: 600 18px/1.3 ui-monospace, monospace; letter-spacing: .06em; color: var(--ink); word-break: break-all; }
-.svc-btn { padding: 0 6px; }
-.svc-btn .badge { pointer-events: none; }
-@media (max-width: 1100px) { .svc-label { display: none; } .svc-btn .badge { padding: 0 8px; } }   /* узко — только точка, как дата скрывается */
+/* «Сервисы» в меню профиля: статус справа; при сбое — точка на аватаре */
+.menu-side { margin-left: auto; padding-left: 12px; }
+.avatar-btn.has-alert { position: relative; overflow: visible; }
+.avatar-btn.has-alert::after { content: ""; position: absolute; top: 0; right: 0; width: 10px; height: 10px; border-radius: 50%; background: var(--orchid); box-shadow: 0 0 0 2px var(--surface); }
 
 /* Переключатель (seg): белая подложка с тенью, как у поиска — на любом фоне выглядит одинаково;
    выбранный вариант — голубая «таблетка». Рамка фокуса — только с клавиатуры и внутри кнопки */
@@ -744,5 +774,9 @@ body {
 .table-meta .count b { color: var(--ink-2); }
 
 /* Журнал: источник и ссылка на предложение в одной ячейке */
-.audit-src { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+/* Источник: метка, под ней — ссылка на заявку, обе по центру колонки */
+.audit-src { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
+.audit-link { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px; border: 0; border-radius: 8px; background: none; font: inherit; font-size: 12.5px; font-weight: 500; color: var(--indigo); white-space: nowrap; }
+.audit-link .ic { width: 13px; height: 13px; }
+.audit-link:hover { background: var(--sky-50); }
 .table-wrap td .effects { text-align: left; }

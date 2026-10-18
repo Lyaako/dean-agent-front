@@ -61,7 +61,7 @@ export function GroupsPage() {
 
   return (
     <Page title="Группы">
-      <TableTools state={state} set={set} cols={GROUP_COLS} rows={rows} count={data.isLoading || data.error ? undefined : filtered.length}>
+      <TableTools state={state} set={set} cols={GROUP_COLS} rows={rows}>
         <span className="spacer" />
         {addBtn}
         <Seg value={view} onChange={(v) => { lastView = v; setView(v); }} options={[["cards", "Карточки", "grid"], ["table", "Таблица", "list"]]} />

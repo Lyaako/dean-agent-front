@@ -30,7 +30,7 @@ export function OlapPage() {
           <button key={v} type="button" className="olap-op" aria-pressed={v === olap.op} onClick={() => set({ op: v })}><b>{l}</b><small>{t}</small></button>
         ))}
       </nav>
-      <div className="enter" key={olap.op}><View set={set} /></div>
+      <div className="enter olap-body" key={olap.op}><View set={set} /></div>
     </Page>
   );
 }

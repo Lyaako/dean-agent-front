@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Page } from "../components/Shell";
 import { Badge } from "../components/ui";
+import { Icon } from "../components/Icon";
 import { DataTable } from "../components/table/DataTable";
 import { useTableState } from "../components/table/useTableState";
 import { applyTable, type Column } from "../components/table/tableLogic";
@@ -14,13 +15,15 @@ import { ProposalDialog } from "../chat/proposals/ProposalDialog";
 /* ═════════ ЖУРНАЛ ИЗМЕНЕНИЙ ═════════
    Админ видит весь журнал, директор и деканат — свой институт; преподавателю и студенту вкладки нет.
    Строка — одно событие: когда, кто, таблица, действие, запись, источник и «поле: было → стало».
-   Фильтры уходят в запрос (журнал отдаётся страницами), записи догружаются кнопкой */
+   Фильтры уходят в запрос (журнал отдаётся порциями), следующая порция догружается на последней странице таблицы */
 
 const COLUMN_LABEL: Record<string, string> = { status: "Статус", stage: "Этап", sheet_kind: "Вид ведомости" };
 const OP_KIND: Record<AuditOperation, string> = { I: "ok", U: "info", D: "bad" };
 const tableName = (t: string) => TABLE_NAME[t] ?? t;
 // Скрытые поля приходят как «***» — показываем как есть
-const val = (v: string | null) => (v == null || v === "" ? "—" : v === "true" ? "да" : v === "false" ? "нет" : v);
+// Отметки времени — по-человечески («18.10.2026 14:13»), а не в формате базы
+const val = (v: string | null) => (v == null || v === "" ? "—" : v === "true" ? "да" : v === "false" ? "нет"
+  : /^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(v) ? fmtDateTime(v) : v);
 // Ключ самой записи уже в колонке «Запись» — в списке изменений его не повторяем
 const keyCols = (r: AuditEvent) => new Set(r.record_key.split(",").map((p) => p.split("=")[0].trim()));
 const changesOf = (r: AuditEvent) => r.changes.filter((c) => !keyCols(r).has(c.column));
@@ -37,6 +40,9 @@ export function AuditPage() {
     return next;
   });
   const audit = useAudit(filters);
+  // Следующая порция журнала — когда таблица дошла до последней загруженной страницы
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = audit;
+  const more = useCallback(() => { if (hasNextPage && !isFetchingNextPage) void fetchNextPage(); }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
   const rows = useMemo(() => audit.data?.pages.flatMap((p) => p.items) ?? [], [audit.data]);
   const { data: schema } = useSchema();
   const [proposal, setProposal] = useState<string | null>(null);
@@ -65,7 +71,9 @@ export function AuditPage() {
       render: (r) => (
         <span className="audit-src">
           <Badge kind={r.source === "agent" ? "warn" : "muted"}>{SOURCE_NAME[r.source]}</Badge>
-          {r.proposal_id && <button type="button" className="btn sm ghost" onClick={(e) => { e.stopPropagation(); setProposal(r.proposal_id); }}>Предложение</button>}
+          {/* Изменение прошло через согласование — по ссылке видно, что предлагали и кто решил */}
+          {r.proposal_id && <button type="button" className="audit-link" title="Что предлагалось и кто согласовал"
+            onClick={(e) => { e.stopPropagation(); setProposal(r.proposal_id); }}>Открыть заявку<Icon name="right" /></button>}
         </span>
       ) },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -111,19 +119,9 @@ export function AuditPage() {
           </select></label>
         {any && <button type="button" className="btn ghost" onClick={() => set({ changed_at__gte: undefined, changed_at__lte: undefined, table_name: undefined, operation: undefined, changed_by: undefined, source: undefined })}>Сбросить</button>}
       </div>
-      <p className="stat-line">
-        <span>Показано событий <b>{rows.length}</b>{audit.hasNextPage ? " — есть ещё" : ""}</span>
-        <span>Через чат-агента <b>{rows.filter((r) => r.source === "agent").length}</b></span>
-      </p>
       <DataTable cols={cols} rows={shown} base={rows} state={state} set={setState} rowKey={(r) => r.audit_id}
-        loading={audit.isLoading} error={audit.error ? errorText(audit.error) : null} onRetry={() => audit.refetch()} />
-      {audit.hasNextPage && (
-        <div className="toolbar end">
-          <button type="button" className="btn soft" disabled={audit.isFetchingNextPage} onClick={() => audit.fetchNextPage()}>
-            {audit.isFetchingNextPage ? "Загружаем…" : "Загрузить ещё"}
-          </button>
-        </div>
-      )}
+        loading={audit.isLoading} error={audit.error ? errorText(audit.error) : null} onRetry={() => audit.refetch()}
+        more={audit.hasNextPage} onMore={more} />
       {proposal && <ProposalDialog id={proposal} onClose={() => setProposal(null)} />}
     </Page>
   );

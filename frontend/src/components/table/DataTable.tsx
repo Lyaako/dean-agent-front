@@ -17,9 +17,12 @@ interface Props<R> {
   flashKey?: string | null;
   /** Открыть страницу, на которой первая строка, подходящая под условие (например, выбранная неделя) */
   startAt?: (r: R) => boolean;
+  /** На сервере есть ещё строки (журнал отдаётся порциями): счётчик «из N+», на последней странице — догрузка */
+  more?: boolean;
+  onMore?: () => void;
 }
 
-export function DataTable<R>({ cols, rows, base, state, set, rowKey, title, onRowClick, loading, error, onRetry, flashKey, startAt }: Props<R>) {
+export function DataTable<R>({ cols, rows, base, state, set, rowKey, title, onRowClick, loading, error, onRetry, flashKey, startAt, more, onMore }: Props<R>) {
   const cardRef = useRef<HTMLElement>(null);
   const [avail, setAvail] = useState(0);
   useLayoutEffect(() => {
@@ -57,6 +60,8 @@ export function DataTable<R>({ cols, rows, base, state, set, rowKey, title, onRo
   }, [flashKey]);
 
   const p = Math.min(state.page, pages);
+  // Дошли до последней загруженной страницы — просим следующую порцию, страниц станет больше
+  useEffect(() => { if (more && onMore && p >= pages) onMore(); }, [more, onMore, p, pages]);
   const shown = rows.slice((p - 1) * PAGE_SIZE, p * PAGE_SIZE);
   const cw = avail ? colWidths(cols, base.length ? base : rows, avail) : null;
   // Значения без пробелов и короткие значения не переносим
@@ -117,7 +122,7 @@ export function DataTable<R>({ cols, rows, base, state, set, rowKey, title, onRo
       </div>
       {pages > 1 && !loading && (
         <div className="pager">
-          <span>{a}–{b} из {rows.length}</span>
+          <span>{a}–{b} из {rows.length}{more ? "+" : ""}</span>
           <div className="pages">
             <button onClick={() => go(p - 1)} disabled={p <= 1} aria-label="Предыдущая страница"><Icon name="left" /></button>
             {pageButtons(p, pages).map((n, i) => n === "…"

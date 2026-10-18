@@ -44,7 +44,7 @@ export function ResourceTablePage({ id, title, view, table, keyField, cols, form
 
   return (
     <Page title={title}>
-      <TableTools state={state} set={set} cols={cols} rows={rows} count={data.isLoading || data.error ? undefined : filtered.length}>
+      <TableTools state={state} set={set} cols={cols} rows={rows}>
         <span className="spacer" />
         {actions}
         {can(table, "create") && <button className="btn sm primary" onClick={() => setOpen({ row: null })}><Icon name="plus" />Добавить</button>}

@@ -3,14 +3,19 @@ import { Icon } from "../../components/Icon";
 import { errorText } from "../../api/errors";
 import { downParts, SERVICE_ROWS, useServices } from "../../api/admin";
 
-/* ── Состояние сервисов агента (у админа — кнопка «Сервисы» в шапке, как в макете) ── */
-export function ServicesButton({ onOpen }: { onOpen: () => void }) {
-  const { data } = useServices(true);
-  const down = !!data && SERVICE_ROWS.some(([, , parts]) => downParts(data, parts).length);
+/* ── Состояние сервисов агента (у админа — пункт «Сервисы» в меню профиля) ── */
+/** Есть ли недоступные сервисы: undefined — ещё проверяем */
+export function useServicesDown(enabled: boolean): boolean | undefined {
+  const { data } = useServices(enabled);
+  return data ? SERVICE_ROWS.some(([, , parts]) => downParts(data, parts).length > 0) : undefined;
+}
+
+export function ServicesMenuItem({ onOpen }: { onOpen: () => void }) {
+  const down = useServicesDown(true);
   return (
-    <button type="button" className="btn sm ghost svc-btn" title="Состояние сервисов" onClick={onOpen}
-      aria-label={`Сервисы: ${!data ? "проверяем" : down ? "есть недоступные" : "всё работает"}`}>
-      <Badge kind={!data ? "muted" : down ? "warn" : "ok"}><span className="svc-label">Сервисы</span></Badge>
+    <button role="menuitem" className="menu-item" onClick={onOpen}>
+      <Icon name="grid" /><span>Сервисы</span>
+      <span className="menu-side"><Badge kind={down == null ? "muted" : down ? "warn" : "ok"}>{down == null ? "проверяем" : down ? "есть сбои" : "работают"}</Badge></span>
     </button>
   );
 }
