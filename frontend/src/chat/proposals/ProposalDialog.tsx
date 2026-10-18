@@ -10,6 +10,7 @@ import { useAuth } from "../../auth/AuthProvider";
 import { errorText } from "../../api/errors";
 import { FileViewer, MessageThumbs, type ViewTarget } from "../attachments/Thumbs";
 import { STATUS, EXECUTION, VALIDITY, dateTime } from "./presentation";
+import { RedoCorrectionDialog } from "../../pages/sheets/CorrectionDialog";
 
 const show = (v: unknown) => (v == null || v === "" ? "—" : typeof v === "boolean" ? (v ? "да" : "нет") : String(v));
 const EVENTS: Record<string, string> = { prepared: "Подготовлено", created: "Подготовлено", assigned: "Назначен согласующий", assignment: "Назначен согласующий", claimed: "Взято в работу", submitted: "Заявка подана", approved: "Подтверждено", rejected: "Отклонено", execution: "Изменилось исполнение", attachment_context: "Добавлены материалы", superseded: "Заменено новым предложением" };
@@ -29,7 +30,11 @@ function DialogContent({ id, onClose, onDecided }: Props) {
   const [assignee, setAssignee] = useState("");
   const [assignmentReason, setAssignmentReason] = useState("");
   const [viewer, setViewer] = useState<ViewTarget | null>(null);
+  const [redoFix, setRedoFix] = useState<{ sheetId: number; studentId: number } | null>(null);
   const p = m.loadError ? undefined : m.proposal;
+  // Ведомость и студент исправления — из строки оценки (preview.before)
+  const fixOf = (x: Proposal) => { const g = x.preview.before ?? x.preview.after; const sheetId = Number(g?.sheet_id), studentId = Number(g?.student_id);
+    return sheetId > 0 && studentId > 0 ? { sheetId, studentId } : null; };
   const locked = m.busy || !!m.attempt || !!m.loadError;
   const close = () => { if (!m.busy) onClose(); };
   return <>
@@ -67,9 +72,11 @@ function DialogContent({ id, onClose, onDecided }: Props) {
         <div className="actions">
           {p?.actions.can_reject && <button type="button" className="btn ghost danger-text" disabled={locked || !m.reasonOk} onClick={() => void m.mutate({ action: "decision", approve: false, reason: m.reason })}>Отклонить</button>}
           <span className="spacer" /><button type="button" className="btn" onClick={() => void m.refresh()} disabled={m.busy}>Обновить</button><button type="button" className="btn" onClick={close} disabled={m.busy}>{p?.status === "pending" ? "Позже" : "Закрыть"}</button>
-          {/* «Подготовить заново» — по флагу сервера; исправление оценки — новой заявкой через форму (экран ещё не перенесён) */}
+          {/* «Подготовить заново» — по флагу сервера; исправление оценки — новой заявкой через форму с той же ведомостью и студентом */}
           {p?.actions.can_redo && p.request_text && p.kind !== "grade_correction" && <button type="button" className="btn" disabled={m.busy}
             onClick={() => { prefillChat(p.request_text!); onClose(); }}><Icon name="refresh" />Подготовить заново</button>}
+          {p?.actions.can_redo && p.kind === "grade_correction" && fixOf(p) && <button type="button" className="btn" disabled={m.busy}
+            onClick={() => setRedoFix(fixOf(p))}><Icon name="refresh" />Подготовить заново</button>}
           {p?.actions.can_submit && <button type="button" className="btn primary" disabled={locked} onClick={() => void m.mutate({ action: "submit" })}>Подать заявку</button>}
           {p?.actions.can_approve && <button type="button" className="btn primary" disabled={locked || !m.reasonOk} onClick={() => void m.mutate({ action: "decision", approve: true, reason: m.reason })}>Подтвердить</button>}
           {m.attempt && <button type="button" className="btn primary" disabled={m.busy || !!m.loadError} onClick={() => void m.mutate()}>Повторить запрос</button>}
@@ -78,5 +85,6 @@ function DialogContent({ id, onClose, onDecided }: Props) {
       </div>
     </Modal>
     {viewer && <FileViewer target={viewer} onClose={() => setViewer(null)} />}
+    {redoFix && <RedoCorrectionDialog sheetId={redoFix.sheetId} studentId={redoFix.studentId} onClose={() => setRedoFix(null)} />}
   </>;
 }

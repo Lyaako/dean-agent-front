@@ -90,6 +90,7 @@ const dialog = await load("chat/proposals/ProposalDialog.tsx", {
   "../../api/errors": { errorText: String },
   "../attachments/Thumbs": { FileViewer: () => null, MessageThumbs: () => null },
   "./presentation": presentation,
+  "../../pages/sheets/CorrectionDialog": { RedoCorrectionDialog: () => null },
 });
 const render = (proposal) => { current = proposal; return renderToStaticMarkup(React.createElement(dialog.ProposalDialog, { id: p.id, onClose() {} })); };
 const scheduled = render({ ...p, status: "approved", actions: {}, execution: { status: "scheduled", effective_date: "2027-01-01", order_id: 42 } });
@@ -107,6 +108,12 @@ const denied = render({ ...p, actions: { can_claim: true, can_assign: true, can_
 assert.match(denied, /Предложение недоступно/);
 assert.doesNotMatch(denied, />Взять в работу<|>Передать<|>Подтвердить<|>Отклонить<|>Подать заявку<|class="diff/);
 loadError = null;
+// «Подготовить заново» у исправления оценки — по can_redo и строке оценки в preview.before (Ф-Р4)
+const fix = { ...p, kind: "grade_correction", status: "rejected", submission_status: "submitted", actions: { can_redo: true }, request_text: "исправь оценку",
+  preview: { ...p.preview, table: "grade", before: { grade_id: 5, sheet_id: 3, student_id: 9 } } };
+assert.match(render(fix), /Подготовить заново/);
+assert.doesNotMatch(render({ ...fix, actions: {} }), /Подготовить заново/);
+assert.doesNotMatch(render({ ...fix, preview: { ...fix.preview, before: null } }), /Подготовить заново/);
 
 // Очередь предложений перенесена из чата во вкладку «Согласование» (pages/ApprovalsPage.tsx)
 console.log("Proposal API/immutable attempt assertions and React server-render action/status checks passed. Hooks, click flows and browser remain integration work.");

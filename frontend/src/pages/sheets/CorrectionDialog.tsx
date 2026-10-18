@@ -4,7 +4,7 @@ import { CodedText, ErrorNote, Modal, Seg, useToast } from "../../components/ui"
 import { Icon } from "../../components/Icon";
 import { ApiError } from "../../api/client";
 import { errorCode, errorText, requestIdOf } from "../../api/errors";
-import { requestCorrection, resultText, useScale, type RosterRow, type Sheet } from "../../api/sheets";
+import { requestCorrection, resultText, useRoster, useScale, useSheets, type RosterRow, type Sheet } from "../../api/sheets";
 import { ptsError, RES_MODES, type Mode } from "./result";
 
 /* ── Заявка на исправление оценки в закрытой ведомости (Б5): решает директор или заместитель в «Согласовании».
@@ -102,6 +102,26 @@ export function CorrectionDialog({ sheet, row, onClose }: { sheet: Sheet; row: R
           <button type="button" className="btn" onClick={onClose} disabled={busy}>Отменить</button>
           <button type="button" className="btn primary" onClick={send} disabled={busy}>{busy ? "Отправляем…" : "Отправить директору"}</button>
         </div>
+      </div>
+    </Modal>
+  );
+}
+
+/* ── «Подготовить заново» для исправления оценки (Ф-Р4): новая заявка по той же ведомости и студенту.
+   Ведомость и студент — из строки оценки в preview.before (special_row), ждём загрузки ведомостей и состава ── */
+export function RedoCorrectionDialog({ sheetId, studentId, onClose }: { sheetId: number; studentId: number; onClose: () => void }) {
+  const sheets = useSheets();
+  const roster = useRoster(sheetId);
+  const sheet = sheets.data?.find((s) => s.sheet_id === sheetId);
+  const row = roster.data?.find((r) => r.student_id === studentId);
+  if (sheet && row) return <CorrectionDialog sheet={sheet} row={row} onClose={onClose} />;
+  const failed = sheets.error ?? roster.error ?? ((sheets.data && !sheet) || (roster.data && !row) ? new Error("Оценка не найдена: ведомость или студент недоступны") : null);
+  return (
+    <Modal onClose={onClose} label="Запросить исправление">
+      <div className="dialog form-dialog">
+        <div className="form-head"><div><h3>Запросить исправление</h3></div>
+          <button type="button" className="icon-btn" aria-label="Закрыть" onClick={onClose}><Icon name="x" /></button></div>
+        <div className="form-body">{failed ? <ErrorNote text={errorText(failed)} requestId={requestIdOf(failed)} code={errorCode(failed)} /> : <div className="skel" style={{ height: 140 }} />}</div>
       </div>
     </Modal>
   );
