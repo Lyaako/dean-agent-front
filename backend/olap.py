@@ -9,16 +9,21 @@ import re
 from fastapi import HTTPException
 from psycopg import Connection
 
+from backend.olap_gate import OlapGate
+
 
 MODES = {
     "rollup-group", "rollup-discipline", "rollup-semester", "slice-group",
     "slice-discipline", "dice", "drilldown-group", "cross-group-semester",
 }
 ANALYSES = {'session','heat','risk','retake','moves'}
+# Один на процесс: ограничение одновременных расчётов и кэш наборов фактов (см. olap_gate).
+GATE = OlapGate()
 
 
 def analyze(db, token, mode, *, group_id=None, discipline_id=None, semester=None,
-            status_id=None, course=None, level=None, mod_min=30, att_min=70, period='month', pick=None, moves=None):
+            status_id=None, course=None, level=None, mod_min=30, att_min=70, period='month', pick=None, moves=None,
+            user_id=None):
     # Параметры «Итогов сессии» проверяет analysis_from_data: ошибка называет поле (validation_error).
     if (mode not in ANALYSES or (mode!='session' and any(v is not None and v<1 for v in
             (group_id,discipline_id,semester,status_id,course))) or not 25<=mod_min<=54 or not 0<=att_min<=100
@@ -26,12 +31,22 @@ def analyze(db, token, mode, *, group_id=None, discipline_id=None, semester=None
             or period not in ('month','semester','year') or (pick is not None and len(pick)>40)
             or (mode=='retake' and level not in (None,'course','group'))):
         raise HTTPException(422,'invalid_filter')
-    dataset=db.execute('SELECT backend_api.olap_dataset(%s) AS data',(token,)).fetchone()['data']
-    # Коды видов приказов — из справочника order_type (чтение, база не меняется).
-    order_types={r['code'] for r in _visible(db,'order_type',token)} if mode=='moves' else None
-    return analysis_from_data(dataset,mode,group_id=group_id,discipline_id=discipline_id,
-        semester=semester,status_id=status_id,course=course,level=level,mod_min=mod_min,att_min=att_min,period=period,pick=pick,
-        moves=moves,order_types=order_types)
+    # Ошибки параметров — до слота и до запроса набора фактов.
+    if mode=='session':
+        _session_rows({'results':[]},{},{},level,course,group_id,discipline_id,semester)
+    order_types=None
+    if mode=='moves':
+        _moves_filters(moves,None)
+        # Коды видов приказов — из справочника order_type (чтение, база не меняется).
+        order_types={r['code'] for r in _visible(db,'order_type',token)}
+        _moves_filters(moves,order_types)
+    def load():
+        return db.execute('SELECT backend_api.olap_dataset(%s) AS data',(token,)).fetchone()['data']
+    dataset=GATE.fetch(('dataset',user_id),load) if user_id is not None else None
+    with GATE.slot():
+        return analysis_from_data(dataset if dataset is not None else load(),mode,group_id=group_id,discipline_id=discipline_id,
+            semester=semester,status_id=status_id,course=course,level=level,mod_min=mod_min,att_min=att_min,period=period,pick=pick,
+            moves=moves,order_types=order_types)
 
 
 def _invalid(field):
@@ -279,9 +294,10 @@ def analysis_from_data(data, mode, *, group_id=None, discipline_id=None, semeste
         types,month_from,month_to,listed=_moves_filters(moves,order_types)
         def period_key(raw):
             value=date.fromisoformat(raw)
-            if period=='year': return str(value.year)
             if period=='month': return value.strftime('%Y-%m')
+            # Учебный год — с сентября по август, как у семестра: 2025/26, 2025/26-1, 2025/26-2.
             year=value.year if value.month>=9 else value.year-1
+            if period=='year': return f'{year}/{str(year+1)[-2:]}'
             return f'{year}/{str(year+1)[-2:]}-{1 if value.month>=9 or value.month==1 else 2}'
         # Пары «приказ × студент» в области, по видам и окну месяцев order_date.
         pairs=[r for r in data['orders'] if r['student_id'] in students
@@ -337,16 +353,24 @@ def _metrics(facts):
 
 
 def report(db: Connection, token: str, mode: str, group_id: int | None,
-           discipline_id: int | None, semester: int | None, status_id: int | None):
-    source = (row["olap_facts"] for row in db.execute(
-        "SELECT olap_facts FROM backend_api.olap_facts(%s,%s,%s,%s,%s)",
-        (token, group_id, discipline_id, semester, status_id),
-    ))
-    return report_from_facts(source, lambda name: _visible(db,name,token), mode,
-                             group_id,discipline_id,semester,status_id)
+           discipline_id: int | None, semester: int | None, status_id: int | None, user_id: int | None = None):
+    _report_checks(mode, group_id, discipline_id, semester, status_id)
+    def load():
+        facts = []
+        for row in db.execute("SELECT olap_facts FROM backend_api.olap_facts(%s,%s,%s,%s,%s)",
+                              (token, group_id, discipline_id, semester, status_id)):
+            facts.append(row["olap_facts"])
+            if len(facts) > 100_000:
+                raise HTTPException(status_code=413, detail="olap_too_large")
+        return facts
+    key = ('facts', user_id, group_id, discipline_id, semester, status_id)
+    facts = GATE.fetch(key, load) if user_id is not None else None
+    with GATE.slot():
+        return report_from_facts(facts if facts is not None else load(), lambda name: _visible(db,name,token), mode,
+                                 group_id,discipline_id,semester,status_id)
 
 
-def report_from_facts(source, visible, mode, group_id=None, discipline_id=None, semester=None, status_id=None):
+def _report_checks(mode, group_id, discipline_id, semester, status_id):
     if mode not in MODES:
         raise HTTPException(status_code=422, detail="invalid_mode")
     if any(value is not None and value < 1 for value in (group_id, discipline_id, semester, status_id)):
@@ -355,6 +379,10 @@ def report_from_facts(source, visible, mode, group_id=None, discipline_id=None, 
         raise HTTPException(status_code=422, detail="group_required")
     if mode == "slice-discipline" and discipline_id is None:
         raise HTTPException(status_code=422, detail="discipline_required")
+
+
+def report_from_facts(source, visible, mode, group_id=None, discipline_id=None, semester=None, status_id=None):
+    _report_checks(mode, group_id, discipline_id, semester, status_id)
     # shortcut: cap facts in memory; move aggregation into SQL for datasets beyond 100,000 facts.
     facts = []
     for fact in source:

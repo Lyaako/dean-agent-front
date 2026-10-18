@@ -232,3 +232,17 @@ def test_moves_parameters_name_the_field(window, field):
     assert raised.value.status_code == 422
     assert raised.value.detail['code'] == 'validation_error'
     assert raised.value.detail['details'] == {'field': field}
+
+
+def test_year_is_the_academic_year():
+    data = dataset(); student(data, 1)
+    for order_id, day in enumerate(('2025-08-31', '2025-09-01', '2026-01-15', '2026-08-31', '2026-09-01'), 20):
+        order(data, order_id, 'expel', day, 1)
+    response = moves(data, period='year', moves={'list': 'true'})
+    assert [r['period'] for r in response['rows']] == ['2024/25', '2025/26', '2026/27']
+    assert {o['order_date']: o['period'] for o in response['orders']} == {
+        '2025-08-31': '2024/25', '2025-09-01': '2025/26', '2026-01-15': '2025/26', '2026-08-31': '2025/26', '2026-09-01': '2026/27'}
+    picked = moves(data, period='year', pick='2025/26')
+    assert sorted(r['order_id'] for r in picked['rows']) == [21, 22, 23]
+    assert [r['period'] for r in moves(data, period='semester')['rows']] == ['2024/25-2', '2025/26-1', '2025/26-2', '2026/27-1']
+    assert [r['period'] for r in moves(data, period='month')['rows']] == ['2025-08', '2025-09', '2026-01', '2026-08', '2026-09']

@@ -238,13 +238,15 @@ def build_tools(connect, run_id, worker_id, emit, check, attachments=None):
                         semester: int | None = None, status_id: int | None = None) -> str:
         """Read the same scoped OLAP report and approved metrics as the application. slice-group/drilldown-group require group_id; slice-discipline requires discipline_id. Result counts reflect stored final results; absence is not proof of attempts or attendance."""
         def execute(db, role):
-            facts = (row["fact"] for row in db.execute(
-                "SELECT backend_api.agent_olap_facts(%s,%s,%s,%s,%s,%s) AS fact",
-                (run_id, worker_id, group_id, discipline_id, semester, status_id)))
             def visible(name):
                 return [json.loads(row["data"], parse_float=Decimal) for row in db.execute(
                     "SELECT backend_api.agent_visible_rows(%s,%s,%s) AS data", (run_id, worker_id, name))]
-            return olap.report_from_facts(facts, visible, mode, group_id, discipline_id, semester, status_id)
+            # Тот же лимит одновременных расчётов, что у API, но в процессе агента (без кэша).
+            with olap.GATE.slot():
+                facts = (row["fact"] for row in db.execute(
+                    "SELECT backend_api.agent_olap_facts(%s,%s,%s,%s,%s,%s) AS fact",
+                    (run_id, worker_id, group_id, discipline_id, semester, status_id)))
+                return olap.report_from_facts(facts, visible, mode, group_id, discipline_id, semester, status_id)
         return invoke("get_olap_report", {}, execute)
 
     @tool

@@ -90,9 +90,12 @@ def readiness():
 @app.exception_handler(HTTPException)
 async def http_error(request: Request, exc: HTTPException):
     if isinstance(exc.detail, dict):
-        return error(request, exc.status_code, exc.detail["code"], exc.detail.get("message"), exc.detail.get("details"))
-    code = str(exc.detail)
-    return error(request, exc.status_code, code)
+        response = error(request, exc.status_code, exc.detail["code"], exc.detail.get("message"), exc.detail.get("details"))
+    else:
+        response = error(request, exc.status_code, str(exc.detail))
+    # Заголовки исключения (например, Retry-After у 429 olap_busy) сохраняются.
+    response.headers.update(exc.headers or {})
+    return response
 
 
 @app.exception_handler(RequestValidationError)
@@ -327,16 +330,17 @@ def get_olap(request: Request, mode: str = "rollup-group", group_id: int | None 
     with user_context(db,authorized[0].user_id,read_only=True):
         # Параметры «Движения контингента» проверяет olap.analysis_from_data (validation_error с полем).
         moves={'types':types,'from':month_from,'to':month_to,'list':listed}
-        return _olap_report(request,mode,group_id,discipline_id,semester,status_id,course,level,mod_min,att_min,period,pick,db,moves)
+        return _olap_report(request,mode,group_id,discipline_id,semester,status_id,course,level,mod_min,att_min,period,pick,db,moves,
+                            user_id=authorized[0].user_id)
 
 
-def _olap_report(request,mode,group_id,discipline_id,semester,status_id,course,level,mod_min,att_min,period,pick,db,moves=None):
+def _olap_report(request,mode,group_id,discipline_id,semester,status_id,course,level,mod_min,att_min,period,pick,db,moves=None,user_id=None):
     if mode in olap.ANALYSES:
         return olap.analyze(db,request.headers['authorization'][7:],mode,group_id=group_id,
             discipline_id=discipline_id,semester=semester,status_id=status_id,course=course,level=level,
-            mod_min=mod_min,att_min=att_min,period=period,pick=pick,moves=moves)
+            mod_min=mod_min,att_min=att_min,period=period,pick=pick,moves=moves,user_id=user_id)
     return olap.report(db, request.headers["authorization"][7:], mode,
-                       group_id, discipline_id, semester, status_id)
+                       group_id, discipline_id, semester, status_id, user_id=user_id)
 
 
 @app.get("/api/v1/audit")
