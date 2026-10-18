@@ -160,5 +160,12 @@ assert.throws(() => api.createProposalAttempt(batch, { action: "undo", picked_it
 const undo = api.createProposalAttempt({ ...batch, actions: { can_undo: true } }, { action: "undo", picked_item_ids: [2] });
 assert.equal(undo.action, "undo"); assert.deepEqual(undo.body, { picked_item_ids: [2] });
 
+// Карточка в чате: пакет — «Пакет изменений · N записей», решение «Применено»; одиночное — как раньше
+const batchCard = presentation.cardText({ ...batch, preview: { operation: "BATCH", table: "Пакет изменений", items: [1, 2, 3], changed_columns: ["a", "b", "c"], affected_rows: 3 } }, {});
+assert.equal(batchCard.sub, "Пакет изменений · 3 записи"); assert.equal(batchCard.button, "Проверить изменения"); assert.equal(batchCard.badge, null);
+assert.equal(presentation.cardText({ ...batch, preview: { operation: "BATCH", table: "Пакет изменений", items: [1], changed_columns: ["a"], affected_rows: 1 } }, {}, "approved").badge, "Применено");
+const single = presentation.cardText(p, { person: "Личные данные" }, "approved");
+assert.match(single.sub, /^Личные данные · /); assert.equal(single.badge, "Подтверждено"); assert.equal(single.button, "Открыть");
+
 // Очередь предложений перенесена из чата во вкладку «Согласование» (pages/ApprovalsPage.tsx)
 console.log("Proposal API/immutable attempt assertions and React server-render action/status checks passed. Hooks, click flows and browser remain integration work.");

@@ -2,7 +2,9 @@ import { api, newKey } from "./client";
 import type { AttachmentMeta } from "../chat/store/ChatStore";
 
 export interface ProposalPreview {
-  operation: "INSERT" | "UPDATE";
+  /** BATCH — пакет: строки в items, table — «Пакет изменений» */
+  operation: "INSERT" | "UPDATE" | "BATCH";
+  items?: unknown[];
   table: string;
   affected_rows: number;
   before: Record<string, unknown> | null;

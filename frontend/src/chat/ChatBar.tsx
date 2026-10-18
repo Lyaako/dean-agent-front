@@ -9,6 +9,7 @@ import { useAttachments } from "./attachments/useAttachments";
 import { ComposerThumbs, ContextDetails, FileViewer, MessageThumbs, type ViewTarget } from "./attachments/Thumbs";
 import { ProposalDialog } from "./proposals/ProposalDialog";
 import { TABLE_NAME } from "./proposals/useProposal";
+import { cardText } from "./proposals/presentation";
 import type { ChatMessage, ChatSummary } from "./store/ChatStore";
 import { onChatPrefill } from "../lib/chatPrefill";
 
@@ -213,13 +214,13 @@ function Message({ m, onOpenFile, onProposal }: { m: ChatMessage; onOpenFile: (a
         </div>
         <ContextDetails context={m.attachment_context} />
         {m.proposals?.map((p) => {
-          const d = m.decisions?.[p.id];
+          const d = m.decisions?.[p.id], t = cardText(p, TABLE_NAME, d);
           return (
-            <div key={p.id} className="proposal-card">
+            <div key={p.id} className={`proposal-card${p.preview.operation === "BATCH" ? " batch-card" : ""}`}>
               <Icon name="sparkle" />
-              <div><b>{p.explanation || "Агент предлагает изменение"}</b><small>{TABLE_NAME[p.preview.table] ?? p.preview.table} · {p.preview.operation === "INSERT" ? "новая запись" : `полей: ${p.preview.changed_columns.length}`}</small></div>
-              {d ? <span className={`badge ${d === "approved" ? "ok" : "muted"}`}>{d === "approved" ? "Подтверждено" : "Отклонено"}</span> : null}
-              <button className="btn sm soft go" onClick={() => onProposal(p.id)}>{d ? "Открыть" : "Посмотреть изменение"}<Icon name="arrow" /></button>
+              <div><b>{p.explanation || "Агент предлагает изменение"}</b><small>{t.sub}</small></div>
+              {t.badge ? <span className={`badge ${d === "approved" ? "ok" : "muted"}`}>{t.badge}</span> : null}
+              <button className="btn sm soft go" onClick={() => onProposal(p.id)}>{t.button}<Icon name="arrow" /></button>
             </div>
           );
         })}
