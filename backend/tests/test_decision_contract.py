@@ -292,3 +292,62 @@ class DecisionContractTests(ProposalHelpers,DatabaseHttpCase):
         item=self.get(applied,teacher)['items'][0]
         self.assertEqual((item['reversible'],item['undo_reason']),(False,'sheet_closed'))
         self.assertEqual(self.post(applied,'undo',{},teacher,status=409)['error']['details'],{'reason':'sheet_closed'})
+
+    # Подписи строк пакета
+    def without_labels(self,view):
+        return [{k:v for k,v in item.items() if k!='label'} for item in view['items']]
+
+    def test_batch_rows_are_labelled_with_student_and_group(self):
+        headers=self.login('vasilyeva'); students=self.students(3)
+        p=self.batch(headers,[self.dormitory(s) for s in students])
+        expected=self.query("""SELECT s.student_id,concat_ws(' ',p.last_name,p.first_name,p.middle_name) AS student,g.name
+            FROM deanery.student s JOIN deanery.person p USING(person_id) JOIN deanery.study_group g ON g.group_id=s.group_id
+            WHERE s.student_id=ANY(%s)""",([s['student_id'] for s in students],))
+        names={r['student_id']:(r['student'],r['name']) for r in expected}
+        for item,student in zip(p['items'],students):
+            self.assertEqual((item['label']['record'],item['label']['sub']),names[student['student_id']])
+            self.assertEqual(item['label']['fields'],{'needs_dormitory':'Нуждается в общежитии'})
+        self.assertEqual([i['label'] for i in p['preview']['items']],[i['label'] for i in p['items']])
+        # Подпись не входит в снимок и не влияет на проверки строк.
+        views=self.query("""SELECT agent_backend.proposal_view_v4(p,%s) AS old,agent_backend.proposal_view(p,%s) AS new
+            FROM agent_backend.proposal p WHERE id=%s""",(self.user_id,self.user_id,p['id']))[0]
+        self.assertEqual(self.without_labels(views['new']),views['old']['items'])
+        self.assertEqual([i['state'] for i in p['items']],['ok']*3)
+
+    def test_new_record_row_is_labelled_from_its_values(self):
+        headers=self.login('vasilyeva')
+        row=self.query("""SELECT s.student_id,p.last_name||' '||left(p.first_name,1)||'.'||COALESCE(' '||left(p.middle_name,1)||'.','') AS short,
+                (SELECT document_type_id FROM deanery.document_type ORDER BY document_type_id LIMIT 1) AS type_id
+            FROM deanery.student s JOIN deanery.person p USING(person_id) ORDER BY s.student_id LIMIT 1""")[0]
+        kind=self.query('SELECT name FROM deanery.document_type WHERE document_type_id=%s',(row['type_id'],))[0]['name']
+        status=self.query('SELECT request_status_id FROM deanery.request_status WHERE NOT is_final ORDER BY request_status_id LIMIT 1')[0]['request_status_id']
+        p=self.batch(headers,[self.record('document_request','create',{},{'student_id':row['student_id'],
+            'document_type_id':row['type_id'],'copies':1,'purpose':'Для проверки подписи','request_status_id':status})])
+        self.assertEqual((p['items'][0]['label']['record'],p['items'][0]['label']['sub']),('Новая заявка',kind+' · '+row['short']))
+
+    def test_teacher_sees_labels_of_students_outside_own_groups(self):
+        teacher=self.login('novikov'); admin=self.login('vasilyeva')
+        tid=self.client.get('/api/v1/auth/me',headers=teacher).json()['teacher_id']
+        allowed=[r['group_id'] for r in self.query('SELECT group_id FROM backend_api.allowed_groups(%s)',(self.user('novikov'),))]
+        target=self.query("""SELECT gs.item_id,gs.group_id,gs.stage,gr.student_id FROM deanery.grade_sheet gs
+            JOIN deanery.grade gr USING(sheet_id) JOIN deanery.student s USING(student_id)
+            JOIN deanery.student_status st USING(status_id) WHERE gs.examiner_id=%s AND gs.status='closed'
+                AND NOT gs.group_id=ANY(%s) AND st.is_active AND s.group_id=gs.group_id AND gr.points IS NULL
+                AND NOT EXISTS(SELECT FROM deanery.grade g2 JOIN deanery.grade_sheet gs2 USING(sheet_id)
+                    WHERE g2.student_id=s.student_id AND gs2.item_id=gs.item_id AND gs2.stage=gs.stage
+                        AND gs2.status<>'cancelled' AND g2.points IS NOT NULL) LIMIT 1""",(tid,allowed))[0]
+        number='QA-'+uuid4().hex[:12]
+        sheet=self.client.post('/api/v1/resources/grade_sheet',headers=admin,json={
+            'sheet_number':number,'item_id':target['item_id'],'group_id':target['group_id'],
+            'stage':target['stage'],'examiner_id':tid,'sheet_kind':'retake','issue_date':date.today().isoformat()}).json()
+        grade=self.client.post('/api/v1/resources/grade',headers=teacher,json={
+            'sheet_id':sheet['sheet_id'],'student_id':target['student_id'],'points':30,'is_absent':False})
+        self.assertEqual(grade.status_code,200,grade.text)
+        visible={r['student_id'] for r in self.client.get('/api/v1/resources/v_students?limit=500',headers=teacher).json()['items']}
+        self.assertNotIn(target['student_id'],visible)
+        p=self.batch(teacher,[self.record('grade','update',{'grade_id':grade.json()['grade_id']},{'points':31})])
+        name=self.query("""SELECT concat_ws(' ',p.last_name,p.first_name,p.middle_name) AS n FROM deanery.student s
+            JOIN deanery.person p USING(person_id) WHERE s.student_id=%s""",(target['student_id'],))[0]['n']
+        label=self.get(p,teacher)['items'][0]['label']
+        self.assertEqual((label['record'],label['sub'],label['fields']),(name,number,{'points':label['fields']['points']}))
+        self.assertTrue(label['fields']['points'])
