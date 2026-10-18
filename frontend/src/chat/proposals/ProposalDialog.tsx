@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Icon } from "../../components/Icon";
-import { Badge, ErrorNote, Modal } from "../../components/ui";
+import { Badge, ErrorNote, Modal, useToast } from "../../components/ui";
 import { REASON_MIN, TABLE_NAME, useProposal } from "./useProposal";
 import { prefillChat } from "../../lib/chatPrefill";
 import type { Proposal } from "../../api/proposals";
@@ -27,6 +27,16 @@ function DialogContent({ id, onClose, onDecided }: Props) {
   const [picked, setPicked] = useState<Set<number> | null>(null);
   const [undoPick, setUndoPick] = useState<Set<number> | null>(null);
   const p = m.loadError ? undefined : m.proposal;
+  const toast = useToast();
+  // «Обновить» — для изменений без участия этого окна (решил другой, сервер исполнил): и заявка, и история; результат — плашкой
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshAll = async () => {
+    setRefreshing(true);
+    const [a, b] = await Promise.all([m.refresh(), m.events.refetch()]);
+    setRefreshing(false);
+    const err = a.error ?? b.error;
+    toast(err ? `Не удалось обновить: ${errorText(err)}` : "Заявка и история обновлены", !!err);
+  };
   const batch = p?.kind === "batch" ? p : undefined;
   // Окно отмены открыто, пока сервер разрешает отмену: после выполненной отмены can_undo снимается и окно закрывается само
   const undoing = !!undoPick && !!batch?.actions.can_undo;
@@ -86,7 +96,7 @@ function DialogContent({ id, onClose, onDecided }: Props) {
           </div>}
           {transfer && p.actions.can_assign && <div className="form-grid"><label className="field"><span>Кому передать</span><select className="text-input" value={assignee} disabled={locked} onChange={(e) => setAssignee(e.target.value)}><option value="">Выберите сотрудника</option>{m.assignees.data?.filter((a) => a.user_id !== p.routing.assignee_user_id).map((a) => <option key={a.user_id} value={a.user_id}>{a.full_name}</option>)}</select></label><div className={`field form-field wide${m.reasonError?.action === "assignment" ? " invalid" : ""}`}><label htmlFor="pr-assign-reason">Причина передачи</label><textarea id="pr-assign-reason" className="text-input textarea" value={assignmentReason} maxLength={2000} disabled={locked} onChange={(e) => setAssignmentReason(e.target.value)} />{m.reasonError?.action === "assignment" ? <small className="field-error" role="alert">{m.reasonError.text}</small> : <small className="hint">От {REASON_MIN} до 2000 символов · {assignmentReason.trim().length} / 2000</small>}</div>{m.assignees.error && <p className="form-error">{errorText(m.assignees.error)}</p>}<button type="button" className="btn" disabled={locked || !assignee || assignmentReason.trim().length < REASON_MIN || !m.assignees.data?.some((a) => a.user_id === Number(assignee))} onClick={() => void m.mutate({ action: "assignment", assignee_user_id: Number(assignee), reason: assignmentReason })}>Передать предложение</button></div>}
           {(p.actions.can_approve || p.actions.can_reject) && <div className={`field form-field${m.reasonError?.action === "decision" ? " invalid" : ""}`}><label htmlFor="pr-reason">Комментарий к решению</label><textarea id="pr-reason" className="text-input textarea" rows={2} value={m.reason} disabled={locked} onChange={(e) => m.setReason(e.target.value)} placeholder="Например: подтверждаю по заявлению студента" maxLength={m.reasonMax} />{m.reasonError?.action === "decision" ? <small className="field-error" role="alert">{m.reasonError.text}</small> : <small className="hint">От {REASON_MIN} до {m.reasonMax} символов · {m.reason.trim().length} / {m.reasonMax}</small>}</div>}
-          <details className="p-history"><summary><Icon name="right" />История действий</summary>{m.events.data?.pages.flatMap((page) => page.items).map((event) => <p className="hint" key={event.id}>{dateTime(event.created_at)} (Москва) · {EVENTS[event.event_type] || "Обновлено"} · {event.actor_user_id == null ? "Система" : event.actor_user_id === p.initiator.user_id ? p.initiator.full_name : event.actor_user_id === p.routing.assignee_user_id ? p.routing.assignee_name : `Пользователь №${event.actor_user_id}`}{event.reason ? ` · ${event.reason}` : ""}</p>)}{m.events.error && <p className="form-error">{errorText(m.events.error)}</p>}<div className="p-history-acts"><button type="button" className="btn sm soft" disabled={m.events.isFetching} onClick={() => void m.events.refetch()}><Icon name="refresh" />Обновить историю</button>{m.events.hasNextPage && <button type="button" className="btn sm soft" disabled={m.events.isFetching} onClick={() => void m.events.fetchNextPage()}>Ещё</button>}</div></details>
+          <details className="p-history"><summary><Icon name="right" />История действий</summary>{m.events.data?.pages.flatMap((page) => page.items).map((event) => <p className="hint" key={event.id}>{dateTime(event.created_at)} (Москва) · {EVENTS[event.event_type] || "Обновлено"} · {event.actor_user_id == null ? "Система" : event.actor_user_id === p.initiator.user_id ? p.initiator.full_name : event.actor_user_id === p.routing.assignee_user_id ? p.routing.assignee_name : `Пользователь №${event.actor_user_id}`}{event.reason ? ` · ${event.reason}` : ""}</p>)}{m.events.error && <p className="form-error">{errorText(m.events.error)}</p>}{m.events.hasNextPage && <div className="p-history-acts"><button type="button" className="btn sm soft" disabled={m.events.isFetching} onClick={() => void m.events.fetchNextPage()}>Ещё</button></div>}</details>
         </>}
         {m.error && <ErrorNote text={m.error.text} requestId={m.error.requestId} code={m.error.code} />}
         {batch && m.error?.itemId != null && pickSet.has(m.error.itemId) && <div className="err-acts">
@@ -94,7 +104,8 @@ function DialogContent({ id, onClose, onDecided }: Props) {
         {m.attempt && !m.busy && <p className="form-error">Результат запроса пока не подтверждён. Повторите тот же запрос, чтобы узнать результат.</p>}
         <div className="actions">
           {p?.actions.can_reject && !undoing && <button type="button" className="btn ghost danger-text" disabled={locked || !m.reasonOk} onClick={() => void m.mutate({ action: "decision", approve: false, reason: m.reason })}>Отклонить</button>}
-          <span className="spacer" /><button type="button" className="btn" onClick={() => void m.refresh()} disabled={m.busy}>Обновить</button><button type="button" className="btn" onClick={close} disabled={m.busy}>{p?.status === "pending" ? "Позже" : "Закрыть"}</button>
+          <span className="spacer" />{p ? <button type="button" className="btn" onClick={() => void refreshAll()} disabled={refreshing || m.busy}>{refreshing ? "Обновляю…" : "Обновить"}</button>
+            : <button type="button" className="btn" onClick={() => void m.refresh()} disabled={m.busy}>Повторить</button>}<button type="button" className="btn" onClick={close} disabled={m.busy}>{p?.status === "pending" ? "Позже" : "Закрыть"}</button>
           {/* «Подготовить заново» — по флагу сервера; исправление оценки — новой заявкой через форму с той же ведомостью и студентом */}
           {p?.actions.can_redo && p.request_text && p.kind !== "grade_correction" && <button type="button" className="btn" disabled={m.busy}
             onClick={() => { prefillChat(p.request_text!); onClose(); }}><Icon name="refresh" />Подготовить заново</button>}
