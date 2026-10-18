@@ -6,7 +6,7 @@ import { applyTable, type Column } from "../../components/table/tableLogic";
 import { errorText } from "../../api/errors";
 import { useOlap, type RetakeRow, type RetakeTotal } from "../../api/olap";
 import { Empty, Tiles } from "../student/parts";
-import { CourseGroup, olap, Pct, Pending, useScope, type Setter } from "./parts";
+import { CourseGroup, olap, Pct, useScope, type Setter } from "./parts";
 
 /* ═════════ 4. Пересдачи: Roll-up по попытке сдачи ═════════
    Воронка по долгам сессии: не сдали в сессию → закрыли на пересдаче → комиссией → не закрыто */
@@ -24,8 +24,7 @@ const cols = (byCourse: boolean): Column<RetakeRow>[] => [
 export function RetakeView({ set }: { set: Setter }) {
   const { groups, scope } = useScope();
   const report = useOlap<RetakeRow, RetakeTotal>("retake", { ...scope, level: olap.level });
-  const fresh = !!report.data && "failed" in (report.data.total ?? {});
-  const rows = fresh ? report.data!.rows : [];
+  const rows = useMemo(() => report.data?.rows ?? [], [report.data]);
   const c = useMemo(() => cols(olap.level === "course"), [olap.level]); // eslint-disable-line react-hooks/exhaustive-deps
   const [state, setState] = useTableState(`olap-retake-${olap.level}`, c);
   const shown = useMemo(() => applyTable(state, c, rows), [state, c, rows]);
@@ -40,7 +39,7 @@ export function RetakeView({ set }: { set: Setter }) {
   );
   if (report.error) return <>{filters}<Empty icon="alert" title="Не удалось загрузить">{errorText(report.error)}</Empty></>;
   if (report.isLoading) return <>{filters}<div className="skel" style={{ height: 200 }} /></>;
-  if (!fresh || !t) return <Pending>Судьба долгов: сколько закрыто на пересдаче и комиссией, сколько ещё открыто и кто кандидат на отчисление.</Pending>;
+  if (!t) return null;
 
   const closed = t.closed_retake + t.closed_commission;
   const steps: [string, number, string][] = [

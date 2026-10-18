@@ -1,6 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { useResource } from "../../api/resources";
-import { Empty } from "../student/parts";
 import { useAuth } from "../../auth/AuthProvider";
 import { StudentCard } from "../students/StudentsPage";
 
@@ -55,11 +54,6 @@ export function CourseGroup({ set, groups }: { set: Setter; groups: ReturnType<t
 /** Процент с полоской под числом: зелёная — хорошо, красная — плохо (good = false — наоборот, меньше — лучше) */
 export const Pct = ({ v, good = true }: { v: number | null | undefined; good?: boolean }) => (v == null ? <>—</>
   : <span className={`pct ${good ? (v >= 85 ? "ok" : v >= 65 ? "mid" : "bad") : (v <= 5 ? "ok" : v <= 15 ? "mid" : "bad")}`}>{v}%<i style={{ ["--w" as string]: `${v}%` }} /></span>);
-
-/** Ответ бекенда ещё в прежнем формате — срез ждёт обновления по ТЗ (docs/olap-backend-task.md) */
-export const Pending = ({ children }: { children: ReactNode }) => (
-  <Empty icon="chart" title="Срез появится после обновления бекенда">{children}</Empty>
-);
 
 /** Карточка студента по клику на строку (как olapOpenStudent в макете); у преподавателя строки не раскрываются */
 export function useStudentCard() {

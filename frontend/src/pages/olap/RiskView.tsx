@@ -7,7 +7,7 @@ import { errorText } from "../../api/errors";
 import { useOlap, type RiskPoint, type RiskRow, type RiskTotal } from "../../api/olap";
 import { plural } from "../../lib/format";
 import { Empty, Tiles } from "../student/parts";
-import { CourseGroup, olap, Pending, useScope, useStudentCard, type Setter } from "./parts";
+import { CourseGroup, olap, useScope, useStudentCard, type Setter } from "./parts";
 
 /* ═════════ 3. Раннее предупреждение: Dice по курсу, модулю 1 и посещаемости ═════════
    Строка на студента: слабый модуль 1, низкая посещаемость, долги прошлых сессий; риск считает сервер */
@@ -46,8 +46,7 @@ export function RiskView({ set }: { set: Setter }) {
   const { groups, scope } = useScope();
   const modMin = numIn(olap.modMin, [25, 54], 30), attMin = numIn(olap.attMin, [0, 100], 70);
   const report = useOlap<RiskRow, RiskTotal>("risk", { ...scope, mod_min: modMin, att_min: attMin });
-  const fresh = !!report.data && "pool" in (report.data.total ?? {});
-  const rows = fresh ? report.data!.rows : [];
+  const rows = useMemo(() => report.data?.rows ?? [], [report.data]);
   const [state, setState] = useTableState("olap-risk", COLS);
   const shown = useMemo(() => applyTable(state, COLS, rows), [state, rows]);
   const t = report.data?.total;
@@ -62,7 +61,7 @@ export function RiskView({ set }: { set: Setter }) {
   );
   if (report.error) return <>{filters}<Empty icon="alert" title="Не удалось загрузить">{errorText(report.error)}</Empty></>;
   if (report.isLoading) return <>{filters}<div className="skel" style={{ height: 200 }} /></>;
-  if (!fresh || !t) return <Pending>Студенты, которым нужна помощь до сессии: слабый модуль 1, низкая посещаемость и долги прошлых сессий.</Pending>;
+  if (!t) return null;
 
   return (
     <>

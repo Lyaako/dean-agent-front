@@ -1,5 +1,5 @@
 // OLAP: GET /api/v1/olap?mode=… Ответ {mode, level, rows, total, filters}.
-// Срезы — как в макете (mockup/redesign/olap.js). Форматы session, risk и retake — по ТЗ docs/olap-backend-task.md
+// Срезы — как в макете (mockup/redesign/olap.js). Форматы — docs/API.md бекенда, раздел «Пять новых режимов OLAP»
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./client";
 
@@ -8,11 +8,15 @@ export type OlapOp = "session" | "heat" | "risk" | "retake" | "moves";
 export interface OlapParams {
   course?: number; group_id?: number; discipline_id?: number; semester?: number;
   level?: string; mod_min?: number; att_min?: number; period?: "month" | "semester" | "year"; pick?: string;
+  /** moves: коды видов приказов через запятую, окно по дате приказа «ГГГГ-ММ» (включительно), list — все пары «приказ × студент» окна */
+  types?: string; from?: string; to?: string; list?: boolean;
 }
 
 export interface OlapReport<R, T = Record<string, unknown>> {
   mode: OlapOp; level: string | null; rows: R[]; total: T; filters: Record<string, unknown>;
   points?: RiskPoint[];
+  /** moves с list=true — все пары «приказ × студент» окна */
+  orders?: MovesOrder[];
 }
 
 /* ── session: «Итоги сессии» (уровни course → group → discipline → result) ── */
@@ -44,11 +48,12 @@ export interface RetakeRow {
 export type RetakeTotal = Omit<RetakeRow, "name" | "course" | "group_id"> & { expulsion_candidates: number };
 
 /* ── moves: «Движение контингента» ── */
-// by_type — число приказов по виду; students_by_type — пар «приказ × студент» (появится по ТЗ, раздел 4)
-export interface MovesRow { period: string; orders: number; students: number; by_type: Record<string, number>; students_by_type?: Record<string, number> }
+// by_type — число приказов по виду; students_by_type — пар «приказ × студент»
+export interface MovesRow { period: string; orders: number; students: number; by_type: Record<string, number>; students_by_type: Record<string, number> }
+// Пара «приказ × студент»; period — по тому же правилу, что rows[].period; applied_at = null — приказ запланирован
 export interface MovesOrder {
-  order_id: number; order_date: string; order_number: string; order_type: string; order_type_code: string; effective_date: string;
-  students: { student_id: number; student: string; group_id: number; group_name: string; applied_at: string | null }[];
+  order_id: number; order_number: string; order_date: string; effective_date: string; order_type: string; order_type_code: string;
+  applied_at: string | null; student_id: number; student: string; group_id: number; group_name: string; course: number; period: string;
 }
 
 export const fetchOlap = <R, T = Record<string, unknown>>(mode: OlapOp, params: OlapParams = {}) =>

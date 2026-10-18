@@ -5,15 +5,14 @@ import { useTableState } from "../../components/table/useTableState";
 import { applyTable, type Column } from "../../components/table/tableLogic";
 import { useResource } from "../../api/resources";
 import { errorText } from "../../api/errors";
-import { useOlap, type MovesOrder, type MovesRow } from "../../api/olap";
+import { useOlap, type MovesRow } from "../../api/olap";
 import { fmtDate, plural, todayIso } from "../../lib/format";
 import { Empty, Tiles } from "../student/parts";
 import { CourseGroup, olap, s, useScope, type Setter } from "./parts";
 
 /* ═════════ 5. Движение контингента: Roll-up по времени (месяц → семестр → год), Drill-down до приказов ═════════
-   Бекенд отдаёт все виды приказов и все периоды — здесь пять видов движения и окно 12 месяцев, как в макете.
-   Отступление от макета, пока бекенд не отдаёт список приказов окна (ТЗ docs/olap-backend-task.md, раздел 4):
-   таблица приказов — только выбранного столбца, одним запросом (параллельные запросы к /olap сейчас дают 503) */
+   Один запрос на выбранную детализацию: пять видов движения, окно 12 месяцев (from/to) и list=true — столбцы (rows)
+   и все пары «приказ × студент» окна (orders). Клик по столбцу фильтрует таблицу по orders[].period без новых запросов */
 
 const MOVE_TYPES = ["expel", "leave", "leave_return", "reinstate", "transfer"] as const;
 const MOVE_KIND: Record<string, string> = { expel: "bad", leave: "warn", leave_return: "info", reinstate: "ok", transfer: "muted" };
@@ -25,7 +24,8 @@ const months12 = () => {
   const t = todayIso(), now = Number(t.slice(0, 4)) * 12 + Number(t.slice(5, 7)) - 1;
   return Array.from({ length: 12 }, (_, i) => { const k = now - 11 + i; return `${Math.floor(k / 12)}-${String(k % 12 + 1).padStart(2, "0")}`; });
 };
-// Ключ периода бекенда для месяца: семестр «2025/26-1» (сентябрь–январь) или «-2» (февраль–август); год — календарный
+// Ключ периода бекенда для месяца: семестр «2025/26-1» (сентябрь–январь) или «-2» (февраль–август); год — календарный.
+// Нужен, чтобы показать и пустые периоды окна: в rows бекенд отдаёт только периоды с приказами
 const periodOf = (month: string, period: Period) => {
   const y = Number(month.slice(0, 4)), mo = Number(month.slice(5));
   if (period === "month") return month;
@@ -37,21 +37,18 @@ const periodLabel = (p: string, period: Period) =>
   period === "month" ? `${MONTH_SHORT[Number(p.slice(5)) - 1]} ${p.slice(2, 4)}`
     : period === "semester" ? `${p.slice(0, -2)}, ${p.endsWith("-1") ? "осень" : "весна"}` : `${p} год`;
 
-// Движение считается по студентам (как в макете); пока бекенд не отдаёт students_by_type — по приказам
-const countOf = (r: MovesRow | undefined, t: string) => (r ? (r.students_by_type ?? r.by_type)[t] ?? 0 : 0);
+// Движение считается по студентам (пары «приказ × студент»), как в макете
+const countOf = (r: MovesRow | undefined, t: string) => r?.students_by_type[t] ?? 0;
 
-interface MoveLine { key: string; order_date: string; order_number: string; order_type: string; code: string; student: string; group_name: string }
+interface MoveLine { key: string; period: string; order_date: string; order_number: string; order_type: string; code: string; student: string; group_name: string; planned: boolean }
 
 export function MovesView({ set }: { set: Setter }) {
-  const { groups, group, scope } = useScope();
+  const { groups, scope } = useScope();
   const orderTypes = useResource("order_type");
   const typeName = useMemo(() => new Map((orderTypes.data ?? []).map((t) => [s(t.code), s(t.name)])), [orderTypes.data]);
   const window = months12();
-  // По месяцам — для плиток «за 12 месяцев»; по выбранному периоду — для столбцов
-  const byMonth = useOlap<MovesRow>("moves", { ...scope, period: "month" });
-  // Запросы к /olap — по одному: параллельные сервер пока не выдерживает
-  const byPeriod = useOlap<MovesRow>("moves", { ...scope, period: olap.period }, olap.period !== "month" && !!byMonth.data);
-  const periodRows = olap.period === "month" ? byMonth.data?.rows : byPeriod.data?.rows;
+  const report = useOlap<MovesRow>("moves", { ...scope, period: olap.period, types: MOVE_TYPES.join(","), from: window[0], to: window[11], list: true });
+  const periodRows = report.data?.rows;
   const periods = [...new Set(window.map((m) => periodOf(m, olap.period)))];
   const data = periods.map((p) => {
     const r = periodRows?.find((x) => x.period === p);
@@ -61,33 +58,28 @@ export function MovesView({ set }: { set: Setter }) {
   const max = Math.max(1, ...data.map((d) => sum(d.by)));
   const pick = olap.pick && periods.includes(olap.pick) ? olap.pick : null;
 
-  // Приказы выбранного периода — один запрос
-  const picked = useOlap<MovesOrder>("moves", { ...scope, period: olap.period, pick: pick ?? undefined }, !!pick && !!periodRows);
-  const lines = useMemo<MoveLine[]>(() => (pick ? picked.data?.rows ?? [] : [])
-    // Весь выбранный период, как в его столбце (у семестра и года на краю окна — и месяцы вне 12)
-    .filter((o) => (MOVE_TYPES as readonly string[]).includes(o.order_type_code))
-    .flatMap((o) => o.students.filter((st) => !group || st.group_id === Number(group.group_id)).map((st) => ({
-      key: `${o.order_id}|${st.student_id}`, order_date: o.order_date, order_number: o.order_number, order_type: o.order_type,
-      code: o.order_type_code, student: st.student, group_name: st.group_name,
-    }))).sort((a, b) => b.order_date.localeCompare(a.order_date)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  [picked.data, pick, group?.group_id]);
+  // Все приказы окна; выбранный столбец — те же строки с его period
+  const all = useMemo<MoveLine[]>(() => (report.data?.orders ?? []).map((o) => ({
+    key: `${o.order_id}|${o.student_id}`, period: o.period, order_date: o.order_date, order_number: o.order_number,
+    order_type: o.order_type, code: o.order_type_code, student: o.student, group_name: o.group_name, planned: o.applied_at == null,
+  })), [report.data]);
+  const lines = useMemo(() => (pick ? all.filter((l) => l.period === pick) : all), [all, pick]);
 
   const cols = useMemo<Column<MoveLine>[]>(() => [
     { label: "Дата", field: "order_date", filter: "date", text: (r) => fmtDate(r.order_date) },
     { label: "Приказ", field: "order_number", filter: "text" },
-    { label: "Вид", field: "order_type", filter: "enum", badge: true, render: (r) => <Badge kind={MOVE_KIND[r.code]}>{r.order_type}</Badge> },
+    { label: "Вид", field: "order_type", filter: "enum", badge: true,
+      render: (r) => <><Badge kind={MOVE_KIND[r.code]}>{r.order_type}</Badge>{r.planned && <small className="hint"> запланирован</small>}</> },
     { label: "Студент", field: "student", filter: "text", bold: true, render: (r) => <b>{r.student}</b> },
     { label: "Группа", field: "group_name", filter: "enum" },
   ], []);
   const [state, setState] = useTableState("olap-moves", cols);
   const shown = useMemo(() => applyTable(state, cols, lines), [state, cols, lines]);
 
-  const monthRows = (byMonth.data?.rows ?? []).filter((r) => window.includes(r.period));
-  const n = (t: string) => monthRows.reduce((acc, r) => acc + countOf(r, t), 0);
-  const error = groups.error || byMonth.error || byPeriod.error;
-  const loading = byMonth.isLoading || (olap.period !== "month" && byPeriod.isLoading);
-  const listError = pick ? picked.error : null;
+  // Окно from/to уже применено сервером: сумма по столбцам — итог за 12 месяцев при любой детализации
+  const n = (t: string) => (periodRows ?? []).reduce((acc, r) => acc + countOf(r, t), 0);
+  const error = groups.error || report.error;
+  const loading = report.isLoading;
 
   return (
     <>
@@ -126,11 +118,9 @@ export function MovesView({ set }: { set: Setter }) {
             </div>
           )}
         </section>
-        {pick ? (
-          <DataTable cols={cols} rows={shown} base={lines} state={state} set={setState} rowKey={(r) => r.key}
-            loading={picked.isLoading} error={listError ? errorText(listError) : null}
-            title={`Drill-down: ${periodLabel(pick, olap.period)} · ${lines.length} ${plural(lines.length, "приказ", "приказа", "приказов")}`} />
-        ) : <p className="olap-foot">Нажмите на столбец, чтобы увидеть приказы периода.</p>}
+        <DataTable cols={cols} rows={shown} base={lines} state={state} set={setState} rowKey={(r) => r.key} loading={loading}
+          title={pick ? `Drill-down: ${periodLabel(pick, olap.period)} · ${lines.length} ${plural(lines.length, "приказ", "приказа", "приказов")}`
+            : "Все приказы за 12 месяцев · нажмите на столбец, чтобы раскрыть период"} />
       </>}
     </>
   );

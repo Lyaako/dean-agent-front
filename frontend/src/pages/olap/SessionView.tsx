@@ -7,7 +7,7 @@ import { applyTable, type Column } from "../../components/table/tableLogic";
 import { errorText } from "../../api/errors";
 import { useOlap, type Attempt, type OlapParams, type SessionResult, type SessionRow, type SessionStats } from "../../api/olap";
 import { Empty, Tiles } from "../student/parts";
-import { olap, Pct, Pending, useStudentCard, type Setter } from "./parts";
+import { olap, Pct, useStudentCard, type Setter } from "./parts";
 
 /* ═════════ 1. Итоги сессии: Roll-up студент → группа → курс, Drill-down обратно ═════════
    Курс → группы → дисциплины → результаты студентов. Считает сервер (последняя сессия каждой группы) */
@@ -37,8 +37,6 @@ export function SessionView({ set }: { set: Setter }) {
   const level = !c ? "course" : !g ? "group" : !d ? "discipline" : "result";
   const params: OlapParams = { level, course: c?.course, group_id: g?.group_id, discipline_id: d?.discipline_id };
   const report = useOlap<SessionRow | SessionResult, SessionStats>("session", params);
-  // Ответ в прежнем формате (без абсолютной успеваемости) — срез ждёт обновления бекенда
-  const fresh = !!report.data && "abs_pct" in (report.data.total ?? {});
   const total = report.data?.total;
 
   const isResult = level === "result";
@@ -51,7 +49,6 @@ export function SessionView({ set }: { set: Setter }) {
 
   if (report.isLoading) return <div className="skel" style={{ height: 200 }} />;
   if (report.error) return <Empty icon="alert" title="Не удалось загрузить">{errorText(report.error)}</Empty>;
-  if (!fresh) return <Pending>Свёртка студентов в группы и курсы: абсолютная и качественная успеваемость, долги после сессии и отличники.</Pending>;
 
   const crumbs = [{ label: "Все курсы" }, ...olap.path];
   const title = level === "course" ? "Roll-up до курсов · нажмите на курс, чтобы раскрыть группы"
