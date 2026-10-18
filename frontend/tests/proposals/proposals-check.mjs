@@ -93,7 +93,7 @@ let current = p, loadError = null, undone;
 const dialog = await load("chat/proposals/ProposalDialog.tsx", {
   "react": React, "react/jsx-runtime": jsx,
   "../../components/Icon": { Icon: () => null },
-  "../../components/ui": { Modal: ({ children }) => React.createElement("section", null, children), Badge: ({ children }) => React.createElement("span", null, children), ErrorNote: ({ text }) => text },
+  "../../components/ui": { Modal: ({ children }) => React.createElement("section", null, children), Badge: ({ children }) => React.createElement("span", null, children), ErrorNote: ({ text }) => text, useToast: () => () => {} },
   "./useProposal": { REASON_MIN: 10, TABLE_NAME: { person: "Личные данные" }, useProposal: () => ({ proposal: current, rows: [], reason: "", reasonOk: false,
     reasonMax: 2000, reasonError: null, events: {}, assignees: {}, tableName: "person", operation: "UPDATE", loadError, undone }) },
   "../../lib/chatPrefill": { prefillChat() {} },
