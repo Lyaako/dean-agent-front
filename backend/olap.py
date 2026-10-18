@@ -4,9 +4,11 @@ from collections import defaultdict
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 import json
+import os
 import re
 
 from fastapi import HTTPException
+import psycopg
 from psycopg import Connection
 
 from backend.olap_gate import OlapGate
@@ -21,25 +23,44 @@ ANALYSES = {'session','heat','risk','retake','moves'}
 GATE = OlapGate()
 
 
+def _checked(mode, params, codes):
+    """Проверка параметров до слота и до запроса к базе; codes() — коды order_type, читаются только для moves."""
+    p=params
+    # Параметры «Итогов сессии» проверяет _session_rows: ошибка называет поле (validation_error).
+    if (mode not in ANALYSES or (mode!='session' and any(p[k] is not None and p[k]<1 for k in
+            ('group_id','discipline_id','semester','status_id','course'))) or not 25<=p['mod_min']<=54 or not 0<=p['att_min']<=100
+            or (mode!='session' and p['level'] not in (None,'course','group','discipline','student'))
+            or p['period'] not in ('month','semester','year') or (p['pick'] is not None and len(p['pick'])>40)
+            or (mode=='retake' and p['level'] not in (None,'course','group'))):
+        raise HTTPException(422,'invalid_filter')
+    if mode=='session':
+        _session_rows({'results':[]},{},{},p['level'],p['course'],p['group_id'],p['discipline_id'],p['semester'])
+    order_types=None
+    if mode=='moves':
+        _moves_filters(p['moves'],None)
+        # Коды видов приказов — из справочника order_type (чтение, база не меняется).
+        order_types=codes()
+        _moves_filters(p['moves'],order_types)
+    return order_types
+
+
 def analyze(db, token, mode, *, group_id=None, discipline_id=None, semester=None,
             status_id=None, course=None, level=None, mod_min=30, att_min=70, period='month', pick=None, moves=None,
             user_id=None):
-    # Параметры «Итогов сессии» проверяет analysis_from_data: ошибка называет поле (validation_error).
-    if (mode not in ANALYSES or (mode!='session' and any(v is not None and v<1 for v in
-            (group_id,discipline_id,semester,status_id,course))) or not 25<=mod_min<=54 or not 0<=att_min<=100
-            or (mode!='session' and level not in (None,'course','group','discipline','student'))
-            or period not in ('month','semester','year') or (pick is not None and len(pick)>40)
-            or (mode=='retake' and level not in (None,'course','group'))):
-        raise HTTPException(422,'invalid_filter')
-    # Ошибки параметров — до слота и до запроса набора фактов.
-    if mode=='session':
-        _session_rows({'results':[]},{},{},level,course,group_id,discipline_id,semester)
-    order_types=None
-    if mode=='moves':
-        _moves_filters(moves,None)
-        # Коды видов приказов — из справочника order_type (чтение, база не меняется).
-        order_types={r['code'] for r in _visible(db,'order_type',token)}
-        _moves_filters(moves,order_types)
+    params=dict(group_id=group_id,discipline_id=discipline_id,semester=semester,status_id=status_id,course=course,
+                level=level,mod_min=mod_min,att_min=att_min,period=period,pick=pick,moves=moves)
+    order_types=_checked(mode,params,lambda:{r['code'] for r in _visible(db,'order_type',token)})
+    if engine()=='sql':
+        # Готовый ответ режима считает база; кэшируется ответ по ключу «пользователь + режим + все параметры».
+        def compute():
+            return _sql_body(db,'backend_api.olap_',(token,),mode,params,order_types)
+        key=('analysis',user_id,mode,*(json.dumps(v,sort_keys=True) if isinstance(v,dict) else v for v in params.values()))
+        if user_id is not None:
+            body=GATE.fetch(key,compute)
+        else:
+            with GATE.slot():
+                body=compute()
+        return envelope(mode,body,params,order_types)
     def load():
         return db.execute('SELECT backend_api.olap_dataset(%s) AS data',(token,)).fetchone()['data']
     dataset=GATE.fetch(('dataset',user_id),load) if user_id is not None else None
@@ -47,6 +68,79 @@ def analyze(db, token, mode, *, group_id=None, discipline_id=None, semester=None
         return analysis_from_data(dataset if dataset is not None else load(),mode,group_id=group_id,discipline_id=discipline_id,
             semester=semester,status_id=status_id,course=course,level=level,mod_min=mod_min,att_min=att_min,period=period,pick=pick,
             moves=moves,order_types=order_types)
+
+
+def engine():
+    """OLAP_ENGINE=sql (по умолчанию) — расчёт в базе; python — прежний набор фактов olap_dataset (на время перехода)."""
+    return 'python' if os.environ.get('OLAP_ENGINE','sql').strip().lower()=='python' else 'sql'
+
+
+def _sql_body(db, prefix, auth, mode, params, order_types):
+    """Вызов функции режима: prefix 'backend_api.olap_' (токен API) или 'backend_api.agent_olap_' (запуск агента)."""
+    p=params
+    if mode=='session':
+        level=p['level'] or 'course'
+        args=('result' if level=='student' else level,p['course'],p['group_id'],p['discipline_id'],p['semester'],p['status_id'])
+        cast='%s,%s,%s,%s,%s,%s'
+    elif mode=='heat':
+        args=(p['course'],p['group_id'],p['discipline_id'],p['semester'],p['status_id'])
+        cast='%s,%s,%s,%s,%s'
+    elif mode=='risk':
+        args=(p['course'],p['group_id'],p['status_id'],p['mod_min'],float(p['att_min']))
+        cast='%s,%s,%s,%s,%s'
+    elif mode=='retake':
+        args=(p['level'] or 'group',p['course'],p['group_id'],p['status_id'])
+        cast='%s,%s,%s,%s'
+    else:
+        types,month_from,month_to,listed=_moves_filters(p['moves'],order_types)
+        args=(p['period'],p['pick'],types,month_from,month_to,listed,p['course'],p['group_id'],p['discipline_id'],p['semester'],p['status_id'])
+        cast='%s,%s,%s::text[],%s,%s,%s,%s,%s,%s,%s,%s'
+    marks=','.join(['%s']*len(auth))
+    try:
+        return db.execute(f'SELECT {prefix}{mode}({marks},{cast}) AS body',(*auth,*args)).fetchone()['body']
+    except psycopg.Error as error:
+        if error.sqlstate=='P6413':
+            raise HTTPException(413,'olap_too_large') from None
+        raise
+
+
+AGENT_ORDERS=200
+
+
+def agent_analysis(db, run_id, worker_id, mode, params):
+    """Пять режимов экрана для агента: та же функция базы от имени автора запуска, без points у risk;
+    список приказов moves — только с окном from/to и не больше AGENT_ORDERS строк."""
+    def codes():
+        return {json.loads(r['data'])['code'] for r in db.execute(
+            "SELECT backend_api.agent_visible_rows(%s,%s,'order_type') AS data",(run_id,worker_id))}
+    order_types=_checked(mode,params,codes)
+    moves=params['moves'] or {}
+    if mode=='moves' and moves.get('list')=='true' and not (moves.get('from') and moves.get('to')):
+        raise _invalid('list')
+    with GATE.slot():
+        body=_sql_body(db,'backend_api.agent_olap_',(run_id,worker_id),mode,params,order_types)
+    result=envelope(mode,body,params,order_types)
+    result.pop('points',None)
+    if len(result.get('orders') or [])>AGENT_ORDERS:
+        result['orders']=result['orders'][:AGENT_ORDERS]
+        result['orders_truncated']=True
+    return result
+
+
+def envelope(mode, body, params, order_types):
+    """Конверт ответа, как у analysis_from_data: {mode, level, rows, total, points?, orders?, filters}."""
+    p=params
+    level=body['level'] if mode in ('session','retake') else p['level']
+    extra={'points':body['points']} if mode=='risk' else {}
+    extra_filters={}
+    if mode=='moves':
+        types,month_from,month_to,listed=_moves_filters(p['moves'],order_types)
+        if listed:
+            extra['orders']=body['orders']
+        extra_filters={'types':types,'from':month_from,'to':month_to,'list':listed}
+    return {'mode':mode,'level':level,'rows':body['rows'],'total':body['total'],**extra,
+        'filters':{'course':p['course'],'group_id':p['group_id'],'discipline_id':p['discipline_id'],'semester':p['semester'],
+            'status_id':p['status_id'],'mod_min':p['mod_min'],'att_min':p['att_min'],'period':p['period'],'pick':p['pick'],**extra_filters}}
 
 
 def _invalid(field):

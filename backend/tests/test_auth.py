@@ -304,12 +304,13 @@ class AuthHttpTests(DatabaseHttpCase):
         teacher_id = self.client.get("/api/v1/auth/me",headers=teacher).json()["teacher_id"]
         teacher_results = self.client.get("/api/v1/olap?mode=dice",headers=teacher).json()["rows"]
         self.db.execute("RESET ROLE")
-        assignments = {(row["group_id"],row["discipline_id"],row["semester"]) for row in self.db.execute(
-            """SELECT ta.group_id,ci.discipline_id,ci.semester FROM deanery.teaching_assignment ta
-               JOIN deanery.curriculum_item ci ON ci.item_id=ta.item_id WHERE ta.teacher_id=%s""",(teacher_id,),
+        # Область преподавателя — группы его поручений, все дисциплины этих групп (как у пяти новых режимов, 18.10.2026).
+        assignments = {row["group_id"] for row in self.db.execute(
+            "SELECT ta.group_id FROM deanery.teaching_assignment ta WHERE ta.teacher_id=%s",(teacher_id,),
         )}
         self.db.execute("SET LOCAL ROLE backend_api")
-        self.assertTrue(all((row["group_id"],row["discipline_id"],row["semester"]) in assignments for row in teacher_results))
+        self.assertTrue(teacher_results)
+        self.assertTrue(all(row["group_id"] in assignments for row in teacher_results))
 
     def test_create_and_delete_work_practice_and_unlinked_employee(self):
         response = self.client.post("/api/v1/auth/login",json={"login":"vasilyeva","password":"only-for-isolated-test"},headers=self.origin)

@@ -40,7 +40,7 @@ class PortableTests(unittest.TestCase):
             path.write_text(original)
             report = dict(model='qwen_qwen3.5-9b', base_url='http://127.0.0.1:1234/v1', context_window=20480,
                           max_tokens=1536, temperature=0.6, reasoning_effort='none', prompt_tokens=4200,
-                          prompt_fingerprint='a' * 64, native_provider_requests=1, tool_count=14)
+                          prompt_fingerprint='a' * 64, native_provider_requests=1, tool_count=15)
             with self.assertRaises(ValueError):
                 apply_result(path, {**report, 'base_url': 'http://other-host:1234/v1'})
             self.assertEqual(path.read_text(), original)
@@ -51,11 +51,12 @@ class PortableTests(unittest.TestCase):
             self.assertIn('OPENAI_API_KEY=local', changed)
             self.assertEqual(len(list(path.parent.glob('agent.env.before-calibration-*'))), 1)
 
-    def test_shared_serializer_preserves_accepted_fourteen_tool_fingerprint(self):
+    def test_shared_serializer_preserves_accepted_fifteen_tool_fingerprint(self):
+        # 15-th tool get_olap_analysis (0065_olap_sql); the model budget must be re-measured by agent_calibration.
         payload = serialize('qwen_qwen3.5-9b', 'http://127.0.0.1:1234/v1', 0.6, 'none')
-        self.assertEqual(len(payload['tools']), 14)
+        self.assertEqual(len(payload['tools']), 15)
         self.assertEqual(static_fingerprint(payload, 20480, 'http://127.0.0.1:1234/v1'),
-                         '98f51c179a951cd3f71df5ed12d3a29124f6eb015356e7fd1e71337bf5c8dd9f')
+                         '778eb08ade52d37037512109faac4fab53891a32ad891da2e5d53bef3f1c1330')
 
 
 if __name__ == '__main__':

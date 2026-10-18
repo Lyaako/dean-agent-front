@@ -36,6 +36,12 @@ class FakeDb:
         return Rows([{'visible_rows': json.dumps({'code': code})} for code in ORDER_TYPES])
 
 
+@pytest.fixture(autouse=True)
+def python_engine(monkeypatch):
+    # Тесты ниже — шлюз прежнего расчёта (набор фактов olap_dataset), пока есть OLAP_ENGINE=python; SQL — в конце файла.
+    monkeypatch.setenv('OLAP_ENGINE', 'python')
+
+
 @pytest.fixture
 def gate(monkeypatch):
     def install(**settings):
@@ -114,3 +120,48 @@ def test_parameter_errors_do_not_wait_for_a_slot(gate):
     assert (raised.value.status_code, raised.value.detail) == (422, 'group_required')
     assert time.monotonic() - started < 0.3
     holder.join()
+
+
+class FakeSqlDb:
+    """Отвечает на функции режимов backend_api.olap_<режим> с задержкой и считает вызовы."""
+    def __init__(self, delay=0.0, fail=False):
+        self.delay, self.fail, self.calls, self.lock = delay, fail, 0, threading.Lock()
+
+    def execute(self, sql, params=()):
+        if 'backend_api.olap_' in sql:
+            with self.lock:
+                self.calls += 1
+            time.sleep(self.delay)
+            if self.fail:
+                raise RuntimeError('расчёт упал')
+            return Rows([{'body': {'level': 'course', 'rows': [], 'total': {}, 'points': [], 'orders': []}}])
+        assert 'visible_rows' in sql
+        return Rows([{'visible_rows': json.dumps({'code': code})} for code in ORDER_TYPES])
+
+
+def test_sql_engine_caches_answers_per_user_mode_and_parameters(gate, monkeypatch):
+    monkeypatch.setenv('OLAP_ENGINE', 'sql')
+    current = gate(ttl=0.2, max_entries=2)
+    db = FakeSqlDb(delay=0.2)
+    with ThreadPoolExecutor(2) as pool:
+        list(pool.map(lambda mode: run(db, mode, 1), ('session', 'session')))
+    assert db.calls == 1
+    run(db, 'heat', 1); run(db, 'session', 1, course=2); run(db, 'session', 2)
+    assert db.calls == 4 and current.cache_size() == 2
+    time.sleep(0.25)
+    run(db, 'session', 2)
+    assert db.calls == 5
+
+
+def test_sql_engine_busy_slot_and_error_release(gate, monkeypatch):
+    monkeypatch.setenv('OLAP_ENGINE', 'sql')
+    gate(limit=1, queue_timeout=0.1)
+    holder = threading.Thread(target=run, args=(FakeSqlDb(delay=0.5), 'risk', 1))
+    holder.start(); time.sleep(0.05)
+    with pytest.raises(HTTPException) as raised:
+        run(FakeSqlDb(), 'risk', 2)
+    holder.join()
+    assert (raised.value.status_code, raised.value.headers) == (429, {'Retry-After': '5'})
+    with pytest.raises(RuntimeError):
+        run(FakeSqlDb(fail=True), 'retake', 3)
+    assert run(FakeSqlDb(), 'retake', 4)['mode'] == 'retake'

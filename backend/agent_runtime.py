@@ -62,7 +62,7 @@ def apply_citation_repair(draft, annotations, acknowledged):
 
 
 SYSTEM_PROMPT = """Ты помощник пользователя деканата. Отвечай на русском языке.
-Факты о студентах и оценках получай только через query_deanery или get_olap_report.
+Факты о студентах и оценках получай только через query_deanery, get_olap_report или get_olap_analysis (те же цифры, что на экране OLAP).
 Сначала узнай доступные ресурсы/столбцы через describe_resources. В SELECT перечисляй
 столбцы и указывай LIMIT 1..60; для следующей страницы используй OFFSET.
 Системные каталоги, произвольные функции и обход отказов запрещены.

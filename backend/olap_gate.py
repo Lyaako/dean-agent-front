@@ -35,9 +35,15 @@ class _Flight:
         self.error = None
 
 
+def default_limit():
+    # Расчёт в SQL (0065_olap_sql): шесть одновременных — ~70 МБ памяти базы, поэтому 4; прежний набор фактов
+    # (OLAP_ENGINE=python) — ~200 МБ на расчёт, при нём остаётся 2.
+    return 2 if os.environ.get('OLAP_ENGINE', 'sql').strip().lower() == 'python' else 4
+
+
 class OlapGate:
     def __init__(self, limit=None, queue_timeout=None, ttl=None, max_entries=None):
-        self.limit = max(1, limit if limit is not None else _number('OLAP_MAX_CONCURRENT', 2, int))
+        self.limit = max(1, limit if limit is not None else _number('OLAP_MAX_CONCURRENT', default_limit(), int))
         self.queue_timeout = queue_timeout if queue_timeout is not None else _number('OLAP_QUEUE_TIMEOUT', 20.0, float)
         self.ttl = ttl if ttl is not None else _number('OLAP_CACHE_TTL', 15.0, float)
         self.max_entries = max(0, max_entries if max_entries is not None else _number('OLAP_CACHE_MAX', 4, int))
