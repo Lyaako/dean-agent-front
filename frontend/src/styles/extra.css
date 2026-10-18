@@ -483,7 +483,9 @@ button.lesson { width: 100%; border: 0; text-align: left; font: inherit; color: 
 .olap-crumbs b { font-weight: 600; }
 .olap-crumbs .link { padding: 4px 8px; border: 0; border-radius: 10px; background: none; color: var(--indigo); font: inherit; font-weight: 500; }
 .olap-crumbs .link:hover { background: var(--sky-100); }
-.olap-crumbs > :first-child.link { margin-left: -8px; }
+/* Ссылка и стрелка — одним элементом в строку (иначе стрелка-блок падала под текст); первая ссылка — вровень с краем */
+.olap-crumbs > span { display: inline-flex; align-items: center; gap: 4px; }
+.olap-crumbs > :first-child .link, .olap-crumbs > :first-child.link { margin-left: -8px; }
 /* Тепловая карта: дисциплина × группа */
 .heat-wrap { overflow-x: auto; padding: 0 20px 4px; }
 .heat { width: 100%; border-collapse: separate; border-spacing: 4px; font-size: 13px; }
@@ -708,6 +710,7 @@ body {
 .batch-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 .batch-tools .fchip { height: 32px; padding: 0 12px; font-size: 13px; background: var(--fill); box-shadow: none; }
 .batch-tools .fchip .ic { width: 13px; height: 13px; }
+.batch-tools .search { margin-left: auto; }   /* поиск справа и тогда, когда фильтра нет */
 .batch-tools .fchip[aria-pressed="true"] { background: var(--indigo); }
 .search.sm { height: 36px; flex: 0 1 220px; background: var(--fill); box-shadow: none; }
 .batch-list { display: flex; flex-direction: column; border-radius: 16px; background: var(--fill); padding: 2px 12px; }

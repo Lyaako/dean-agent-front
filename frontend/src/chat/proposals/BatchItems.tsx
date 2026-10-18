@@ -101,9 +101,12 @@ export function BatchItems({ p, mode, picked, onPick, culprit, disabled, undone 
     <button type="button" className="fchip" aria-pressed={filter === v} onClick={() => { setFilter(v); setAll(false); }}>{label}<span className="n">{n}</span></button>
   );
 
+  // Фильтр нужен, только когда есть из чего выбирать: у решённого пакета без предупреждений осталась бы одна «Все»
+  const chips = [chip("all", "Все", items.length), check && chip("picked", "Отмечено", picked.size), !!warn.length && chip("warn", <><Icon name="alert" />Внимание</>, warn.length)].filter(Boolean);
+
   return <>
     <div className="batch-tools">
-      <div className="chips">{chip("all", "Все", items.length)}{check && chip("picked", "Отмечено", picked.size)}{!!warn.length && chip("warn", <><Icon name="alert" />Внимание</>, warn.length)}</div>
+      {chips.length > 1 && <div className="chips">{chips}</div>}
       <label className="search sm"><Icon name="search" /><input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Найти запись" aria-label="Найти запись" autoComplete="off" /></label>
     </div>
     {!check && one && <p className="hint">{title(one, one.field[0])}: было → стало</p>}
