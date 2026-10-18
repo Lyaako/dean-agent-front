@@ -30,10 +30,15 @@ export function useProposal(id: string, onDecided?: (proposal: Proposal) => void
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const sending = useRef(false);
-  const [error, setError] = useState<{ text: string; requestId?: string; code?: string } | null>(null);
+  // itemId — строка пакета из details.item_id (stale_item, undo_changed, undo_unavailable)
+  const [error, setError] = useState<{ text: string; requestId?: string; code?: string; itemId?: number } | null>(null);
   // Ошибка длины с details.field = "reason" — под полем: комментария к решению или причины передачи
   const [reasonError, setReasonError] = useState<{ action: ProposalIntent["action"]; text: string } | null>(null);
   const p = q.data;
+  // Пакет после отмены: отмена — отдельное обратное предложение, его picked_item_ids — строки, которые она вернула
+  const undoId = p?.kind === "batch" ? p.execution.undo_id ?? undefined : undefined;
+  const inverse = useQuery({ queryKey: ["proposal", undoId], queryFn: () => getProposal(undoId!), enabled: !!undoId });
+  const undone = useMemo(() => (inverse.data ? new Set(inverse.data.execution.picked_item_ids ?? []) : undefined), [inverse.data]);
   const rows: DiffRow[] = useMemo(() => {
     if (!p) return [];
     const spec = schema?.[p.preview.table];
@@ -51,7 +56,8 @@ export function useProposal(id: string, onDecided?: (proposal: Proposal) => void
       qc.setQueryData(attemptKey, current); setAttempt(current);
       const result = await sendProposalAttempt(id, current);
       qc.removeQueries({ queryKey: attemptKey, exact: true }); setAttempt(null);
-      qc.setQueryData(["proposal", id], result);
+      // Отмена возвращает новое, обратное предложение — исходное перечитываем
+      if (result.id === id) qc.setQueryData(["proposal", id], result); else void q.refetch();
       for (const key of ["proposals", "proposal-events", "proposal-assignees", "res", "row", "lookup"]) void qc.invalidateQueries({ queryKey: [key] });
       onDecided?.(result);
     } catch (e) {
@@ -62,7 +68,10 @@ export function useProposal(id: string, onDecided?: (proposal: Proposal) => void
       if (e instanceof ApiError && e.code === "validation_error" && field === "reason") {
         const max = Number((e.details as { max?: unknown }).max) || reasonMax(p, (attempt ?? intent)?.action);
         setReasonError({ action: (attempt ?? intent)!.action, text: `От ${REASON_MIN} до ${max} символов` });
-      } else setError({ text: errorText(e), requestId: requestIdOf(e), code: errorCode(e) });
+      } else {
+        const item = e instanceof ApiError ? Number((e.details as { item_id?: unknown } | null)?.item_id) : NaN;
+        setError({ text: errorText(e), requestId: requestIdOf(e), code: errorCode(e), itemId: Number.isInteger(item) ? item : undefined });
+      }
       void q.refetch();
       void qc.invalidateQueries({ queryKey: ["proposals"] });
     } finally { sending.current = false; setBusy(false); }
@@ -71,5 +80,5 @@ export function useProposal(id: string, onDecided?: (proposal: Proposal) => void
     tableName: p?.preview.table, operation: p?.preview.operation, rows, reason, setReason,
     reasonMax: reasonMax(p),
     reasonOk: reason.trim().length >= REASON_MIN && reason.trim().length <= reasonMax(p),
-    busy, error, reasonError, attempt, mutate, events, assignees };
+    undone, busy, error, clearError: () => setError(null), reasonError, attempt, mutate, events, assignees };
 }

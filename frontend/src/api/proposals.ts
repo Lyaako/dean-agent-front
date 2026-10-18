@@ -13,6 +13,14 @@ export interface ProposalPreview {
   note: string | null;
   applied?: Record<string, unknown> | null;
 }
+/** Строка пакета (kind = batch). label — подпись записи и полей, если бекенд её отдаёт (ТЗ docs/backend-task-batch-labels.md) */
+export type BatchState = "ok" | "already_done" | "conflict" | "gone" | "rule_violation";
+export interface BatchItem {
+  item_id: number; table: string; key: Record<string, unknown>; field: string[];
+  before: Record<string, unknown> | null; after: Record<string, unknown>;
+  state: BatchState; message: string | null; reversible?: boolean; undo_reason?: string | null;
+  label?: { record: string; sub: string | null; fields?: Record<string, string> };
+}
 export interface ProposalSummary { id: string; preview: ProposalPreview; explanation: string; reason: string }
 export type ProposalStatus = "pending" | "approved" | "rejected";
 export type ExecutionStatus = "not_started" | "scheduled" | "running" | "succeeded" | "failed" | "cancelled";
@@ -31,7 +39,10 @@ export interface Proposal extends ProposalSummary {
   validity: { state: "current" | "stale" | "expired" | "superseded"; reason: string | null };
   routing: { institute_id: number | null; assignee_user_id: number | null; assignee_name: string | null };
   execution: { status: ExecutionStatus; effective_date: string | null; order_id: number | null; job_id: string | null;
-    started_at: string | null; completed_at: string | null; error: { code?: string; message?: string } | string | null };
+    started_at: string | null; completed_at: string | null; error: { code?: string; message?: string } | string | null;
+    /** Пакет: применённые строки; undo_id — обратное предложение, undo_skipped — строки, которые отмена пропустила */
+    picked_item_ids?: number[]; undo_id?: string | null; undo_skipped?: { item_id: number; code: string; reason: string }[] };
+  items?: BatchItem[];
   actions: { can_claim: boolean; can_assign: boolean; can_submit: boolean; can_approve: boolean; can_reject: boolean;
     can_undo?: boolean; can_redo?: boolean };
   /** Текст исходной просьбы агенту — только автору и только у предложений агента (Р4) */
@@ -47,10 +58,13 @@ export interface ProposalPage { items: Proposal[]; limit: number; offset: number
 export interface Assignee { user_id: number; full_name: string; role: string }
 export interface ProposalEvent { id: number; actor_user_id: number | null; event_type: string; reason: string | null; data: Record<string, unknown>; created_at: string }
 export interface EventPage { items: ProposalEvent[]; has_more: boolean }
-export type ProposalIntent = { action: "decision"; approve: boolean; reason: string }
+export type ProposalIntent = { action: "decision"; approve: boolean; reason: string; picked_item_ids?: number[] }
   | { action: "assignment"; assignee_user_id: number; reason: string; claim?: boolean }
-  | { action: "submit" };
-export type ProposalAttempt = Readonly<{ key: string; action: ProposalIntent["action"]; body: Readonly<Record<string, string | number | boolean>> }>;
+  | { action: "submit" }
+  /** Отмена пакета по выбранным строкам (Ф-Р8) */
+  | { action: "undo"; picked_item_ids: number[] };
+type Body = Record<string, string | number | boolean | number[]>;
+export type ProposalAttempt = Readonly<{ key: string; action: ProposalIntent["action"]; body: Readonly<Body> }>;
 
 export const getProposal = (id: string) => api<Proposal>(`/agent/proposals/${id}`);
 export const listProposals = (filters: ProposalFilters) => api<ProposalPage>("/agent/proposals", { query: { ...filters } });
@@ -64,16 +78,28 @@ export const reasonMax = (p: Pick<Proposal, "kind"> | undefined, action: Proposa
   action === "decision" && p?.kind === "grade_correction" ? 500 : 2000;
 
 export function createProposalAttempt(proposal: Proposal, intent: ProposalIntent): ProposalAttempt {
+  if (intent.action === "undo") {
+    if (!proposal.actions.can_undo) throw new Error("Отмена недоступна — обновите предложение");
+    if (!intent.picked_item_ids.length) throw new Error("Отметьте строки для отмены");
+    return Object.freeze({ key: newKey(), action: "undo", body: Object.freeze({ picked_item_ids: [...intent.picked_item_ids] }) });
+  }
   const allowed = intent.action === "submit" ? proposal.actions.can_submit : intent.action === "decision"
     ? (intent.approve ? proposal.actions.can_approve : proposal.actions.can_reject)
     : intent.claim ? proposal.actions.can_claim : proposal.actions.can_assign;
   if (!allowed) throw new Error("Действие недоступно — обновите предложение");
-  const body: Record<string, string | number | boolean> = { expected_version: proposal.version };
+  const body: Body = { expected_version: proposal.version };
   if (intent.action !== "submit") {
     const reason = intent.reason.trim();
     if (reason.length < REASON_MIN || reason.length > reasonMax(proposal, intent.action)) throw new Error("Проверьте длину комментария");
     body.reason = reason;
-    if (intent.action === "decision") body.approve = intent.approve;
+    if (intent.action === "decision") {
+      body.approve = intent.approve;
+      // Пакет: одобряются только отмеченные строки (непустой набор), отклоняется целиком
+      if (intent.approve && intent.picked_item_ids) {
+        if (!intent.picked_item_ids.length) throw new Error("Отметьте строки для применения");
+        body.picked_item_ids = [...intent.picked_item_ids];
+      }
+    }
     else {
       if (!Number.isSafeInteger(intent.assignee_user_id) || intent.assignee_user_id < 1) throw new Error("Выберите сотрудника");
       body.assignee_user_id = intent.assignee_user_id;
