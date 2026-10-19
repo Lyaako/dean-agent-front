@@ -1,6 +1,6 @@
-// Хранилище чатов. Сейчас — в браузере (localChatStore); когда бэкенд отдаст список сессий и сообщения
-// (GET /agent/sessions, GET /agent/sessions/{id}/messages), появится serverChatStore с тем же интерфейсом.
-import type { ProposalSummary } from "../../api/agent";
+import type { ProposalSummary } from "../../api/proposals";
+import type { AttachmentContext } from "../../api/agent";
+import type { ExtractionResult } from "../../api/files";
 
 export interface AttachmentMeta {
   file_id: string;
@@ -9,6 +9,7 @@ export interface AttachmentMeta {
   filename: string;
   mime: string;
   size: number;
+  extraction?: ExtractionResult;
 }
 
 export interface ChatMessage {
@@ -16,30 +17,33 @@ export interface ChatMessage {
   role: "user" | "agent" | "error";
   text: string;
   at: string;
+  runId?: string;
+  attachment_context?: AttachmentContext;
   attachments?: AttachmentMeta[];
   proposals?: ProposalSummary[];
   tools?: string[];
   requestId?: string;
-  /** Решение по предложению агента, принятое в этом браузере: id → статус */
+  /** Актуальные решения из серверной истории. */
   decisions?: Record<string, "approved" | "rejected">;
 }
 
 export interface ChatSummary { id: string; title: string; updatedAt: string; preview: string }
 
-export interface Chat {
+export interface SessionInfo {
   id: string;
   title: string;
-  sessionId: string | null;   // сессия агента на бэкенде: с ней агент помнит контекст диалога
+  sessionId: string;
+  activeRunId: string | null;
   createdAt: string;
   updatedAt: string;
-  messages: ChatMessage[];
 }
+export interface Chat extends SessionInfo { messages: ChatMessage[] }
 
 export interface ChatStore {
-  list(): Promise<ChatSummary[]>;
-  get(id: string): Promise<Chat | null>;
-  save(chat: Chat): Promise<void>;
-  rename(id: string, title: string): Promise<void>;
+  list(signal?: AbortSignal): Promise<ChatSummary[]>;
+  get(id: string, signal?: AbortSignal): Promise<Chat>;
+  create(title: string, key: string, signal?: AbortSignal): Promise<SessionInfo>;
+  rename(id: string, title: string): Promise<SessionInfo>;
   remove(id: string): Promise<void>;
 }
 

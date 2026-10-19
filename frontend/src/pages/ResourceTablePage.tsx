@@ -27,10 +27,12 @@ export interface ResourceTableProps {
   actions?: ReactNode;
   /** Свои действия в окне записи */
   dialogExtra?: (viewRow: Row) => (row: Row | null) => ReactNode;
+  /** Свой блок над полями окна записи */
+  dialogTop?: (viewRow: Row) => ReactNode;
 }
 
 // Вкладка = таблица представления + окно записи исходной таблицы (ключ в представлении и в таблице один)
-export function ResourceTablePage({ id, title, view, table, keyField, cols, form, rowTitle, newTitle, initial, actions, dialogExtra }: ResourceTableProps) {
+export function ResourceTablePage({ id, title, view, table, keyField, cols, form, rowTitle, newTitle, initial, actions, dialogExtra, dialogTop }: ResourceTableProps) {
   const can = useCan();
   const data = useResource(view);
   const rows = useMemo(() => data.data ?? [], [data.data]);
@@ -38,22 +40,24 @@ export function ResourceTablePage({ id, title, view, table, keyField, cols, form
   const filtered = useMemo(() => applyTable(state, cols, rows), [state, cols, rows]);
   const [open, setOpen] = useState<{ row: Row | null } | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const dialogRow = open?.row ? rows.find((r) => r[keyField] === open.row?.[keyField]) ?? open.row : null;
 
   return (
     <Page title={title}>
-      <TableTools state={state} set={set} cols={cols} rows={rows} />
+      <TableTools state={state} set={set} cols={cols} rows={rows}>
+        <span className="spacer" />
+        {actions}
+        {can(table, "create") && <button className="btn sm primary" onClick={() => setOpen({ row: null })}><Icon name="plus" />Добавить</button>}
+      </TableTools>
       <DataTable cols={cols} rows={filtered} base={rows} state={state} set={set}
         rowKey={(r) => String(r[keyField])} onRowClick={(r) => setOpen({ row: r })}
-        loading={data.isLoading} error={data.error ? errorText(data.error) : null} onRetry={() => data.refetch()} flashKey={flash}
-        actions={<>
-          {actions}
-          {can(table, "create") && <button className="btn sm primary" onClick={() => setOpen({ row: null })}><Icon name="plus" />Добавить</button>}
-        </>} />
+        loading={data.isLoading} error={data.error ? errorText(data.error) : null} onRetry={() => data.refetch()} flashKey={flash} />
       {open && (
         <RecordDialog table={table} config={form} initial={initial}
           recordKey={open.row ? { [keyField]: open.row[keyField] } : null}
           title={open.row ? rowTitle(open.row) : newTitle}
-          extra={open.row && dialogExtra ? dialogExtra(open.row) : undefined}
+          extra={dialogRow && dialogExtra ? dialogExtra(dialogRow) : undefined}
+          top={dialogRow && dialogTop ? dialogTop(dialogRow) : undefined}
           onClose={() => setOpen(null)}
           onSaved={(saved) => { setFlash(null); requestAnimationFrame(() => setFlash(String(saved[keyField]))); }} />
       )}

@@ -4,6 +4,7 @@ import { emptyTable, labelOf, type Column, type TableState } from "./tableLogic"
 
 // Состояние таблиц живёт между переключениями вкладок, как в макете
 const store = new Map<string, TableState>();
+export const clearTableState = () => store.clear();
 
 export function useTableState<R>(id: string, cols: Column<R>[]) {
   const [state, setLocal] = useState<TableState>(() => store.get(id) ?? emptyTable());

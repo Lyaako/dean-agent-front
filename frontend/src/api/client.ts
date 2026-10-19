@@ -19,21 +19,47 @@ export class ApiError extends Error {
 let accessToken: string | null = null;
 let refreshing: Promise<boolean> | null = null;
 let onExpired: (() => void) | null = null;
+let onPasswordRequired: (() => void) | null = null;
+// Почему сеанс закрылся — экран входа показывает это один раз
+let endedBecause: string | null = null;
+export const takeEndedReason = () => { const r = endedBecause; endedBecause = null; return r; };
+let revision = 0;
 
 export const session = {
   start(access: string, csrf: string) {
+    revision++;
+    refreshing = null;
     accessToken = access;
-    // CSRF-токен выдаётся только при входе; в sessionStorage — чтобы перезагрузка страницы не выкидывала на логин
-    try { sessionStorage.setItem(CSRF_KEY, csrf); } catch { /* приватный режим — останется только в памяти */ }
+    // CSRF-токен выдаётся только при входе. Храним в localStorage: перезагрузка не выкидывает на логин,
+    // и все вкладки работают в одной сессии (cookie обновления у них и так общая)
+    try { localStorage.setItem(CSRF_KEY, csrf); } catch { /* приватный режим — останется только в памяти */ }
   },
   clear() {
+    revision++;
+    refreshing = null;
     accessToken = null;
-    try { sessionStorage.removeItem(CSRF_KEY); } catch { /* нет доступа к хранилищу */ }
+    try { localStorage.removeItem(CSRF_KEY); } catch { /* нет доступа к хранилищу */ }
   },
+  hasAccess() { return !!accessToken; },
+  revision() { return revision; },
   hasCsrf() {
-    try { return !!sessionStorage.getItem(CSRF_KEY); } catch { return false; }
+    try { return !!localStorage.getItem(CSRF_KEY); } catch { return false; }
   },
   onExpired(fn: () => void) { onExpired = fn; },
+  /** Бэкенд требует сменить пароль (сброс администратором) — показать окно смены */
+  onPasswordRequired(fn: () => void) { onPasswordRequired = fn; },
+};
+
+if (typeof window !== "undefined") window.addEventListener("storage", (event) => {
+  if (event.key !== CSRF_KEY && event.key !== null) return;
+  revision++;
+  accessToken = null;
+  refreshing = null;
+  onExpired?.();
+});
+
+const checkSession = (started: number) => {
+  if (started !== revision) throw new ApiError(401, "session_changed", "Аккаунт изменился — повторите действие");
 };
 
 export async function readError(res: Response): Promise<ApiError> {
@@ -50,27 +76,45 @@ export async function readError(res: Response): Promise<ApiError> {
   return new ApiError(res.status, code, message, requestId, details);
 }
 
+// Обновление идёт строго по одному и между вкладками браузера (Web Locks): cookie общая, и если две вкладки
+// отправят одну и ту же cookie одновременно, бэкенд примет это за повторное использование и закроет сессию
+const exclusive = <T,>(fn: () => Promise<T>): Promise<T> =>
+  navigator.locks ? (navigator.locks.request("deanery-refresh", fn) as Promise<T>) : fn();
+
 export function refreshSession(): Promise<boolean> {
-  refreshing ??= (async () => {
+  if (refreshing) return refreshing;
+  const started = revision;
+  const pending = exclusive(async () => {
+    if (started !== revision) return false;
     let csrf: string | null = null;
-    try { csrf = sessionStorage.getItem(CSRF_KEY); } catch { /* нет доступа */ }
+    try { csrf = localStorage.getItem(CSRF_KEY); } catch { /* нет доступа */ }
     if (!csrf) return false;
     try {
       const res = await fetch(`${API_BASE}/auth/refresh`, {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: "{}",
       });
+      if (started !== revision) return false;
       if (!res.ok) {
-        if (res.status === 401 || res.status === 403) session.clear();
+        if (res.status === 401 || res.status === 403) {
+          // Пароль сброшен администратором: обновить сеанс до смены нельзя, а без действующего токена
+          // сменить пароль тоже нельзя — входим заново временным паролем, и откроется окно смены
+          if (res.status === 403 && (await readError(res)).code === "password_change_required")
+            endedBecause = "Пароль сброшен администратором. Войдите с временным паролем, чтобы задать новый";
+          session.clear(); onExpired?.();
+        }
         return false;
       }
-      accessToken = (await res.json()).access_token;
+      const body = await res.json();
+      if (started !== revision) return false;
+      accessToken = body.access_token;
       return true;
     } catch {
       return false;
     }
-  })().finally(() => { refreshing = null; });
-  return refreshing;
+  }).finally(() => { if (refreshing === pending) refreshing = null; });
+  refreshing = pending;
+  return pending;
 }
 
 type Query = Record<string, string | number | boolean | null | undefined>;
@@ -93,27 +137,41 @@ export function buildUrl(path: string, query?: Query) {
 
 // Возвращает сам Response (для потоков и файлов); на 401 один раз обновляет токен и повторяет запрос
 export async function apiRaw(path: string, opts: RequestOptions = {}, retried = false): Promise<Response> {
+  const started = revision;
+  const method = (opts.method ?? (opts.json !== undefined || opts.body ? "POST" : "GET")).toUpperCase();
   const headers: Record<string, string> = { ...opts.headers };
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   if (opts.json !== undefined) headers["Content-Type"] = "application/json";
   const res = await fetch(buildUrl(path, opts.query), {
-    method: opts.method ?? (opts.json !== undefined || opts.body ? "POST" : "GET"),
+    method,
     headers, credentials: "include", signal: opts.signal,
     body: opts.json !== undefined ? JSON.stringify(opts.json) : opts.body,
   });
+  checkSession(started);
   if (res.status === 401 && !retried && !path.startsWith("/auth/login")) {
-    if (await refreshSession()) return apiRaw(path, opts, true);
+    const refreshed = await refreshSession();
+    checkSession(started);
+    if (refreshed) {
+      if (method === "GET" || method === "HEAD" || Object.keys(headers).some((key) => key.toLowerCase() === "idempotency-key")) return apiRaw(path, opts, true);
+      throw new ApiError(401, "session_refreshed", "Сессия обновлена — отправьте форму ещё раз");
+    }
     session.clear();
     onExpired?.();
   }
-  if (!res.ok) throw await readError(res);
+  if (!res.ok) {
+    const error = await readError(res);
+    if (error.code === "password_change_required") onPasswordRequired?.();
+    throw error;
+  }
   return res;
 }
 
 export async function api<T = unknown>(path: string, opts: RequestOptions = {}): Promise<T> {
+  const started = revision;
   const res = await apiRaw(path, opts);
   if (res.status === 204) return undefined as T;
   const text = await res.text();
+  checkSession(started);
   return (text ? JSON.parse(text) : undefined) as T;
 }
 

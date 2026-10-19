@@ -1,7 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { fetchMe, login as apiLogin, logout as apiLogout, type Me, type Role } from "../api/auth";
+import { changePassword as apiChangePassword, fetchMe, login as apiLogin, logout as apiLogout, logoutAll as apiLogoutAll, type Me, type Role } from "../api/auth";
 import { api, refreshSession, session } from "../api/client";
+import { clearChatRecovery } from "../chat/store/recovery";
+import { clearTableState } from "../components/table/useTableState";
+import { clearScheduleState } from "../pages/schedule/SchedulePage";
 
 type Status = "loading" | "anon" | "auth";
 
@@ -10,8 +13,14 @@ interface AuthValue {
   me: Me | null;
   role: Role | null;
   fullName: string | null;
+  /** Пароль сброшен администратором: до смены работа недоступна */
+  mustChange: boolean;
+  /** Временный пароль, введённый при входе (только в памяти этой вкладки) */
+  tempPassword(): string | null;
   login(login: string, password: string): Promise<void>;
   logout(): Promise<void>;
+  logoutAll(): Promise<void>;
+  changePassword(current: string, next: string): Promise<void>;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -33,38 +42,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>("loading");
   const [me, setMe] = useState<Me | null>(null);
   const [fullName, setFullName] = useState<string | null>(null);
+  const [forced, setForced] = useState(false);
+  const entering = useRef(0);
+  const temp = useRef<string | null>(null);
 
   const reset = useCallback(() => {
+    entering.current++;
     setMe(null);
     setFullName(null);
+    setForced(false);
+    temp.current = null;
     setStatus("anon");
     qc.clear();
+    clearChatRecovery();
+    clearTableState();
+    clearScheduleState();
   }, [qc]);
 
   const enter = useCallback(async () => {
+    const attempt = entering.current;
+    const started = session.revision();
     const m = await fetchMe();
+    const name = await loadName(m);
+    if (attempt !== entering.current || started !== session.revision()) return null;
     setMe(m);
     setStatus("auth");
-    setFullName(await loadName(m));
+    setFullName(name);
+    return m;
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     session.onExpired(reset);
-    // После перезагрузки страницы: пробуем обновить токен по cookie
+    // Любой запрос получил password_change_required (например, админ сбросил пароль, пока вкладка открыта)
+    session.onPasswordRequired(() => setForced(true));
+    // Токен уже в памяти (повторное монтирование) — просто проверяем его; после перезагрузки страницы — обновляем по cookie.
+    // Лишнее обновление опасно: если страница уйдёт до ответа, новая cookie потеряется и бэкенд закроет сессию.
     (async () => {
-      if (session.hasCsrf() && (await refreshSession())) {
-        try { await enter(); return; } catch { /* упадём на вход */ }
+      if (session.hasAccess() || (session.hasCsrf() && (await refreshSession()))) {
+        if (cancelled) return;
+        try { if (await enter()) return; } catch { /* упадём на вход */ }
       }
-      setStatus("anon");
+      if (!cancelled) setStatus("anon");
     })();
+    return () => { cancelled = true; };
   }, [enter, reset]);
 
   const value = useMemo<AuthValue>(() => ({
     status, me, fullName,
     role: me?.roles[0] ?? null,
-    async login(l, p) { await apiLogin(l, p); await enter(); },
+    mustChange: forced || !!me?.must_change_password,
+    tempPassword: () => temp.current,
+    async login(l, p) {
+      session.clear(); reset(); await apiLogin(l, p);
+      // Пароль держим в памяти, только если это временный пароль: им подтверждается обязательная смена
+      temp.current = p;
+      const m = await enter();
+      if (!m?.must_change_password) temp.current = null;
+    },
     async logout() { try { await apiLogout(); } finally { reset(); } },
-  }), [status, me, fullName, enter, reset]);
+    async logoutAll() { try { await apiLogoutAll(); } finally { reset(); } },
+    async changePassword(current, next) {
+      await apiChangePassword(current, next);
+      temp.current = null;
+      setForced(false);
+      // После обязательной смены заново читаем учётную запись и ФИО — до неё они были закрыты
+      await enter();
+    },
+  }), [status, me, fullName, forced, enter, reset]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

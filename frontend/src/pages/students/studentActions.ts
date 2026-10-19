@@ -1,5 +1,5 @@
 // Приказы по студентам — предметные команды бэкенда (POST /workflows/{name})
-export type WfKind = "text" | "textarea" | "date" | "gender" | "group" | "funding" | "leave_reason" | "employee";
+export type WfKind = "text" | "textarea" | "date" | "gender" | "group" | "funding" | "leave_reason" | "employee" | "signer";
 
 export interface WfField { name: string; label: string; kind: WfKind; required?: boolean; hint?: string }
 
@@ -14,7 +14,7 @@ export interface WfDef {
 
 const ORDER: WfField[] = [
   { name: "order_number", label: "Номер приказа", kind: "text", required: true },
-  { name: "signed_by", label: "Подписал", kind: "employee", required: true },
+  { name: "signed_by", label: "Подписал", kind: "signer", required: true, hint: "Подписывает директор или заместитель" },
   { name: "effective_date", label: "Вступает в силу", kind: "date", hint: "Пусто — сегодня. Будущая дата — приказ будет запланирован" },
 ];
 

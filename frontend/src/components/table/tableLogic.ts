@@ -16,6 +16,10 @@ export interface Column<R> {
   className?: string;
   badge?: boolean;
   bold?: boolean;
+  /** Доля свободной ширины, которая достаётся колонке (по умолчанию 1). «да/—» — меньше, метки — больше */
+  grow?: number;
+  /** Свой порядок значений (дни недели): для сортировки и для вариантов в фильтре */
+  order?: string[];
 }
 
 export type RangeNum = { min?: string; max?: string };
@@ -67,17 +71,21 @@ function passes<R>(c: Column<R>, f: FilterValue, r: R) {
 
 export function applyTable<R>(s: TableState, cols: Column<R>[], rows: R[]): R[] {
   const q = norm(s.q.trim());
-  let out = rows.filter((r) => (!q || cols.some((c) => c.field && norm(shownOf(c, r)).includes(q)))
+  // Поиск — только по колонкам с текстовым фильтром («Содержит…»): ФИО, тема, номер и т. п.
+  let out = rows.filter((r) => (!q || cols.some((c) => c.field && c.filter === "text" && norm(shownOf(c, r)).includes(q)))
     && Object.entries(s.f).every(([i, f]) => !isSet(f) || !cols[+i] || passes(cols[+i], f, r)));
   if (s.sort && cols[s.sort.i]) {
     const c = cols[s.sort.i], dir = s.sort.dir;
-    out = [...out].sort((a, b) => cmp(rawOf(c, a), rawOf(c, b)) * dir);
+    const key = (r: R) => (c.order ? c.order.indexOf(String(rawOf(c, r))) : rawOf(c, r));
+    out = [...out].sort((a, b) => cmp(key(a), key(b)) * dir);
   }
   return out;
 }
 
 export function enumValues<R>(c: Column<R>, rows: R[]) {
-  return [...new Set(rows.map((r) => labelOf(rawOf(c, r))))].sort((a, b) => Number(a === "—") - Number(b === "—") || cmp(a, b));
+  const vals = [...new Set(rows.map((r) => labelOf(rawOf(c, r))))];
+  if (c.order) return vals.sort((a, b) => (c.order!.indexOf(a) + 1 || 99) - (c.order!.indexOf(b) + 1 || 99));
+  return vals.sort((a, b) => Number(a === "—") - Number(b === "—") || cmp(a, b));
 }
 
 export function plaqueText<R>(c: Column<R>, f: FilterValue) {
@@ -123,7 +131,7 @@ function textW(t: string, size: number, weight = 400) {
 }
 const WRAP_MAX = 230;
 
-export function colWidths<R>(cols: Column<R>[], rows: R[], avail: number, edge = 22) {
+export function colWidths<R>(cols: Column<R>[], rows: R[], avail: number, edge = 20, pad = 7) {
   const small = innerWidth <= 1360, fs = small ? 12 : 13, hs = small ? 11 : 11.5;
   const content: number[] = [], least: number[] = [], shorts: boolean[] = [];
   // Для ширины хватает выборки: на больших таблицах мерить каждую строку дорого
@@ -135,25 +143,38 @@ export function colWidths<R>(cols: Column<R>[], rows: R[], avail: number, edge =
     const word = Math.max(0, ...vals.flatMap((v) => v.split(/\s+/)).map((x) => textW(x, size, weight)));
     const wraps = vals.some((v) => /\s/.test(v));
     let w = wraps && !c.badge ? Math.min(full, Math.max(word, WRAP_MAX)) : full;
-    const extraBadge = c.badge ? 34 : 0;
+    const extraBadge = c.badge ? 36 : 0;   // поля, точка и отступ метки + запас, чтобы метка не переносилась
     w += extraBadge;
     const head = textW(c.label, hs, 500) + 14;
-    const headWord = Math.max(...c.label.split(/\s+/).map((x) => textW(x, hs, 500))) + 14;
+    // Заголовок может переноситься по пробелам и мягким переносам (\u00AD: «Обще-житие»)
+    const headWord = Math.max(...c.label.split(/\s+/).flatMap((word) => {
+      const parts = word.split("\u00AD");
+      return parts.map((x, i) => textW(i < parts.length - 1 ? x + "-" : x, hs, 500));
+    })) + 8;   // стрелка сортировки стоит абсолютно и почти не требует места
     content.push(Math.ceil(Math.max(w, head)) + 2);
     const short = full + extraBadge <= 140;
     shorts.push(short && !c.badge);
-    least.push(Math.ceil(Math.max(wraps && !short ? word + extraBadge : w, headWord)) + 4);
+    least.push(Math.ceil(Math.max(wraps && !short ? word + extraBadge : w, headWord)) + 2);
   });
-  const pads = cols.map((_, j) => (j === 0 ? edge : 8) + (j === cols.length - 1 ? edge : 8));
+  const pads = cols.map((_, j) => (j === 0 ? edge : pad) + (j === cols.length - 1 ? edge : pad));
   let widths = content.map((w, j) => w + pads[j]);
   const total = widths.reduce((a, b) => a + b, 0);
   if (total <= avail) {
-    const extra = (avail - total) / cols.length;
-    widths = widths.map((w) => w + extra);
+    const weights = cols.map((c) => c.grow ?? 1), sumW = weights.reduce((a, b) => a + b, 0) || 1;
+    widths = widths.map((w, j) => w + (avail - total) * weights[j] / sumW);
   } else {
-    const slack = content.map((w, j) => w - least[j]), room = slack.reduce((a, b) => a + b, 0);
-    const k = Math.min(1, (total - avail) / (room || 1));
-    widths = widths.map((w, j) => w - slack[j] * k);
+    // Не помещается: сначала сужаем обычные колонки, и только если места всё равно нет — колонки с метками
+    // (метка при этом переносится на две строки — это лучше, чем прокрутка вбок)
+    const slack = content.map((w, j) => w - least[j]);
+    let over = total - avail;
+    for (const badgePhase of [false, true]) {
+      if (over <= 0) break;
+      const inPhase = (j: number) => !!cols[j].badge === badgePhase;
+      const room = slack.reduce((a, x, j) => a + (inPhase(j) ? x : 0), 0);
+      const k = Math.min(1, over / (room || 1));
+      widths = widths.map((w, j) => (inPhase(j) ? w - slack[j] * k : w));
+      over -= Math.min(over, room);
+    }
   }
   return { widths, sum: widths.reduce((a, b) => a + b, 0), short: shorts };
 }

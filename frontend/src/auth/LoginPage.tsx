@@ -1,13 +1,14 @@
 import { useState, type FormEvent } from "react";
 import { useAuth } from "./AuthProvider";
 import { errorText } from "../api/errors";
-import { Icon } from "../components/Icon";
+import { takeEndedReason } from "../api/client";
 
 export function LoginPage() {
   const { login } = useAuth();
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice] = useState(takeEndedReason);
   const [busy, setBusy] = useState(false);
 
   async function submit(e: FormEvent) {
@@ -27,8 +28,8 @@ export function LoginPage() {
     <div className="login">
       <form className="card login-card" onSubmit={submit}>
         <div className="brand">
-          <span className="mark"><Icon name="cap" /></span>
-          <div><b>Деканат</b><small>Агент для сотрудников</small></div>
+          <span className="orb logo-orb" aria-hidden="true" />
+          <b>Деканат</b>
         </div>
         <h1>Вход</h1>
         <label className="field">
@@ -39,6 +40,7 @@ export function LoginPage() {
           <span>Пароль</span>
           <input className="text-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
         </label>
+        {notice && !error && <div className="form-note">{notice}</div>}
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="btn primary" disabled={busy || !name.trim() || !password}>{busy ? "Входим…" : "Войти"}</button>
       </form>

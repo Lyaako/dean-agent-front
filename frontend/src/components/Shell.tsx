@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Navigate, NavLink, Outlet, useLocation } from "react-router-dom";
 import { Icon } from "./Icon";
 import { TABS, type TabDef } from "../pages/tabs";
 import { useSchema } from "../api/schema";
@@ -7,31 +7,39 @@ import { useAuth } from "../auth/AuthProvider";
 import { ROLE_NAME } from "../api/auth";
 import { human, initials, tone, todayIso } from "../lib/format";
 import { ChatBar } from "../chat/ChatBar";
+import { AccountDialog } from "../auth/AccountDialog";
+import { ServicesDialog, ServicesMenuItem, useServicesDown } from "../pages/admin/ServicesDialog";
 
 const WD_FULL = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
 
 // Вкладки, которые роль может читать
 export function useVisibleTabs(): TabDef[] {
   const { data: schema } = useSchema();
-  return TABS.filter((t) => !t.view || !schema || schema[t.view]);
+  const { role } = useAuth();
+  return TABS.filter((t) => (!t.view || !schema || schema[t.view]) && (!t.roles || (role && t.roles.includes(role))));
 }
 
 export function Shell() {
+  const { me } = useAuth();
   const [scrolled, setScrolled] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  // Адрес чужой вкладки (остался от прошлой учётки или набран вручную) — на первую вкладку роли
+  const tabs = useVisibleTabs();
+  const { pathname } = useLocation();
+  const foreign = tabs.length > 0 && !tabs.some((t) => t.path === pathname);
   return (
     <div className={`app${scrolled ? " scrolled" : ""}`}>
       <header className="topbar">
         <div className="brand">
-          <span className="mark"><Icon name="cap" /></span>
-          <div><b>Деканат</b><small>Агент для сотрудников</small></div>
+          <span className="orb logo-orb" aria-hidden="true" />
+          <b>Деканат</b>
         </div>
-        <ChatBar open={chatOpen} setOpen={setChatOpen} />
+        <ChatBar key={me?.user_id} open={chatOpen} setOpen={setChatOpen} />
         <Me />
       </header>
       <div className={`scrim${chatOpen ? " show" : ""}`} onClick={() => setChatOpen(false)} />
       <main className="content" onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 4)}>
-        <div className="page"><Outlet /></div>
+        <div className="page">{foreign ? <Navigate to={tabs[0].path} replace /> : <Outlet />}</div>
       </main>
       <TabBar />
     </div>
@@ -41,6 +49,8 @@ export function Shell() {
 function Me() {
   const { me, role, fullName, logout } = useAuth();
   const [open, setOpen] = useState(false);
+  const [account, setAccount] = useState(false);
+  const [services, setServices] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -50,21 +60,30 @@ function Me() {
   }, [open]);
   const today = todayIso();
   const name = fullName || me?.login || "";
+  // У админа состояние сервисов агента — в меню профиля; при сбое на аватаре точка
+  const svcDown = useServicesDown(role === "admin");
   return (
     <div className="me" ref={ref}>
       <div className="when"><b>{WD_FULL[new Date().getDay()]}, {human(today)}</b></div>
-      <button className={`avatar t${tone(name)} avatar-btn`} title={`${name} — ${role ? ROLE_NAME[role] : ""}`}
+      <button className={`avatar t${tone(name)} avatar-btn${svcDown ? " has-alert" : ""}`}
+        title={`${name} — ${role ? ROLE_NAME[role] : ""}${svcDown ? " · есть сбои сервисов" : ""}`}
         aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
         {initials(name)}
       </button>
       {open && (
         <div className="menu" role="menu">
           <div className="menu-head"><b>{name}</b><small>{role ? ROLE_NAME[role] : ""} · {me?.login}</small></div>
+          <button role="menuitem" className="menu-item" onClick={() => { setOpen(false); setAccount(true); }}>
+            <Icon name="users" /><span>Личный кабинет</span>
+          </button>
+          {role === "admin" && <ServicesMenuItem onOpen={() => { setOpen(false); setServices(true); }} />}
           <button role="menuitem" className="menu-item" onClick={() => { setOpen(false); logout(); }}>
             <Icon name="logout" /><span>Выйти</span>
           </button>
         </div>
       )}
+      {account && <AccountDialog onClose={() => setAccount(false)} />}
+      {services && <ServicesDialog onClose={() => setServices(false)} />}
     </div>
   );
 }

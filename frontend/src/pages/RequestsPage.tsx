@@ -30,6 +30,7 @@ export function RequestsPage() {
     order: ["student_id", "document_type_id", "copies", "purpose", "request_status_id", "processed_by_id"],
     hide: isStudent ? ["student_id", "request_status_id", "processed_by_id"] : [],
     labels: { processed_by_id: "Исполнитель" },
+    lockOnEdit: ["student_id"],
     // Сотрудник взял заявку в работу — исполнителем становится он
     derive: (changed, v) => (changed === "request_status_id" && !v.processed_by_id && staffId ? { processed_by_id: staffId } : {}),
   }), [isStudent, staffId]);

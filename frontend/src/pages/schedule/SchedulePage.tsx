@@ -22,6 +22,7 @@ const byField = (by: By) => BY.find(([v]) => v === by)![2];
 
 // Состояние вкладки сохраняется между переключениями, как в макете
 const saved = { view: "table" as "table" | "week", date: todayIso(), by: "group" as By, who: "" };
+export const clearScheduleState = () => Object.assign(saved, { view: "table", date: todayIso(), by: "group", who: "" });
 
 const SORT = "lesson_date,pair_number,group_name";
 
@@ -54,13 +55,15 @@ export function SchedulePage() {
   const holidays = useResource("holiday");
   const pairs = useResource("pair_time");
 
-  const [tstate, tset] = useTableState("schedule", SCHEDULE_COLS);
-  const filtered = useMemo(() => applyTable(tstate, SCHEDULE_COLS, rows), [tstate, rows]);
-
   const mon = mondayOf(s.date);
   const first = term ? mondayOf(String(term.start_date)) : null;
   const prev = addDays(mon, -7), next = addDays(mon, 7);
   const today = todayIso();
+
+  // Таблица показывает выбранную неделю: даты задаёт переключатель недель, а не фильтр
+  const weekRows = useMemo(() => rows.filter((r) => String(r.lesson_date) >= mon && String(r.lesson_date) <= addDays(mon, 6)), [rows, mon]);
+  const [tstate, tset] = useTableState("schedule", SCHEDULE_COLS);
+  const filtered = useMemo(() => applyTable(tstate, SCHEDULE_COLS, weekRows), [tstate, weekRows]);
 
   const whoOptions = useMemo(() => {
     const f = byField(s.by);
@@ -72,6 +75,9 @@ export function SchedulePage() {
   const form = useMemo<FormConfig>(() => ({
     order: ["assignment_id", "classroom_id", "weekday", "pair_number", "week_parity", "term_id", "valid_from", "valid_to"],
     labels: { assignment_id: "Занятие (группа · дисциплина)", term_id: "Семестр" },
+    // Чётность недели в новом занятии не спрашиваем: база ставит «каждую неделю»
+    hideOnCreate: ["week_parity"],
+    checks: (v) => ({ valid_to: v.valid_from && v.valid_to && v.valid_to < v.valid_from ? "«Действует по» не может быть раньше «Действует с»" : undefined }),
     // Выбранная в «Неделе» группа или преподаватель сужает список поручений
     filters: s.view === "week" && s.by !== "classroom" && who
       ? { assignment_id: (o) => String(o.row[s.by === "group" ? "group_name" : "teacher"]) === who } : undefined,
@@ -84,7 +90,6 @@ export function SchedulePage() {
         <button className="icon-btn soft" onClick={() => set({ date: prev })} disabled={!!first && prev < first} aria-label="Предыдущая неделя"><Icon name="left" /></button>
         <div className="week-label"><b>{human(mon)} — {human(addDays(mon, 5))}</b></div>
         <button className="icon-btn soft" onClick={() => set({ date: next })} disabled={!!term && next > String(term.end_date)} aria-label="Следующая неделя"><Icon name="right" /></button>
-        {mondayOf(today) !== mon && <button className="btn sm soft" onClick={() => set({ date: today })}>Сегодня</button>}
       </div>
       <Seg value={s.view} onChange={(v) => set({ view: v })} options={[["table", "Таблица", "list"], ["week", "Неделя", "calendar"]]} />
     </div>
@@ -100,12 +105,15 @@ export function SchedulePage() {
       {bar}
       {s.view === "table" ? (
         <>
-          <TableTools state={tstate} set={tset} cols={SCHEDULE_COLS} rows={rows} />
+          <TableTools state={tstate} set={tset} cols={SCHEDULE_COLS} rows={weekRows}>
+            <span className="spacer" />
+            {addBtn}
+          </TableTools>
           <div className="enter" key="table">
-            <DataTable cols={SCHEDULE_COLS} rows={filtered} base={rows} state={tstate} set={tset}
-              rowKey={(r) => `${r.lesson_date}|${r.slot_id}`} title={term ? `${term.name} семестр` : ""}
+            <DataTable cols={SCHEDULE_COLS} rows={filtered} base={weekRows} state={tstate} set={tset}
+              rowKey={(r) => `${r.lesson_date}|${r.slot_id}`} title={term ? `${term.name} семестр · ${human(mon)} — ${human(addDays(mon, 5))}` : ""}
               loading={terms.isLoading || lessons.isLoading} error={error ? errorText(error) : null} onRetry={() => lessons.refetch()}
-              startAt={(r) => String(r.lesson_date) >= mon} onRowClick={(r) => setOpen({ slotId: r.slot_id })} actions={addBtn} />
+              onRowClick={(r) => setOpen({ slotId: r.slot_id })} />
           </div>
         </>
       ) : (
@@ -138,4 +146,3 @@ export function SchedulePage() {
     </Page>
   );
 }
-

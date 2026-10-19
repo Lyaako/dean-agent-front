@@ -10,7 +10,6 @@ interface Props<R> {
   set: (patch: Partial<TableState>) => void;
   rowKey: (r: R) => string;
   title?: ReactNode;
-  actions?: ReactNode;
   onRowClick?: (r: R) => void;
   loading?: boolean;
   error?: string | null;
@@ -18,9 +17,12 @@ interface Props<R> {
   flashKey?: string | null;
   /** Открыть страницу, на которой первая строка, подходящая под условие (например, выбранная неделя) */
   startAt?: (r: R) => boolean;
+  /** На сервере есть ещё строки (журнал отдаётся порциями): счётчик «из N+», на последней странице — догрузка */
+  more?: boolean;
+  onMore?: () => void;
 }
 
-export function DataTable<R>({ cols, rows, base, state, set, rowKey, title, actions, onRowClick, loading, error, onRetry, flashKey, startAt }: Props<R>) {
+export function DataTable<R>({ cols, rows, base, state, set, rowKey, title, onRowClick, loading, error, onRetry, flashKey, startAt, more, onMore }: Props<R>) {
   const cardRef = useRef<HTMLElement>(null);
   const [avail, setAvail] = useState(0);
   useLayoutEffect(() => {
@@ -58,6 +60,8 @@ export function DataTable<R>({ cols, rows, base, state, set, rowKey, title, acti
   }, [flashKey]);
 
   const p = Math.min(state.page, pages);
+  // Дошли до последней загруженной страницы — просим следующую порцию, страниц станет больше
+  useEffect(() => { if (more && onMore && p >= pages) onMore(); }, [more, onMore, p, pages]);
   const shown = rows.slice((p - 1) * PAGE_SIZE, p * PAGE_SIZE);
   const cw = avail ? colWidths(cols, base.length ? base : rows, avail) : null;
   // Значения без пробелов и короткие значения не переносим
@@ -76,13 +80,7 @@ export function DataTable<R>({ cols, rows, base, state, set, rowKey, title, acti
 
   return (
     <section ref={cardRef} className="card table-card">
-      <div className="table-head">
-        <h2>{title}</h2>
-        <div className="table-head-r">
-          {!loading && !error && <span className="count">Всего записей: <b>{rows.length}</b></span>}
-          {actions}
-        </div>
-      </div>
+      {title && <div className="table-head"><h2>{title}</h2></div>}
       <div className="table-wrap">
         <table className="fixed" style={cw ? { width: cw.sum } : undefined}>
           {cw && <colgroup>{cw.widths.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>}
@@ -124,7 +122,7 @@ export function DataTable<R>({ cols, rows, base, state, set, rowKey, title, acti
       </div>
       {pages > 1 && !loading && (
         <div className="pager">
-          <span>{a}–{b} из {rows.length}</span>
+          <span>{a}–{b} из {rows.length}{more ? "+" : ""}</span>
           <div className="pages">
             <button onClick={() => go(p - 1)} disabled={p <= 1} aria-label="Предыдущая страница"><Icon name="left" /></button>
             {pageButtons(p, pages).map((n, i) => n === "…"

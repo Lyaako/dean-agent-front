@@ -299,7 +299,7 @@ th.sortable:hover { color: var(--ink); }
 /* Таблицы помещаются в ширину страницы: текст в ячейках переносится вместо прокрутки вбок */
 .table-wrap table.fixed { table-layout: fixed; }   /* ширины задаёт colgroup — колонки не прыгают */
 .table-wrap th, .table-wrap td { white-space: normal; }
-.table-wrap th { vertical-align: bottom; }   /* заголовок переносится по словам, только если не хватает места */
+.table-wrap th { vertical-align: middle; }   /* если какой-то заголовок в две строки — остальные встают по середине его высоты */
 .table-wrap .sort-ic { position: absolute; margin-left: 3px; }
 .table-wrap th.sortable { position: relative; }
 .table-wrap tbody tr { animation: none; }   /* строки не «въезжают» заново при сортировке и фильтрах */
@@ -309,9 +309,9 @@ th.sortable:hover { color: var(--ink); }
 .table-wrap td .badge { font-size: 11.5px; height: auto; min-height: 24px; padding-top: 4px; padding-bottom: 4px; line-height: 1.25; white-space: normal; }
 @media (max-width: 1360px) { .table-wrap table { font-size: 12px; } .table-wrap th, .table-wrap td .badge { font-size: 11px; } }
 .table-wrap th, .table-wrap td, .table-wrap th.num, .table-wrap td.num { text-align: center; }   /* всё по центру колонки */
-.table-wrap th, .table-wrap td { padding-left: 8px; padding-right: 8px; }   /* одинаковые поля у всех колонок, у крайних — шире */
-.table-wrap th:first-child, .table-wrap td:first-child { padding-left: 22px; }
-.table-wrap th:last-child, .table-wrap td:last-child { padding-right: 22px; }
+.table-wrap th, .table-wrap td { padding-left: 7px; padding-right: 7px; }   /* одинаковые поля у всех колонок, у крайних — шире */
+.table-wrap th:first-child, .table-wrap td:first-child { padding-left: 20px; }
+.table-wrap th:last-child, .table-wrap td:last-child { padding-right: 20px; }
 
 .empty-day { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 64px 24px; text-align: center; color: var(--muted); }
 .empty-day .ic { width: 38px; height: 38px; margin-bottom: 10px; color: var(--sky); animation: float 3s ease-in-out infinite; }

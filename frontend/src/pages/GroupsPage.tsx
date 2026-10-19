@@ -63,11 +63,11 @@ export function GroupsPage() {
     <Page title="Группы">
       <TableTools state={state} set={set} cols={GROUP_COLS} rows={rows}>
         <span className="spacer" />
+        {addBtn}
         <Seg value={view} onChange={(v) => { lastView = v; setView(v); }} options={[["cards", "Карточки", "grid"], ["table", "Таблица", "list"]]} />
       </TableTools>
       {view === "cards" ? (
         <div className="enter" key="cards">
-          {addBtn && <div className="toolbar end cards-actions">{addBtn}</div>}
           {data.isLoading ? <div className="cards">{Array.from({ length: 6 }, (_, i) => <div key={i} className="card skel" style={{ height: 320 }} />)}</div>
             : data.error ? <section className="card empty-day"><Icon name="alert" /><b>Не удалось загрузить</b>{errorText(data.error)}
                 <button className="btn sm soft retry" onClick={() => data.refetch()}><Icon name="refresh" />Повторить</button></section>
@@ -78,7 +78,7 @@ export function GroupsPage() {
         <div className="enter" key="table">
           <DataTable cols={GROUP_COLS} rows={filtered} base={rows} state={state} set={set} rowKey={(r) => String(r.group_id)}
             onRowClick={(r) => setOpen({ row: r })} loading={data.isLoading} error={data.error ? errorText(data.error) : null}
-            onRetry={() => data.refetch()} flashKey={flash} actions={addBtn} />
+            onRetry={() => data.refetch()} flashKey={flash} />
         </div>
       )}
       {open && (

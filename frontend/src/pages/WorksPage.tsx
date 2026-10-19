@@ -5,6 +5,7 @@ import type { FormConfig } from "../components/form/RecordDialog";
 const FORM: FormConfig = {
   order: ["student_id", "item_id", "topic", "supervisor_id", "reviewer_id", "order_id"],
   labels: { item_id: "Работа из учебного плана", order_id: "Приказ об утверждении темы" },
+  lockOnEdit: ["student_id"],
   // В списке — только курсовые и ВКР
   filters: { item_id: (o) => o.row.kind === "coursework" || o.row.kind === "final_attestation" },
 };
